@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "game_server.json",
   "title": "GameServer",
-  "description": "A game server in the role-playing guild system",
+  "description": "A game server in the Lorewyld system",
   "type": "object",
   "properties": {
     "id": {

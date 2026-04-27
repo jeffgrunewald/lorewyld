@@ -2,13 +2,13 @@
 
 ## System Overview
 
-Role-Playing Guild follows a client-server architecture with a REST API backend and mobile client.
+Lorewyld follows a client-server architecture with a REST API backend and mobile client.
 
 ```
 ┌─────────────────┐         ┌─────────────────┐
-│   Guild Pass    │  HTTP   │  Role-Playing   │
-│  (Flutter App)  │◄───────►│     Guild       │
-│                 │  REST   │  (Rust Server)  │
+│    Lorewyld     │  HTTP   │    Lorewyld     │
+│  (Flutter App)  │◄───────►│  (Rust Server)  │
+│                 │  REST   │                 │
 └─────────────────┘         └────────┬────────┘
                                      │
                                      ▼
@@ -68,7 +68,7 @@ The API follows REST conventions:
 - Meaningful HTTP status codes
 - Token-based authentication
 
-## Mobile Client (Guild Pass)
+## Mobile Client (Lorewyld)
 
 ### Technology Stack
 

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "user.json",
   "title": "User",
-  "description": "A user account in the role-playing guild system",
+  "description": "A user account in the Lorewyld system",
   "type": "object",
   "properties": {
     "id": {

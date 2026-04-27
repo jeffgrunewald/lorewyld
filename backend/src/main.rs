@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::{Args, Parser, Subcommand};
-use role_playing_guild::{api::ApiServer, settings::Settings};
+use lorewyld::{api::ApiServer, settings::Settings};
 use std::path::PathBuf;
 use tokio::signal;
 use tracing_subscriber::{fmt::layer, layer::SubscriberExt, util::SubscriberInitExt};

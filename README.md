@@ -1,17 +1,17 @@
-# Role-Playing Guild
+# Lorewyld
 
 A self-hostable web server for storing, sharing, and building role-playing campaigns. Designed to facilitate easy in-person gaming experiences with friends.
 
 ## Overview
 
-Role-Playing Guild is a backend service that manages campaign data, characters, and game resources. It pairs with **Guild Pass**, a companion mobile application for interacting with the server during gaming sessions.
+Lorewyld is a self-hostable backend service that manages campaign data, characters, and game resources. It pairs with a companion Flutter mobile app (also named **Lorewyld**) for interacting with the server during gaming sessions.
 
 ## Architecture
 
 - **Backend**: Rust application built on the Tokio async runtime with Axum web framework
 - **API**: RESTful API for all client interactions
 - **Database**: SQLite via SQLx for simplicity and portability
-- **Mobile**: Guild Pass - Flutter application for iOS and Android
+- **Mobile**: Lorewyld mobile — Flutter application for iOS and Android
 
 ## Key Features
 
@@ -23,7 +23,7 @@ Role-Playing Guild is a backend service that manages campaign data, characters, 
 
 ## Deployment Options
 
-Role-Playing Guild is designed to run anywhere:
+Lorewyld is designed to run anywhere:
 
 - **Cloud hosting**: Deploy to any hosting provider
 - **Home network**: Run on a Raspberry Pi or home server
@@ -47,16 +47,16 @@ The server will start on `http://localhost:3000`.
 
 ### Mobile App
 
-See the [mobile/](mobile/) directory for Guild Pass setup instructions.
+See the [mobile/](mobile/) directory for the Lorewyld mobile app setup instructions.
 
 ## Project Structure
 
 ```
-role-playing-guild/
+lorewyld/
 ├── backend/          # Rust web server
 │   ├── src/          # Application source code
 │   └── migrations/   # SQLx database migrations
-├── mobile/           # Guild Pass Flutter app
+├── mobile/           # Lorewyld mobile Flutter app
 ├── shared/           # Shared schemas and API specs
 │   ├── schemas/      # JSON Schema definitions
 │   └── api-spec/     # API specifications

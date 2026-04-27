@@ -6,7 +6,7 @@ Accepted
 
 ## Context
 
-Role-Playing Guild needs a database to store campaigns, characters, and user data. The application is designed for individual gaming groups to self-host, typically supporting a small number of concurrent users (rarely more than a dozen players in a session).
+Lorewyld needs a database to store campaigns, characters, and user data. The application is designed for individual gaming groups to self-host, typically supporting a small number of concurrent users (rarely more than a dozen players in a session).
 
 Key requirements:
 - Simple deployment without external dependencies

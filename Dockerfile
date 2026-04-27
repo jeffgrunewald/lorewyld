@@ -10,11 +10,11 @@ COPY backend/Cargo.toml backend/Cargo.lock backend/rust-toolchain.toml ./
 
 RUN mkdir ./src \
  && echo "fn main() {}" > ./src/main.rs \
- && cargo build --package role-playing-guild --release
+ && cargo build --package lorewyld --release
 
 COPY backend/migrations/ migrations/
 COPY backend/src/ src/
-RUN cargo build --package role-playing-guild --release
+RUN cargo build --package lorewyld --release
 
 FROM debian:trixie-slim
 
@@ -26,8 +26,8 @@ RUN apt update \
 RUN useradd -ms /bin/bash dungeonmaster
 USER dungeonmaster
 
-COPY --from=builder /app/target/release/role-playing-guild /opt/role-playing-guild/bin/role-playing-guild
+COPY --from=builder /app/target/release/lorewyld /opt/lorewyld/bin/lorewyld
 
 EXPOSE 8080
 
-CMD ["/opt/role-playing-guild/bin/role-playing-guild", "server"]
+CMD ["/opt/lorewyld/bin/lorewyld", "server"]

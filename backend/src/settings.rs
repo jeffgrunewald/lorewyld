@@ -22,7 +22,7 @@ pub struct Settings {
 }
 
 fn default_log() -> String {
-    "role_playing_guild=info".to_string()
+    "lorewyld=info".to_string()
 }
 
 fn default_listen() -> String {
@@ -47,7 +47,7 @@ impl Settings {
         }
 
         builder
-            .add_source(Environment::with_prefix("RPG").separator("__"))
+            .add_source(Environment::with_prefix("LW").separator("__"))
             .build()
             .and_then(|config| config.try_deserialize())
             .map_err(anyhow::Error::from)
