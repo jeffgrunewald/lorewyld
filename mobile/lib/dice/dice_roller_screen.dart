@@ -17,7 +17,7 @@ class _DiceRollerScreenState extends State<DiceRollerScreen> {
 
   final Map<DiceType, int> _queue = {};
   final Map<DiceType, List<int>> _lastRolls = {};
-  final Random _random = Random();
+  final Random _random = Random.secure();
   bool _rolled = false;
 
   void _enqueue(DiceType type) {
