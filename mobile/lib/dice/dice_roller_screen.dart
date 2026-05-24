@@ -53,9 +53,6 @@ class _DiceRollerScreenState extends State<DiceRollerScreen> {
     });
   }
 
-  int _subtotal(DiceType t) =>
-      (_lastRolls[t] ?? const []).fold(0, (a, b) => a + b);
-
   int get _grandTotal => _lastRolls.values.fold(
         0,
         (a, list) => a + list.fold(0, (p, n) => p + n),
@@ -85,8 +82,8 @@ class _DiceRollerScreenState extends State<DiceRollerScreen> {
                         return _QueueRow(
                           type: t,
                           count: _queue[t] ?? 0,
-                          subtotal: _rolled ? _subtotal(t) : null,
-                        );
+                          rolls: _lastRolls[t],
+                         );
                       },
                     ),
             ),
@@ -220,33 +217,29 @@ class _QueueRow extends StatelessWidget {
   const _QueueRow({
     required this.type,
     required this.count,
-    required this.subtotal,
-  });
+    required this.rolls,
+   });
 
-  final DiceType type;
-  final int count;
-  final int? subtotal;
+   final DiceType type;
+   final int count;
+   final List<int>? rolls;
 
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Row(
-        children: [
-          DiceIcon(type: type, size: 44),
-          const SizedBox(width: 12),
-          Text(
-            'x$count',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const Spacer(),
-          if (subtotal != null)
-            Text(
-              '= $subtotal',
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-        ],
-      ),
-    );
-  }
-}
+    @override
+   Widget build(BuildContext context) {
+     final style = Theme.of(context).textTheme.titleMedium;
+     final detail = rolls != null
+        ? '${rolls!.join(', ')} = ${rolls!.fold(0, (a, b) => a + b)}'
+        : 'x$count';
+
+     return Padding(
+       padding: const EdgeInsets.symmetric(vertical: 6),
+       child: Row(
+         children: [
+           DiceIcon(type: type, size: 44),
+           const SizedBox(width: 12),
+           Text(detail, style: style),
+         ],
+       ),
+     );
+    }
+ }
