@@ -2,7 +2,7 @@
 
 ## System Overview
 
-Lorewyld follows a client-server architecture with a REST API backend and mobile client.
+ Lorewyld follows a client-server architecture with a REST API server and mobile client.
 
 ```
 ┌─────────────────┐         ┌─────────────────┐

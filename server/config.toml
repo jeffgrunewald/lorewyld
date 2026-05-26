@@ -1,0 +1,5 @@
+log = "lorewyld=info"
+api_addr = "0.0.0.0:8080"
+db_path = "database.db"
+db_max_connections = 5
+jwt_key_path = "jwt_signing_key.bin"

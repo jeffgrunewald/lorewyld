@@ -1,4 +1,4 @@
-backend/target
+server/target
 database.db
 jwt_signing_key.bin
 .claude

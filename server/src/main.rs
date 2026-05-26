@@ -1,9 +1,9 @@
 use anyhow::Result;
 use clap::{Args, Parser, Subcommand};
-use lorewyld::{api::ApiServer, settings::Settings};
+use lorewyld::{api::ApiServer, settings::Settings, web::InstanceName};
 use std::path::PathBuf;
 use tokio::signal;
-use tracing_subscriber::{fmt::layer, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -52,10 +52,12 @@ impl Server {
     pub async fn run(&self, settings: &Settings) -> Result<()> {
         let db_pool = settings.db_connect().await;
         sqlx::migrate!().run(&db_pool).await?;
+        lorewyld::setup_game_server(&db_pool).await?;
 
         let shutdown_listener = shutdown_listener();
 
-        let api_server = ApiServer::new(db_pool, settings.listen_addr()?);
+        let instance_name = InstanceName(lorewyld::get_server_name(&db_pool).await?);
+        let api_server = ApiServer::new(db_pool, settings.listen_addr()?, instance_name);
 
         api_server.run(shutdown_listener).await
     }

@@ -4,11 +4,11 @@ A self-hostable web server for storing, sharing, and building role-playing campa
 
 ## Overview
 
-Lorewyld is a self-hostable backend service that manages campaign data, characters, and game resources. It pairs with a companion Flutter mobile app (also named **Lorewyld**) for interacting with the server during gaming sessions.
+ Lorewyld is a self-hostable server service that manages campaign data, characters, and game resources. It pairs with a companion Flutter mobile app (also named **Lorewyld**) for interacting with the server during gaming sessions.
 
 ## Architecture
 
-- **Backend**: Rust application built on the Tokio async runtime with Axum web framework
+- **Server**: Rust application built on the Tokio async runtime with Axum web framework
 - **API**: RESTful API for all client interactions
 - **Database**: SQLite via SQLx for simplicity and portability
 - **Mobile**: Lorewyld mobile — Flutter application for iOS and Android
@@ -39,7 +39,7 @@ Lorewyld is designed to run anywhere:
 ### Running the Server
 
 ```bash
-cd backend
+ cd server
 cargo run
 ```
 
@@ -53,7 +53,7 @@ See the [mobile/](mobile/) directory for the Lorewyld mobile app setup instructi
 
 ```
 lorewyld/
-├── backend/          # Rust web server
+ ├── server/            # Rust web server
 │   ├── src/          # Application source code
 │   └── migrations/   # SQLx database migrations
 ├── mobile/           # Lorewyld mobile Flutter app

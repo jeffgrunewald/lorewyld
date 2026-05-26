@@ -6,14 +6,14 @@ ENV CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
 WORKDIR /app
 
 # Copy cargo file to cache build
-COPY backend/Cargo.toml backend/Cargo.lock backend/rust-toolchain.toml ./
+COPY server/Cargo.toml server/Cargo.lock server/rust-toolchain.toml ./
 
 RUN mkdir ./src \
- && echo "fn main() {}" > ./src/main.rs \
- && cargo build --package lorewyld --release
+  && echo "fn main() {}" > ./src/main.rs \
+  && cargo build --package lorewyld --release
 
-COPY backend/migrations/ migrations/
-COPY backend/src/ src/
+COPY server/migrations/ migrations/
+COPY server/src/ src/
 RUN cargo build --package lorewyld --release
 
 FROM debian:trixie-slim
