@@ -1,8 +1,20 @@
+pub mod auth;
+pub mod error;
+pub mod lore_notes;
+pub mod modules;
+pub mod search;
+pub mod server_info;
+pub mod settings;
+pub mod tags;
+
 use anyhow::Result;
-use axum::{routing::get, Router};
+use axum::{
+    Router,
+    routing::{get, post},
+};
 use leptos::config::Env;
 use leptos::prelude::LeptosOptions;
-use leptos_axum::{generate_route_list, LeptosRoutes};
+use leptos_axum::{LeptosRoutes, generate_route_list};
 use sqlx::SqlitePool;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
@@ -40,13 +52,58 @@ impl ApiServer {
     }
 
     pub async fn run(self, shutdown: triggered::Listener) -> Result<()> {
-        let _state = ApiState::new(self.db);
         let leptos = self.leptos.clone();
         let instance_name = self.instance_name.clone();
         let routes = generate_route_list(crate::web::app::App);
 
-        let router = Router::new()
-            .route("/health", get(health))
+        let api_state = ApiState::new(self.db);
+
+        // Two subrouters, each owning its own state, then state-erased
+        // to `Router<()>` via `with_state(...)`. Composing the
+        // two via `merge` on a root `Router<()>` keeps the state types
+        // separate without forcing a single composite state struct.
+        let api_router: Router<()> = Router::new()
+            .route("/api/server-info", get(server_info::server_info))
+            .route("/api/users/register", post(auth::register))
+            .route("/api/users/login", post(auth::login))
+            .route(
+                "/api/lore-notes",
+                get(lore_notes::list_lore_notes).post(lore_notes::create_lore_note),
+            )
+            .route(
+                "/api/lore-notes/{uuid}",
+                get(lore_notes::get_lore_note)
+                    .patch(lore_notes::update_lore_note)
+                    .delete(lore_notes::delete_lore_note),
+            )
+            .route("/api/tags", get(tags::list_tags).post(tags::create_tag))
+            .route(
+                "/api/settings",
+                get(settings::list_settings).post(settings::create_setting),
+            )
+            .route(
+                "/api/settings/{uuid}",
+                get(settings::get_setting)
+                    .patch(settings::update_setting)
+                    .delete(settings::delete_setting),
+            )
+            .route(
+                "/api/settings/{uuid}/collaborators",
+                post(settings::add_collaborator),
+            )
+            .route(
+                "/api/settings/{uuid}/collaborators/{collab_uuid}",
+                axum::routing::delete(settings::remove_collaborator),
+            )
+            .route("/api/search", post(search::search))
+            .route(
+                "/api/modules",
+                get(modules::list_modules).post(modules::publish_module),
+            )
+            .route("/api/modules/{uuid}", get(modules::get_module))
+            .with_state(api_state);
+
+        let leptos_router: Router<()> = Router::new()
             .nest_service("/assets", ServeDir::new("assets"))
             .leptos_routes(&leptos, routes, {
                 let leptos = leptos.clone();
@@ -54,6 +111,11 @@ impl ApiServer {
                 move || crate::web::app::shell(leptos.clone(), instance_name.clone())
             })
             .with_state(leptos);
+
+        let router = Router::new()
+            .route("/health", get(health))
+            .merge(api_router)
+            .merge(leptos_router);
 
         let listener = TcpListener::bind(self.listen_addr)
             .await

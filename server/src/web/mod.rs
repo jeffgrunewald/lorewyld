@@ -1,5 +1,6 @@
 pub mod app;
 pub mod home;
+pub mod modules;
 pub mod nav;
 pub mod roll;
 

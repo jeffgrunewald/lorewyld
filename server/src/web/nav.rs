@@ -13,6 +13,14 @@ pub fn Nav() -> impl IntoView {
         }
     };
 
+    let modules_class = move || {
+        if pathname.get().starts_with("/modules") {
+            "lw-nav-item lw-nav-item-active"
+        } else {
+            "lw-nav-item"
+        }
+    };
+
     let dice_class = move || {
         if pathname.get() == "/roll" {
             "lw-nav-dice-btn lw-nav-dice-btn-active"
@@ -24,6 +32,7 @@ pub fn Nav() -> impl IntoView {
     view! {
         <nav class="lw-nav">
             <a href="/" class=home_class>"Home"</a>
+            <a href="/modules" class=modules_class>"Modules"</a>
             <div class="lw-nav-spacer"></div>
             <a href="/roll" class=dice_class aria-label="Dice roller">
                 <img src="/assets/dice/d20.png" alt="Dice roller"/>

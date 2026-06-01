@@ -35,6 +35,15 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
+  # HTTP client for the lorewyld server JSON API.
+  http: ^1.2.0
+
+  # Persistent key-value store for session token + last-used server URL.
+  shared_preferences: ^2.3.0
+
+  # Markdown rendering for lore-note previews and read views.
+  flutter_markdown: ^0.7.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

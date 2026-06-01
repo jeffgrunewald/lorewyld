@@ -1,0 +1,379 @@
+use axum::{
+    Json,
+    extract::{Path, State},
+    http::StatusCode,
+};
+use chrono::{DateTime, NaiveDate, Utc};
+use lorewyld_types::{
+    api_v1::{LoreNoteWithTags, PublishModuleRequest, PublishModuleResponse},
+    content_module::ContentModule,
+    lore_note::{LoreNote, NoteScope, NoteScopeKind, NoteVisibility},
+};
+use uuid::Uuid;
+
+use crate::api::{ApiState, auth::CurrentUser, error::ApiError, tags::load_tags_for_note};
+
+/// Filter loose notes against viewer's visibility expectations. For
+/// public/unauthenticated module-detail rendering we only show notes
+/// with `Visible` visibility — `AuthorOnly`/`GamemasterOnly` notes that
+/// somehow ended up in a Module scope (an authoring mistake the
+/// Promote-to-Module wizard's review step should prevent) stay hidden.
+fn note_is_publicly_visible(visibility: &str) -> bool {
+    visibility == "visible"
+}
+
+/// `GET /api/modules` — list installed (active) content modules.
+pub async fn list_modules(
+    State(state): State<ApiState>,
+) -> Result<Json<Vec<ContentModule>>, ApiError> {
+    let rows: Vec<ContentModuleRow> = sqlx::query_as(MODULE_SELECT_ALL)
+        .fetch_all(&state.db)
+        .await?;
+    rows.into_iter()
+        .map(ContentModuleRow::into_dto)
+        .collect::<Result<_, _>>()
+        .map(Json)
+}
+
+/// `GET /api/modules/:uuid` — read a single module with its notes.
+/// Public: published modules are by definition meant to be shareable.
+pub async fn get_module(
+    State(state): State<ApiState>,
+    Path(uuid): Path<Uuid>,
+) -> Result<Json<ModuleWithNotes>, ApiError> {
+    let row: Option<ContentModuleRow> = sqlx::query_as(MODULE_SELECT_ONE)
+        .bind(uuid.to_string())
+        .fetch_optional(&state.db)
+        .await?;
+    let module = row.ok_or(ApiError::NotFound)?.into_dto()?;
+
+    let note_rows: Vec<LoreNoteFlatRow> = sqlx::query_as(
+        "SELECT uuid, title, body_markdown, scope_kind, scope_target_uuid,
+                visibility, derived_from_setting_note_uuid, created_by_user_uuid,
+                created_at, updated_at
+           FROM lore_note
+          WHERE scope_kind = 'module' AND scope_target_uuid = ?
+          ORDER BY updated_at DESC",
+    )
+    .bind(uuid.to_string())
+    .fetch_all(&state.db)
+    .await?;
+
+    let mut notes = Vec::with_capacity(note_rows.len());
+    for row in note_rows {
+        if !note_is_publicly_visible(&row.visibility) {
+            continue;
+        }
+        let note = row.into_dto()?;
+        let tags = load_tags_for_note(&state.db, &note.uuid.to_string()).await?;
+        notes.push(LoreNoteWithTags { note, tags });
+    }
+    Ok(Json(ModuleWithNotes { module, notes }))
+}
+
+/// `POST /api/modules` — Promote-to-Module commit. Snapshot-publishes
+/// a `Setting`'s selected notes into a new `ContentModule` row.
+pub async fn publish_module(
+    State(state): State<ApiState>,
+    user: CurrentUser,
+    Json(req): Json<PublishModuleRequest>,
+) -> Result<(StatusCode, Json<PublishModuleResponse>), ApiError> {
+    if req.name.trim().is_empty() {
+        return Err(ApiError::BadRequest("name is required".into()));
+    }
+    let slug = req.slug.trim().to_lowercase();
+    if slug.is_empty() {
+        return Err(ApiError::BadRequest("slug is required".into()));
+    }
+    if req.version_string.trim().is_empty() {
+        return Err(ApiError::BadRequest("version_string is required".into()));
+    }
+
+    // Verify ownership of source setting.
+    let owner_row: Option<(String, Option<String>)> = sqlx::query_as(
+        "SELECT owner_user_uuid, published_as_module_uuid FROM setting WHERE uuid = ?",
+    )
+    .bind(req.source_setting_uuid.to_string())
+    .fetch_optional(&state.db)
+    .await?;
+    let (owner_uuid, prev_published_uuid) = owner_row.ok_or(ApiError::NotFound)?;
+    if owner_uuid != user.uuid.to_string() {
+        return Err(ApiError::Unauthorized);
+    }
+
+    // Slug-collision check.
+    let slug_taken: Option<(String,)> =
+        sqlx::query_as("SELECT uuid FROM content_module WHERE slug = ?")
+            .bind(&slug)
+            .fetch_optional(&state.db)
+            .await?;
+    if slug_taken.is_some() {
+        return Err(ApiError::BadRequest(format!(
+            "module slug '{slug}' is already taken"
+        )));
+    }
+
+    // Pull selected notes (validate they belong to the source setting).
+    let placeholders = vec!["?"; req.selected_note_uuids.len()].join(", ");
+    let setting_uuid_str = req.source_setting_uuid.to_string();
+    let selected_notes: Vec<SelectedNoteRow> = if req.selected_note_uuids.is_empty() {
+        Vec::new()
+    } else {
+        let select_sql = format!(
+            "SELECT uuid, title, body_markdown, visibility
+               FROM lore_note
+              WHERE scope_kind = 'setting'
+                AND scope_target_uuid = ?
+                AND uuid IN ({placeholders})"
+        );
+        let mut q = sqlx::query_as::<_, SelectedNoteRow>(&select_sql);
+        q = q.bind(&setting_uuid_str);
+        for u in &req.selected_note_uuids {
+            q = q.bind(u.to_string());
+        }
+        q.fetch_all(&state.db).await?
+    };
+    if selected_notes.len() != req.selected_note_uuids.len() {
+        return Err(ApiError::BadRequest(
+            "one or more selected_note_uuids do not belong to the source setting".into(),
+        ));
+    }
+
+    // Pre-resolve all (source_note_uuid, tag_uuids) pairs so we can copy
+    // tag attachments inside the publish transaction without contending
+    // for SQLite's write lock.
+    let mut tag_uuids_per_note: Vec<(String, Vec<String>)> =
+        Vec::with_capacity(selected_notes.len());
+    for note in &selected_notes {
+        let tag_rows: Vec<(String,)> = sqlx::query_as(
+            "SELECT tag_uuid FROM tag_attachment_lore_note WHERE lore_note_uuid = ?",
+        )
+        .bind(&note.uuid)
+        .fetch_all(&state.db)
+        .await?;
+        tag_uuids_per_note.push((note.uuid.clone(), tag_rows.into_iter().map(|(s,)| s).collect()));
+    }
+
+    let module_uuid = Uuid::new_v4().to_string();
+    let authors_json = serde_json::to_string(&req.authors)
+        .map_err(|e| ApiError::Internal(e.into()))?;
+
+    let mut tx = state.db.begin().await?;
+
+    sqlx::query(
+        "INSERT INTO content_module (
+            uuid, name, slug, license, license_url, schema_version,
+            authors, description, version_string, previous_version_uuid,
+            published_at, is_active, ordering
+         ) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, datetime('now'), 1, 0)",
+    )
+    .bind(&module_uuid)
+    .bind(req.name.trim())
+    .bind(&slug)
+    .bind(&req.license)
+    .bind(&req.license_url)
+    .bind(&authors_json)
+    .bind(&req.description)
+    .bind(&req.version_string)
+    .bind(prev_published_uuid.clone())
+    .execute(&mut *tx)
+    .await?;
+
+    // Snapshot-copy each note into Module scope with derived_from linkage.
+    for (note, (_source_uuid, tag_uuids)) in
+        selected_notes.iter().zip(tag_uuids_per_note.iter())
+    {
+        let new_note_uuid = Uuid::new_v4().to_string();
+        sqlx::query(
+            "INSERT INTO lore_note (
+                uuid, title, body_markdown, scope_kind, scope_target_uuid,
+                visibility, derived_from_setting_note_uuid, created_by_user_uuid
+             ) VALUES (?, ?, ?, 'module', ?, ?, ?, ?)",
+        )
+        .bind(&new_note_uuid)
+        .bind(&note.title)
+        .bind(&note.body_markdown)
+        .bind(&module_uuid)
+        .bind(&note.visibility)
+        .bind(&note.uuid)
+        .bind(user.uuid.to_string())
+        .execute(&mut *tx)
+        .await?;
+
+        for tag_uuid in tag_uuids {
+            sqlx::query(
+                "INSERT INTO tag_attachment_lore_note (tag_uuid, lore_note_uuid)
+                 VALUES (?, ?)",
+            )
+            .bind(tag_uuid)
+            .bind(&new_note_uuid)
+            .execute(&mut *tx)
+            .await?;
+        }
+    }
+
+    // Link source setting to the published module.
+    sqlx::query(
+        "UPDATE setting
+            SET published_as_module_uuid = ?, updated_at = datetime('now')
+          WHERE uuid = ?",
+    )
+    .bind(&module_uuid)
+    .bind(req.source_setting_uuid.to_string())
+    .execute(&mut *tx)
+    .await?;
+
+    tx.commit().await?;
+
+    let module_row: ContentModuleRow = sqlx::query_as(MODULE_SELECT_ONE)
+        .bind(&module_uuid)
+        .fetch_one(&state.db)
+        .await?;
+    let module = module_row.into_dto()?;
+
+    Ok((
+        StatusCode::CREATED,
+        Json(PublishModuleResponse {
+            module,
+            note_count: selected_notes.len() as u32,
+        }),
+    ))
+}
+
+// ─── shared row types ──────────────────────────────────────────────────
+
+const MODULE_SELECT_ALL: &str = "SELECT uuid, name, slug, license, license_url, schema_version, \
+                                 release_date, authors, publisher, description, website_url, \
+                                 is_active, ordering, version_string, previous_version_uuid, \
+                                 published_at, created_at, updated_at \
+                                 FROM content_module WHERE is_active = 1 ORDER BY ordering, name";
+
+const MODULE_SELECT_ONE: &str = "SELECT uuid, name, slug, license, license_url, schema_version, \
+                                 release_date, authors, publisher, description, website_url, \
+                                 is_active, ordering, version_string, previous_version_uuid, \
+                                 published_at, created_at, updated_at \
+                                 FROM content_module WHERE uuid = ?";
+
+#[derive(sqlx::FromRow)]
+struct ContentModuleRow {
+    uuid: String,
+    name: String,
+    slug: String,
+    license: String,
+    license_url: Option<String>,
+    schema_version: i64,
+    release_date: Option<NaiveDate>,
+    authors: String,
+    publisher: Option<String>,
+    description: Option<String>,
+    website_url: Option<String>,
+    is_active: i64,
+    ordering: i64,
+    version_string: String,
+    previous_version_uuid: Option<String>,
+    published_at: Option<DateTime<Utc>>,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+}
+
+impl ContentModuleRow {
+    fn into_dto(self) -> Result<ContentModule, ApiError> {
+        Ok(ContentModule {
+            uuid: Uuid::parse_str(&self.uuid).map_err(|e| ApiError::Internal(e.into()))?,
+            name: self.name,
+            slug: self.slug,
+            license: self.license,
+            license_url: self.license_url,
+            schema_version: self.schema_version as u32,
+            release_date: self.release_date,
+            authors: serde_json::from_str(&self.authors)
+                .map_err(|e| ApiError::Internal(e.into()))?,
+            publisher: self.publisher,
+            description: self.description,
+            website_url: self.website_url,
+            is_active: self.is_active != 0,
+            ordering: self.ordering as i32,
+            version_string: self.version_string,
+            previous_version_uuid: self
+                .previous_version_uuid
+                .as_deref()
+                .map(|s| Uuid::parse_str(s).map_err(|e| ApiError::Internal(e.into())))
+                .transpose()?,
+            published_at: self.published_at,
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+        })
+    }
+}
+
+#[derive(sqlx::FromRow)]
+struct SelectedNoteRow {
+    uuid: String,
+    title: String,
+    body_markdown: String,
+    visibility: String,
+}
+
+#[derive(sqlx::FromRow)]
+struct LoreNoteFlatRow {
+    uuid: String,
+    title: String,
+    body_markdown: String,
+    scope_kind: String,
+    scope_target_uuid: String,
+    visibility: String,
+    derived_from_setting_note_uuid: Option<String>,
+    created_by_user_uuid: String,
+    created_at: DateTime<Utc>,
+    updated_at: DateTime<Utc>,
+}
+
+impl LoreNoteFlatRow {
+    fn into_dto(self) -> Result<LoreNote, ApiError> {
+        Ok(LoreNote {
+            uuid: Uuid::parse_str(&self.uuid).map_err(|e| ApiError::Internal(e.into()))?,
+            title: self.title,
+            body_markdown: self.body_markdown,
+            scope: NoteScope {
+                kind: match self.scope_kind.as_str() {
+                    "module" => NoteScopeKind::Module,
+                    "setting" => NoteScopeKind::Setting,
+                    "campaign" => NoteScopeKind::Campaign,
+                    "character" => NoteScopeKind::Character,
+                    other => {
+                        return Err(ApiError::Internal(anyhow::anyhow!(
+                            "unknown scope_kind: {other}"
+                        )));
+                    }
+                },
+                target_uuid: Uuid::parse_str(&self.scope_target_uuid)
+                    .map_err(|e| ApiError::Internal(e.into()))?,
+            },
+            visibility: match self.visibility.as_str() {
+                "visible" => NoteVisibility::Visible,
+                "author_only" => NoteVisibility::AuthorOnly,
+                "gamemaster_only" => NoteVisibility::GamemasterOnly,
+                other => {
+                    return Err(ApiError::Internal(anyhow::anyhow!(
+                        "unknown visibility: {other}"
+                    )));
+                }
+            },
+            derived_from_setting_note_uuid: self
+                .derived_from_setting_note_uuid
+                .as_deref()
+                .map(|s| Uuid::parse_str(s).map_err(|e| ApiError::Internal(e.into())))
+                .transpose()?,
+            created_by_user_uuid: Uuid::parse_str(&self.created_by_user_uuid)
+                .map_err(|e| ApiError::Internal(e.into()))?,
+            created_at: self.created_at,
+            updated_at: self.updated_at,
+        })
+    }
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ModuleWithNotes {
+    pub module: ContentModule,
+    pub notes: Vec<LoreNoteWithTags>,
+}

@@ -1,9 +1,10 @@
 use leptos::prelude::*;
 use leptos_meta::{provide_meta_context, MetaTags, Stylesheet, Title};
 use leptos_router::components::{FlatRoutes, Route, Router};
-use leptos_router::StaticSegment;
+use leptos_router::{ParamSegment, StaticSegment};
 
 use crate::web::home::Home;
+use crate::web::modules::{ModuleDetailPage, ModulesPage};
 use crate::web::nav::Nav;
 use crate::web::roll::Roll;
 use crate::web::InstanceName;
@@ -51,6 +52,11 @@ pub fn App() -> impl IntoView {
                         <FlatRoutes fallback=|| view! { <h1>"Not Found"</h1> }>
                             <Route path=StaticSegment("") view=Home/>
                             <Route path=StaticSegment("roll") view=Roll/>
+                            <Route path=StaticSegment("modules") view=ModulesPage/>
+                            <Route
+                                path=(StaticSegment("modules"), ParamSegment("uuid"))
+                                view=ModuleDetailPage
+                            />
                         </FlatRoutes>
                     </main>
                 </div>
