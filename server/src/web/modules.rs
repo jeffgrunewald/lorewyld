@@ -50,7 +50,10 @@ const MODULES_LIST_SCRIPT: &str = r#"
 (function () {
     const list = document.getElementById('lw-modules-list');
     fetch('/api/server-info')
-        .then(r => r.json())
+        .then(r => {
+            if (!r.ok) throw new Error('HTTP ' + r.status);
+            return r.json();
+        })
         .then(data => {
             const modules = data.modules || [];
             list.replaceChildren();

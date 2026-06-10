@@ -20,6 +20,9 @@ pub enum ApiError {
     DisplayNameNotFound,
     /// Request lacked a valid `Authorization: Bearer <token>` header.
     Unauthorized,
+    /// Caller is authenticated but does not own / may not act on the
+    /// target resource.
+    Forbidden,
     /// Requested resource does not exist.
     NotFound,
     /// Request body or path parameters were malformed beyond what serde
@@ -39,6 +42,13 @@ impl From<sqlx::Error> for ApiError {
     fn from(value: sqlx::Error) -> Self {
         Self::Internal(value.into())
     }
+}
+
+/// True when the error is a UNIQUE-constraint violation. Handlers that
+/// insert into unique columns map this to a 4xx instead of letting two
+/// concurrent requests turn the constraint into a 500.
+pub fn is_unique_violation(err: &sqlx::Error) -> bool {
+    matches!(err, sqlx::Error::Database(db) if db.is_unique_violation())
 }
 
 #[derive(Serialize)]
@@ -69,6 +79,11 @@ impl IntoResponse for ApiError {
                 StatusCode::UNAUTHORIZED,
                 "unauthorized",
                 "missing or invalid session token".to_string(),
+            ),
+            Self::Forbidden => (
+                StatusCode::FORBIDDEN,
+                "forbidden",
+                "you do not have permission to act on this resource".to_string(),
             ),
             Self::NotFound => (
                 StatusCode::NOT_FOUND,

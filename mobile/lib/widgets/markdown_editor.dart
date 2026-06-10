@@ -186,20 +186,16 @@ class TagChipInput extends StatefulWidget {
 }
 
 class _TagChipInputState extends State<TagChipInput> {
-  final _ctl = TextEditingController();
+  // The Autocomplete widget owns (and disposes) this controller; we keep
+  // a reference so selection and submission share one add-slug path.
+  TextEditingController? _fieldCtl;
 
-  @override
-  void dispose() {
-    _ctl.dispose();
-    super.dispose();
-  }
-
-  void _addCurrent() {
-    final raw = _ctl.text.trim().toLowerCase();
-    if (raw.isEmpty) return;
+  void _add(String raw) {
+    final slug = raw.trim().toLowerCase();
+    if (slug.isEmpty) return;
     final next = List<String>.of(widget.slugs);
-    if (!next.contains(raw)) next.add(raw);
-    _ctl.clear();
+    if (!next.contains(slug)) next.add(slug);
+    _fieldCtl?.clear();
     widget.onChanged(next);
   }
 
@@ -240,13 +236,9 @@ class _TagChipInputState extends State<TagChipInput> {
         const SizedBox(height: 4),
         Autocomplete<String>(
           optionsBuilder: (value) async => _suggestions(value.text),
-          onSelected: (value) {
-            _ctl.text = value;
-            _addCurrent();
-          },
+          onSelected: _add,
           fieldViewBuilder: (context, controller, focusNode, onSubmitted) {
-            // Keep our outer controller in sync so _addCurrent can read it.
-            controller.addListener(() => _ctl.text = controller.text);
+            _fieldCtl = controller;
             return TextField(
               controller: controller,
               focusNode: focusNode,
@@ -259,10 +251,7 @@ class _TagChipInputState extends State<TagChipInput> {
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'[a-z0-9\- ]')),
               ],
-              onSubmitted: (_) {
-                _addCurrent();
-                controller.clear();
-              },
+              onSubmitted: (text) => _add(text),
             );
           },
         ),

@@ -178,13 +178,19 @@ class _SearchScreenState extends State<SearchScreen> {
                 // open in the editor read-only (visibility flag would
                 // gate edits; for v1 just route through the same screen
                 // and let the API enforce ownership).
-                Navigator.of(context).push(MaterialPageRoute(
-                  builder: (_) => LoreNoteEditScreen(
-                    connection: widget.connection,
-                    scope: entry.note.scope,
-                    existing: entry,
-                  ),
-                ));
+                Navigator.of(context)
+                    .push(MaterialPageRoute(
+                      builder: (_) => LoreNoteEditScreen(
+                        connection: widget.connection,
+                        scope: entry.note.scope,
+                        existing: entry,
+                      ),
+                    ))
+                    // Re-run the search so an edit (or delete) made in
+                    // the editor is reflected in the results list.
+                    .then((_) {
+                      if (mounted) _runSearch();
+                    });
               },
             );
           },

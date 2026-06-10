@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../services/server_connection.dart';
 import '../types/setting.dart';
+import '../widgets/async_list_view.dart';
 import 'setting_detail_screen.dart';
 
 class SettingListScreen extends StatefulWidget {
@@ -89,55 +90,18 @@ class _SettingListScreenState extends State<SettingListScreen> {
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: _refresh,
-        child: FutureBuilder<List<Setting>>(
+        child: AsyncListView<Setting>(
           future: _settingsFuture,
-          builder: (context, snap) {
-            if (snap.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (snap.hasError) {
-              return ListView(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text('Failed to load: ${snap.error}'),
-                  ),
-                ],
-              );
-            }
-            final settings = snap.data ?? const [];
-            if (settings.isEmpty) {
-              return ListView(
-                children: const [
-                  SizedBox(height: 80),
-                  Center(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 24),
-                      child: Text(
-                        'No settings yet. Tap + to create one and start authoring lore notes.',
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            }
-            return ListView.separated(
-              itemCount: settings.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (_, i) {
-                final s = settings[i];
-                return ListTile(
-                  title: Text(s.name),
-                  subtitle: s.publishedAsModuleUuid != null
-                      ? const Text('Published')
-                      : const Text('Draft'),
-                  trailing: const Icon(Icons.chevron_right),
-                  onTap: () => _openSetting(s),
-                );
-              },
-            );
-          },
+          emptyMessage:
+              'No settings yet. Tap + to create one and start authoring lore notes.',
+          itemBuilder: (_, s) => ListTile(
+            title: Text(s.name),
+            subtitle: s.publishedAsModuleUuid != null
+                ? const Text('Published')
+                : const Text('Draft'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _openSetting(s),
+          ),
         ),
       ),
       floatingActionButton: FloatingActionButton(

@@ -11,7 +11,10 @@ use lorewyld_types::{
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
-use crate::api::{ApiState, error::ApiError};
+use crate::api::{
+    ApiState,
+    error::{ApiError, is_unique_violation},
+};
 
 /// Authenticated caller resolved from a `Authorization: Bearer <token>`
 /// header. Handlers that require auth accept `CurrentUser` as an
@@ -81,24 +84,22 @@ pub async fn register(
         return Err(ApiError::InvalidJoinCode);
     }
 
-    let existing: Option<(String,)> = sqlx::query_as(
-        "SELECT uuid FROM app_user WHERE server_uuid = ? AND display_name = ?",
-    )
-    .bind(&server_id)
-    .bind(&req.display_name)
-    .fetch_optional(&state.db)
-    .await?;
-    if existing.is_some() {
-        return Err(ApiError::DisplayNameTaken);
-    }
-
+    // UNIQUE(server_uuid, display_name) is the real uniqueness guard; a
+    // SELECT pre-check would race a concurrent registration and surface
+    // the constraint violation as a 500 instead of 409.
     let user_uuid = Uuid::new_v4().to_string();
-    sqlx::query("INSERT INTO app_user (uuid, server_uuid, display_name) VALUES (?, ?, ?)")
-        .bind(&user_uuid)
-        .bind(&server_id)
-        .bind(&req.display_name)
-        .execute(&state.db)
-        .await?;
+    let inserted =
+        sqlx::query("INSERT INTO app_user (uuid, server_uuid, display_name) VALUES (?, ?, ?)")
+            .bind(&user_uuid)
+            .bind(&server_id)
+            .bind(&req.display_name)
+            .execute(&state.db)
+            .await;
+    match inserted {
+        Ok(_) => {}
+        Err(e) if is_unique_violation(&e) => return Err(ApiError::DisplayNameTaken),
+        Err(e) => return Err(e.into()),
+    }
 
     let response = build_auth_response(&state.db, &user_uuid).await?;
     Ok(Json(response))
@@ -124,6 +125,9 @@ pub async fn login(
 
 async fn build_auth_response(db: &SqlitePool, user_uuid: &str) -> Result<AuthResponse, ApiError> {
     let token = Uuid::new_v4().to_string();
+    // v1 sessions are permanent: expires_at stays NULL, so the expiry
+    // check in resolve_session never fires. v1.5 adds an expiry policy
+    // by stamping expires_at here.
     sqlx::query("INSERT INTO user_session (token, user_uuid) VALUES (?, ?)")
         .bind(&token)
         .bind(user_uuid)

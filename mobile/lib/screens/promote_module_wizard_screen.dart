@@ -98,15 +98,15 @@ class _PromoteModuleWizardScreenState extends State<PromoteModuleWizardScreen> {
       _publishing = true;
       _publishError = null;
     });
+    final name = _nameCtl.text.trim();
+    final description = _descCtl.text.trim();
     try {
       await widget.connection.api!.publishModule(
         sourceSettingUuid: widget.setting.uuid,
-        name: _nameCtl.text.trim(),
+        name: name,
         slug: _slugCtl.text.trim().toLowerCase(),
         license: _licenseCtl.text.trim(),
-        description: _descCtl.text.trim().isEmpty
-            ? null
-            : _descCtl.text.trim(),
+        description: description.isEmpty ? null : description,
         authors: [
           widget.connection.user?.displayName ?? '',
         ].where((s) => s.isNotEmpty).toList(),
@@ -115,7 +115,7 @@ class _PromoteModuleWizardScreenState extends State<PromoteModuleWizardScreen> {
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Published ${_nameCtl.text.trim()}.')),
+        SnackBar(content: Text('Published $name.')),
       );
       Navigator.of(context).pop();
     } on ApiException catch (e) {

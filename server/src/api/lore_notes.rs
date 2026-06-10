@@ -4,7 +4,6 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
-use chrono::{DateTime, Utc};
 use lorewyld_types::{
     api_v1::{CreateLoreNoteRequest, LoreNoteWithTags, UpdateLoreNoteRequest},
     lore_note::{LoreNote, NoteScope, NoteScopeKind, NoteVisibility},
@@ -17,7 +16,11 @@ use crate::api::{
     ApiState,
     auth::CurrentUser,
     error::ApiError,
-    tags::{load_tags_for_note, resolve_or_create_tags},
+    rows::{
+        LORE_NOTE_SELECT, LORE_NOTE_SELECT_N, LoreNoteRow, VISIBILITY_PREDICATE,
+        scope_kind_from_str, scope_kind_to_str, visibility_to_str,
+    },
+    tags::{load_tags_for_note, load_tags_for_notes, resolve_or_create_tags},
 };
 
 #[derive(Debug, Deserialize)]
@@ -39,12 +42,7 @@ pub async fn list_lore_notes(
 ) -> Result<Json<Vec<LoreNoteWithTags>>, ApiError> {
     let limit = query.limit.unwrap_or(100).clamp(1, 500);
 
-    let mut sql = String::from(
-        "SELECT n.uuid, n.title, n.body_markdown, n.scope_kind, n.scope_target_uuid,
-                n.visibility, n.derived_from_setting_note_uuid, n.created_by_user_uuid,
-                n.created_at, n.updated_at
-           FROM lore_note n",
-    );
+    let mut sql = String::from(LORE_NOTE_SELECT_N);
     let mut joins = String::new();
     let mut conds = Vec::<String>::new();
     let mut binds = Vec::<String>::new();
@@ -67,10 +65,7 @@ pub async fn list_lore_notes(
         binds.push(tag_slug.to_lowercase());
     }
 
-    // Visibility filter: caller sees Visible always, plus their own
-    // AuthorOnly/GamemasterOnly notes. (Campaign-DM-based visibility for
-    // GamemasterOnly arrives in v1.5 with the Campaign entity.)
-    conds.push("(n.visibility = 'visible' OR n.created_by_user_uuid = ?)".into());
+    conds.push(VISIBILITY_PREDICATE.into());
     binds.push(user.uuid.to_string());
 
     if !joins.is_empty() {
@@ -89,13 +84,16 @@ pub async fn list_lore_notes(
     query_builder = query_builder.bind(limit);
 
     let rows = query_builder.fetch_all(&state.db).await?;
-    let mut notes = Vec::with_capacity(rows.len());
-    for row in rows {
-        let note = row.into_dto()?;
-        let tags = load_tags_for_note(&state.db, &note.uuid.to_string()).await?;
-        notes.push(LoreNoteWithTags { note, tags });
-    }
-    Ok(Json(notes))
+    let note_uuids: Vec<String> = rows.iter().map(|r| r.uuid.clone()).collect();
+    let mut tags_by_note = load_tags_for_notes(&state.db, &note_uuids).await?;
+    rows.into_iter()
+        .map(|row| {
+            let note = row.into_dto()?;
+            let tags = tags_by_note.remove(&note.uuid.to_string()).unwrap_or_default();
+            Ok(LoreNoteWithTags { note, tags })
+        })
+        .collect::<Result<Vec<_>, ApiError>>()
+        .map(Json)
 }
 
 pub async fn get_lore_note(
@@ -103,7 +101,7 @@ pub async fn get_lore_note(
     user: CurrentUser,
     Path(uuid): Path<Uuid>,
 ) -> Result<Json<LoreNoteWithTags>, ApiError> {
-    let row: Option<LoreNoteRow> = sqlx::query_as(LORE_NOTE_SELECT)
+    let row: Option<LoreNoteRow> = sqlx::query_as(&note_by_uuid_sql())
         .bind(uuid.to_string())
         .fetch_optional(&state.db)
         .await?;
@@ -163,7 +161,7 @@ pub async fn create_lore_note(
     }
     tx.commit().await?;
 
-    let row: LoreNoteRow = sqlx::query_as(LORE_NOTE_SELECT)
+    let row: LoreNoteRow = sqlx::query_as(&note_by_uuid_sql())
         .bind(&uuid)
         .fetch_one(&state.db)
         .await?;
@@ -178,14 +176,21 @@ pub async fn update_lore_note(
     Path(uuid): Path<Uuid>,
     Json(req): Json<UpdateLoreNoteRequest>,
 ) -> Result<Json<LoreNoteWithTags>, ApiError> {
-    let row: Option<LoreNoteRow> = sqlx::query_as(LORE_NOTE_SELECT)
+    let row: Option<LoreNoteRow> = sqlx::query_as(&note_by_uuid_sql())
         .bind(uuid.to_string())
         .fetch_optional(&state.db)
         .await?;
     let row = row.ok_or(ApiError::NotFound)?;
     let existing = row.into_dto()?;
     if existing.created_by_user_uuid != user.uuid {
-        return Err(ApiError::Unauthorized);
+        return Err(ApiError::Forbidden);
+    }
+
+    let next_title = req.title.as_deref().map(str::trim).map(str::to_string);
+    // COALESCE only guards NULL — an explicit empty string would wipe
+    // the title, which create_lore_note forbids.
+    if next_title.as_deref() == Some("") {
+        return Err(ApiError::BadRequest("title cannot be empty".into()));
     }
 
     // Resolve tags before the transaction (see create_lore_note for why).
@@ -197,7 +202,6 @@ pub async fn update_lore_note(
 
     let mut tx = state.db.begin().await?;
 
-    let next_title = req.title.as_deref().map(str::trim).map(str::to_string);
     let next_body = req.body_markdown.clone();
     let next_visibility = req.visibility.map(visibility_to_str);
 
@@ -234,7 +238,7 @@ pub async fn update_lore_note(
 
     tx.commit().await?;
 
-    let row: LoreNoteRow = sqlx::query_as(LORE_NOTE_SELECT)
+    let row: LoreNoteRow = sqlx::query_as(&note_by_uuid_sql())
         .bind(uuid.to_string())
         .fetch_one(&state.db)
         .await?;
@@ -255,7 +259,7 @@ pub async fn delete_lore_note(
             .await?;
     let (creator,) = row.ok_or(ApiError::NotFound)?;
     if creator != user.uuid.to_string() {
-        return Err(ApiError::Unauthorized);
+        return Err(ApiError::Forbidden);
     }
     sqlx::query("DELETE FROM lore_note WHERE uuid = ?")
         .bind(uuid.to_string())
@@ -266,93 +270,12 @@ pub async fn delete_lore_note(
 
 // ─── helpers ────────────────────────────────────────────────────────────
 
-const LORE_NOTE_SELECT: &str = "SELECT uuid, title, body_markdown, scope_kind, \
-                                scope_target_uuid, visibility, \
-                                derived_from_setting_note_uuid, \
-                                created_by_user_uuid, created_at, updated_at \
-                                FROM lore_note WHERE uuid = ?";
-
-#[derive(sqlx::FromRow)]
-struct LoreNoteRow {
-    uuid: String,
-    title: String,
-    body_markdown: String,
-    scope_kind: String,
-    scope_target_uuid: String,
-    visibility: String,
-    derived_from_setting_note_uuid: Option<String>,
-    created_by_user_uuid: String,
-    created_at: DateTime<Utc>,
-    updated_at: DateTime<Utc>,
-}
-
-impl LoreNoteRow {
-    fn into_dto(self) -> Result<LoreNote, ApiError> {
-        Ok(LoreNote {
-            uuid: Uuid::parse_str(&self.uuid).map_err(|e| ApiError::Internal(e.into()))?,
-            title: self.title,
-            body_markdown: self.body_markdown,
-            scope: NoteScope {
-                kind: scope_kind_from_str(&self.scope_kind)?,
-                target_uuid: Uuid::parse_str(&self.scope_target_uuid)
-                    .map_err(|e| ApiError::Internal(e.into()))?,
-            },
-            visibility: visibility_from_str(&self.visibility)?,
-            derived_from_setting_note_uuid: self
-                .derived_from_setting_note_uuid
-                .as_deref()
-                .map(|s| Uuid::parse_str(s).map_err(|e| ApiError::Internal(e.into())))
-                .transpose()?,
-            created_by_user_uuid: Uuid::parse_str(&self.created_by_user_uuid)
-                .map_err(|e| ApiError::Internal(e.into()))?,
-            created_at: self.created_at,
-            updated_at: self.updated_at,
-        })
-    }
-}
-
-fn scope_kind_to_str(kind: NoteScopeKind) -> &'static str {
-    match kind {
-        NoteScopeKind::Module => "module",
-        NoteScopeKind::Setting => "setting",
-        NoteScopeKind::Campaign => "campaign",
-        NoteScopeKind::Character => "character",
-    }
-}
-
-fn scope_kind_from_str(s: &str) -> Result<NoteScopeKind, ApiError> {
-    match s {
-        "module" => Ok(NoteScopeKind::Module),
-        "setting" => Ok(NoteScopeKind::Setting),
-        "campaign" => Ok(NoteScopeKind::Campaign),
-        "character" => Ok(NoteScopeKind::Character),
-        other => Err(ApiError::Internal(anyhow::anyhow!(
-            "unknown scope_kind in database: {other}"
-        ))),
-    }
+fn note_by_uuid_sql() -> String {
+    format!("{LORE_NOTE_SELECT} WHERE uuid = ?")
 }
 
 fn validate_scope_kind(s: &str) -> Result<(), ApiError> {
     scope_kind_from_str(s).map(|_| ())
-}
-
-fn visibility_to_str(v: NoteVisibility) -> &'static str {
-    match v {
-        NoteVisibility::Visible => "visible",
-        NoteVisibility::AuthorOnly => "author_only",
-        NoteVisibility::GamemasterOnly => "gamemaster_only",
-    }
-}
-
-fn visibility_from_str(s: &str) -> Result<NoteVisibility, ApiError> {
-    match s {
-        "visible" => Ok(NoteVisibility::Visible),
-        "author_only" => Ok(NoteVisibility::AuthorOnly),
-        "gamemaster_only" => Ok(NoteVisibility::GamemasterOnly),
-        other => Err(ApiError::Internal(anyhow::anyhow!(
-            "unknown visibility in database: {other}"
-        ))),
-    }
 }
 
 /// Can the given user view the given note? V1 rules:

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../services/server_connection.dart';
 import '../types/lore_note.dart';
 import '../types/setting.dart';
+import '../widgets/async_list_view.dart';
 import 'lore_note_edit_screen.dart';
 import 'promote_module_wizard_screen.dart';
 
@@ -85,51 +86,15 @@ class _SettingDetailScreenState extends State<SettingDetailScreen> {
       ),
       body: RefreshIndicator(
         onRefresh: _refresh,
-        child: FutureBuilder<List<LoreNoteWithTags>>(
+        child: AsyncListView<LoreNoteWithTags>(
           future: _notesFuture,
-          builder: (context, snap) {
-            if (snap.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (snap.hasError) {
-              return ListView(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text('Failed to load: ${snap.error}'),
-                  ),
-                ],
-              );
-            }
-            final notes = snap.data ?? const [];
-            if (notes.isEmpty) {
-              return ListView(
-                children: const [
-                  SizedBox(height: 80),
-                  Center(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 24),
-                      child: Text(
-                        'No lore notes in this setting yet. Tap + to add one.',
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            }
-            return ListView.separated(
-              itemCount: notes.length,
-              separatorBuilder: (_, __) => const Divider(height: 1),
-              itemBuilder: (_, i) {
-                final entry = notes[i];
-                final tagStr = entry.tags.map((t) => t.slug).join(' · ');
-                return ListTile(
-                  title: Text(entry.note.title),
-                  subtitle: tagStr.isEmpty ? null : Text(tagStr),
-                  onTap: () => _openNote(entry),
-                );
-              },
+          emptyMessage: 'No lore notes in this setting yet. Tap + to add one.',
+          itemBuilder: (_, entry) {
+            final tagStr = entry.tags.map((t) => t.slug).join(' · ');
+            return ListTile(
+              title: Text(entry.note.title),
+              subtitle: tagStr.isEmpty ? null : Text(tagStr),
+              onTap: () => _openNote(entry),
             );
           },
         ),

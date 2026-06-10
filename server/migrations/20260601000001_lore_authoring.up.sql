@@ -49,7 +49,7 @@ CREATE TABLE content_module (
     updated_at             TEXT                 NOT NULL  DEFAULT (datetime('now'))
 );
 
-CREATE INDEX idx_content_module_slug ON content_module(slug);
+-- No explicit slug index: UNIQUE on content_module.slug already creates one.
 CREATE INDEX idx_content_module_version_chain ON content_module(previous_version_uuid);
 
 CREATE TABLE setting (

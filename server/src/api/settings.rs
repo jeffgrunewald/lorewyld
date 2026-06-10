@@ -73,11 +73,20 @@ pub async fn list_settings(
 
 pub async fn get_setting(
     State(state): State<ApiState>,
-    _user: CurrentUser,
+    user: CurrentUser,
     Path(uuid): Path<Uuid>,
 ) -> Result<Json<Setting>, ApiError> {
-    let row: Option<SettingRow> = sqlx::query_as(&format!("{SETTING_SELECT} WHERE uuid = ?"))
+    // Same owner-or-collaborator access as list_settings; a setting the
+    // caller can't list also shouldn't resolve by uuid (404, not 403,
+    // so existence isn't leaked).
+    let sql = format!(
+        "{SETTING_SELECT} WHERE uuid = ?1 \
+         AND (owner_user_uuid = ?2 \
+              OR uuid IN (SELECT setting_uuid FROM setting_collaborator WHERE user_uuid = ?2))"
+    );
+    let row: Option<SettingRow> = sqlx::query_as(&sql)
         .bind(uuid.to_string())
+        .bind(user.uuid.to_string())
         .fetch_optional(&state.db)
         .await?;
     let row = row.ok_or(ApiError::NotFound)?;
@@ -119,6 +128,11 @@ pub async fn update_setting(
 ) -> Result<Json<Setting>, ApiError> {
     require_owner(&state.db, &uuid, &user).await?;
     let next_name = req.name.as_deref().map(str::trim).map(str::to_string);
+    // COALESCE only guards NULL — an explicit empty string would wipe
+    // the name, which create_setting forbids.
+    if next_name.as_deref() == Some("") {
+        return Err(ApiError::BadRequest("name cannot be empty".into()));
+    }
     sqlx::query(
         "UPDATE setting
             SET name                  = COALESCE(?, name),
@@ -205,7 +219,7 @@ async fn require_owner(
             .await?;
     let (owner,) = row.ok_or(ApiError::NotFound)?;
     if owner != user.uuid.to_string() {
-        return Err(ApiError::Unauthorized);
+        return Err(ApiError::Forbidden);
     }
     Ok(())
 }

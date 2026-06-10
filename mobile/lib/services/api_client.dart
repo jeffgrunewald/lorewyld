@@ -48,14 +48,27 @@ class ApiClient {
     return h;
   }
 
-  Uri _u(String path, [Map<String, String>? query]) =>
-      baseUri.replace(path: path, queryParameters: query);
+  Uri _u(String path, [Map<String, String>? query]) {
+    // Append to the base URI's path rather than replacing it, so a
+    // server URL with a prefix (http://host/lorewyld) keeps working.
+    final basePath = baseUri.path.endsWith('/')
+        ? baseUri.path.substring(0, baseUri.path.length - 1)
+        : baseUri.path;
+    return baseUri.replace(path: '$basePath$path', queryParameters: query);
+  }
 
   Future<dynamic> _send(Future<http.Response> Function() send) async {
     final res = await send();
     if (res.statusCode >= 200 && res.statusCode < 300) {
       if (res.body.isEmpty) return null;
-      return jsonDecode(res.body);
+      try {
+        return jsonDecode(res.body);
+      } on FormatException catch (e) {
+        // A non-JSON 2xx (proxy page, captive portal) should surface as
+        // an ApiException like every other failure, not a raw parse error.
+        throw ApiException(res.statusCode, 'parse_error',
+            'Server returned a malformed response: ${e.message}');
+      }
     }
     String code = 'http_${res.statusCode}';
     String message = res.body;

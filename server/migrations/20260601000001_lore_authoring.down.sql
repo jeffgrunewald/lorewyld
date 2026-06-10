@@ -18,7 +18,6 @@ DROP INDEX IF EXISTS idx_setting_owner;
 DROP TABLE IF EXISTS setting;
 
 DROP INDEX IF EXISTS idx_content_module_version_chain;
-DROP INDEX IF EXISTS idx_content_module_slug;
 DROP TABLE IF EXISTS content_module;
 
 DROP INDEX IF EXISTS idx_user_session_user_uuid;

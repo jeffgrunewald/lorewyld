@@ -6,9 +6,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 
 import '../services/server_connection.dart';
-import '../types/api_v1.dart';
 import '../types/content_module.dart';
 import '../types/lore_note.dart';
+import '../widgets/async_list_view.dart';
 
 class ModulesBrowseScreen extends StatefulWidget {
   const ModulesBrowseScreen({super.key, required this.connection});
@@ -20,18 +20,20 @@ class ModulesBrowseScreen extends StatefulWidget {
 }
 
 class _ModulesBrowseScreenState extends State<ModulesBrowseScreen> {
-  late Future<ServerInfo> _infoFuture;
+  late Future<List<ContentModule>> _modulesFuture;
 
   @override
   void initState() {
     super.initState();
-    _infoFuture = widget.connection.api!.serverInfo();
+    _modulesFuture = _load();
+  }
+
+  Future<List<ContentModule>> _load() {
+    return widget.connection.api!.serverInfo().then((info) => info.modules);
   }
 
   Future<void> _refresh() async {
-    setState(() {
-      _infoFuture = widget.connection.api!.serverInfo();
-    });
+    setState(() => _modulesFuture = _load());
   }
 
   @override
@@ -40,55 +42,20 @@ class _ModulesBrowseScreenState extends State<ModulesBrowseScreen> {
       appBar: AppBar(title: const Text('Modules')),
       body: RefreshIndicator(
         onRefresh: _refresh,
-        child: FutureBuilder<ServerInfo>(
-          future: _infoFuture,
-          builder: (context, snap) {
-            if (snap.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-            if (snap.hasError) {
-              return ListView(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text('Failed: ${snap.error}'),
-                  ),
-                ],
-              );
-            }
-            final modules = snap.data?.modules ?? const [];
-            if (modules.isEmpty) {
-              return ListView(
-                children: const [
-                  SizedBox(height: 80),
-                  Center(
-                    child: Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 24),
-                      child: Text(
-                        'No modules published on this server yet.',
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            }
-            return ListView.separated(
-              itemCount: modules.length,
-              separatorBuilder: (_, _) => const Divider(height: 1),
-              itemBuilder: (_, i) => _ModuleTile(
-                module: modules[i],
-                onTap: () {
-                  Navigator.of(context).push(MaterialPageRoute(
-                    builder: (_) => ModuleDetailScreen(
-                      connection: widget.connection,
-                      module: modules[i],
-                    ),
-                  ));
-                },
-              ),
-            );
-          },
+        child: AsyncListView<ContentModule>(
+          future: _modulesFuture,
+          emptyMessage: 'No modules published on this server yet.',
+          itemBuilder: (context, module) => _ModuleTile(
+            module: module,
+            onTap: () {
+              Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => ModuleDetailScreen(
+                  connection: widget.connection,
+                  module: module,
+                ),
+              ));
+            },
+          ),
         ),
       ),
     );

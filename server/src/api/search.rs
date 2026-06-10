@@ -1,12 +1,13 @@
 use axum::{Json, extract::State};
-use chrono::{DateTime, Utc};
-use lorewyld_types::{
-    api_v1::{LoreNoteWithTags, SearchRequest, SearchResponse},
-    lore_note::{LoreNote, NoteScope, NoteScopeKind, NoteVisibility},
-};
-use uuid::Uuid;
+use lorewyld_types::api_v1::{LoreNoteWithTags, SearchRequest, SearchResponse};
 
-use crate::api::{ApiState, auth::CurrentUser, error::ApiError, tags::load_tags_for_note};
+use crate::api::{
+    ApiState,
+    auth::CurrentUser,
+    error::ApiError,
+    rows::{LORE_NOTE_SELECT_N, LoreNoteRow, VISIBILITY_PREDICATE, scope_kind_to_str},
+    tags::load_tags_for_notes,
+};
 
 const DEFAULT_LIMIT: u32 = 50;
 const MAX_LIMIT: u32 = 200;
@@ -27,19 +28,14 @@ pub async fn search(
         .map(|n| n.clamp(1, MAX_LIMIT))
         .unwrap_or(DEFAULT_LIMIT) as i64;
 
-    let mut sql = String::from(
-        "SELECT n.uuid, n.title, n.body_markdown, n.scope_kind, n.scope_target_uuid,
-                n.visibility, n.derived_from_setting_note_uuid, n.created_by_user_uuid,
-                n.created_at, n.updated_at
-           FROM lore_note n",
-    );
+    let mut sql = String::from(LORE_NOTE_SELECT_N);
     let mut binds: Vec<String> = Vec::new();
     let mut conds: Vec<String> = Vec::new();
 
-    if let Some(q) = req.q.as_deref().filter(|s| !s.is_empty()) {
+    if let Some(q) = req.q.as_deref().filter(|s| !s.trim().is_empty()) {
         sql.push_str(" JOIN lore_note_fts fts ON fts.rowid = n.rowid");
         conds.push("lore_note_fts MATCH ?".into());
-        binds.push(q.to_string());
+        binds.push(fts5_quote(q));
     }
 
     if let Some(kind) = req.scope_kind {
@@ -75,7 +71,7 @@ pub async fn search(
     }
 
     // Visibility filter applies last (always present).
-    conds.push("(n.visibility = 'visible' OR n.created_by_user_uuid = ?)".into());
+    conds.push(VISIBILITY_PREDICATE.into());
     binds.push(user.uuid.to_string());
 
     if !conds.is_empty() {
@@ -84,85 +80,33 @@ pub async fn search(
     }
     sql.push_str(" ORDER BY n.updated_at DESC LIMIT ?");
 
-    let mut q = sqlx::query_as::<_, NoteRow>(&sql);
+    let mut q = sqlx::query_as::<_, LoreNoteRow>(&sql);
     for b in &binds {
         q = q.bind(b);
     }
     q = q.bind(limit);
     let rows = q.fetch_all(&state.db).await?;
 
-    let mut notes = Vec::with_capacity(rows.len());
-    for row in rows {
-        let note = row.into_dto()?;
-        let tags = load_tags_for_note(&state.db, &note.uuid.to_string()).await?;
-        notes.push(LoreNoteWithTags { note, tags });
-    }
+    let note_uuids: Vec<String> = rows.iter().map(|r| r.uuid.clone()).collect();
+    let mut tags_by_note = load_tags_for_notes(&state.db, &note_uuids).await?;
+    let notes = rows
+        .into_iter()
+        .map(|row| {
+            let note = row.into_dto()?;
+            let tags = tags_by_note.remove(&note.uuid.to_string()).unwrap_or_default();
+            Ok(LoreNoteWithTags { note, tags })
+        })
+        .collect::<Result<Vec<_>, ApiError>>()?;
     Ok(Json(SearchResponse { notes }))
 }
 
-#[derive(sqlx::FromRow)]
-struct NoteRow {
-    uuid: String,
-    title: String,
-    body_markdown: String,
-    scope_kind: String,
-    scope_target_uuid: String,
-    visibility: String,
-    derived_from_setting_note_uuid: Option<String>,
-    created_by_user_uuid: String,
-    created_at: DateTime<Utc>,
-    updated_at: DateTime<Utc>,
-}
-
-impl NoteRow {
-    fn into_dto(self) -> Result<LoreNote, ApiError> {
-        Ok(LoreNote {
-            uuid: Uuid::parse_str(&self.uuid).map_err(|e| ApiError::Internal(e.into()))?,
-            title: self.title,
-            body_markdown: self.body_markdown,
-            scope: NoteScope {
-                kind: match self.scope_kind.as_str() {
-                    "module" => NoteScopeKind::Module,
-                    "setting" => NoteScopeKind::Setting,
-                    "campaign" => NoteScopeKind::Campaign,
-                    "character" => NoteScopeKind::Character,
-                    other => {
-                        return Err(ApiError::Internal(anyhow::anyhow!(
-                            "unknown scope_kind: {other}"
-                        )));
-                    }
-                },
-                target_uuid: Uuid::parse_str(&self.scope_target_uuid)
-                    .map_err(|e| ApiError::Internal(e.into()))?,
-            },
-            visibility: match self.visibility.as_str() {
-                "visible" => NoteVisibility::Visible,
-                "author_only" => NoteVisibility::AuthorOnly,
-                "gamemaster_only" => NoteVisibility::GamemasterOnly,
-                other => {
-                    return Err(ApiError::Internal(anyhow::anyhow!(
-                        "unknown visibility: {other}"
-                    )));
-                }
-            },
-            derived_from_setting_note_uuid: self
-                .derived_from_setting_note_uuid
-                .as_deref()
-                .map(|s| Uuid::parse_str(s).map_err(|e| ApiError::Internal(e.into())))
-                .transpose()?,
-            created_by_user_uuid: Uuid::parse_str(&self.created_by_user_uuid)
-                .map_err(|e| ApiError::Internal(e.into()))?,
-            created_at: self.created_at,
-            updated_at: self.updated_at,
-        })
-    }
-}
-
-fn scope_kind_to_str(kind: NoteScopeKind) -> &'static str {
-    match kind {
-        NoteScopeKind::Module => "module",
-        NoteScopeKind::Setting => "setting",
-        NoteScopeKind::Campaign => "campaign",
-        NoteScopeKind::Character => "character",
-    }
+/// Quote each whitespace-separated term as an FTS5 string literal
+/// (implicit AND between terms). Raw user input fed to MATCH otherwise
+/// hits FTS5's query grammar — an unbalanced `"` or stray `NEAR(`
+/// becomes a SQLite syntax error and surfaces as a 500.
+fn fts5_quote(q: &str) -> String {
+    q.split_whitespace()
+        .map(|term| format!("\"{}\"", term.replace('"', "\"\"")))
+        .collect::<Vec<_>>()
+        .join(" ")
 }

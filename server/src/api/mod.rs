@@ -2,6 +2,7 @@ pub mod auth;
 pub mod error;
 pub mod lore_notes;
 pub mod modules;
+pub mod rows;
 pub mod search;
 pub mod server_info;
 pub mod settings;
