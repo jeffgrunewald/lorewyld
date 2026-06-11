@@ -1,14 +1,23 @@
 import 'package:flutter/material.dart';
 
 import '../home_screen.dart';
-import '../screens/server_connect_screen.dart';
+import '../screens/server_screen.dart';
+import '../services/local_store.dart';
 import '../services/server_connection.dart';
 import 'lorewyld_app_bar.dart';
 
+/// App shell: brand app bar over an inner navigator. The app is fully
+/// usable offline — the server connection is optional and managed from
+/// the cloud icon in the app bar.
 class LorewyldShell extends StatefulWidget {
-  const LorewyldShell({super.key, required this.connection});
+  const LorewyldShell({
+    super.key,
+    required this.connection,
+    required this.store,
+  });
 
   final ServerConnection connection;
+  final LocalStore store;
 
   @override
   State<LorewyldShell> createState() => _LorewyldShellState();
@@ -47,9 +56,17 @@ class _LorewyldShellState extends State<LorewyldShell> {
     await _navigatorKey.currentState?.maybePop();
   }
 
+  void _openServerScreen() {
+    _navigatorKey.currentState?.push(
+      MaterialPageRoute(
+        builder: (_) => ServerScreen(connection: widget.connection),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isConnected = widget.connection.isConnected;
+    final loggedIn = widget.connection.isLoggedIn;
     return PopScope(
       canPop: !_canPop,
       onPopInvokedWithResult: (didPop, _) {
@@ -65,38 +82,29 @@ class _LorewyldShellState extends State<LorewyldShell> {
                   tooltip: 'Back',
                 )
               : null,
-          actions: isConnected
-              ? [
-                  PopupMenuButton<String>(
-                    onSelected: (value) async {
-                      if (value == 'disconnect') {
-                        await widget.connection.disconnect();
-                      }
-                    },
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(
-                        value: 'disconnect',
-                        child: Text('Disconnect from server'),
-                      ),
-                    ],
-                  ),
-                ]
-              : null,
-        ),
-        body: isConnected
-            ? Navigator(
-                key: _navigatorKey,
-                observers: [_observer],
-                onGenerateRoute: (settings) => MaterialPageRoute(
-                  settings: settings,
-                  builder: (_) =>
-                      HomeScreen(connection: widget.connection),
-                ),
-              )
-            : ServerConnectScreen(
-                connection: widget.connection,
-                onConnected: () {},
+          actions: [
+            IconButton(
+              icon: Icon(
+                loggedIn ? Icons.cloud_done_outlined : Icons.cloud_off_outlined,
               ),
+              tooltip: loggedIn
+                  ? 'Connected as ${widget.connection.user?.username ?? 'user'}'
+                  : 'Connect to a server',
+              onPressed: _openServerScreen,
+            ),
+          ],
+        ),
+        body: Navigator(
+          key: _navigatorKey,
+          observers: [_observer],
+          onGenerateRoute: (settings) => MaterialPageRoute(
+            settings: settings,
+            builder: (_) => HomeScreen(
+              connection: widget.connection,
+              store: widget.store,
+            ),
+          ),
+        ),
       ),
     );
   }

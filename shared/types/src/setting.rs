@@ -25,7 +25,10 @@ pub struct Setting {
     /// Optional `SettingScope` lore note serving as the world primer.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description_note_uuid: Option<EntityId>,
-    pub owner_user_uuid: EntityId,
+    /// `None` when the owning account has been deleted — content
+    /// outlives its owner.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub owner_user_uuid: Option<EntityId>,
     /// Set when the setting has been published as a module via the
     /// Promote-to-Module wizard. Points to the most recent published
     /// version; older versions are reachable via the module's own

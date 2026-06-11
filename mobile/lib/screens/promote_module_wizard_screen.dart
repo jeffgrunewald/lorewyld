@@ -1,25 +1,32 @@
-// Promote-to-Module wizard.
+// Promote-to-Module wizard. Publishing happens server-side from the
+// setting's PUSHED notes, so the wizard requires a logged-in connection
+// and a setting that has been pushed; local notes that haven't been
+// pushed yet appear disabled with a hint.
+//
 // Step 1: module metadata (name, slug, license, version, description).
-// Step 2: note selection (defaults: Visible checked, GamemasterOnly unchecked
-//         with spoiler-warning banner).
-// Step 3: confirm + publish — calls POST /api/modules.
+// Step 2: note selection (defaults: Visible checked, GamemasterOnly
+//         unchecked with spoiler-warning banner).
+// Step 3: confirm + publish — calls POST /api/modules. The server tags
+//         the publishing user's email into the module's authors.
 
 import 'package:flutter/material.dart';
 
 import '../services/api_client.dart';
+import '../services/local_store.dart';
 import '../services/server_connection.dart';
 import '../types/lore_note.dart';
-import '../types/setting.dart';
 
 class PromoteModuleWizardScreen extends StatefulWidget {
   const PromoteModuleWizardScreen({
     super.key,
     required this.connection,
+    required this.store,
     required this.setting,
   });
 
   final ServerConnection connection;
-  final Setting setting;
+  final LocalStore store;
+  final LocalSetting setting;
 
   @override
   State<PromoteModuleWizardScreen> createState() =>
@@ -39,8 +46,8 @@ class _PromoteModuleWizardScreenState extends State<PromoteModuleWizardScreen> {
   final _versionCtl = TextEditingController(text: '1.0.0');
   final _descCtl = TextEditingController();
 
-  // note selection state
-  List<LoreNoteWithTags> _notes = const [];
+  // note selection state (keyed by LOCAL note uuid)
+  List<LocalNote> _notes = const [];
   final Map<String, bool> _selected = {};
 
   @override
@@ -61,37 +68,33 @@ class _PromoteModuleWizardScreenState extends State<PromoteModuleWizardScreen> {
     super.dispose();
   }
 
-  String _slugify(String s) =>
-      s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-').replaceAll(RegExp(r'^-+|-+$'), '');
+  String _slugify(String s) => s
+      .toLowerCase()
+      .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+      .replaceAll(RegExp(r'^-+|-+$'), '');
 
   Future<void> _loadNotes() async {
-    try {
-      final notes = await widget.connection.api!.listLoreNotes(
-        scopeKind: NoteScopeKind.setting,
-        scopeTarget: widget.setting.uuid,
-      );
-      setState(() {
-        _notes = notes;
-        for (final n in notes) {
-          // Spoiler-safe defaults: Visible checked, AuthorOnly/GamemasterOnly
-          // unchecked. Users can re-check explicitly.
-          _selected[n.note.uuid] = n.note.visibility == NoteVisibility.visible;
-        }
-        _loadingNotes = false;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _loadingNotes = false;
-        _publishError = 'Failed to load setting notes: $e';
-      });
-    }
+    final notes = await widget.store.listNotes(
+      scopeKind: NoteScopeKind.setting,
+      scopeTarget: widget.setting.uuid,
+    );
+    if (!mounted) return;
+    setState(() {
+      _notes = notes;
+      for (final n in notes) {
+        // Spoiler-safe defaults: Visible checked, AuthorOnly/GamemasterOnly
+        // unchecked. Unpushed notes can't be selected at all.
+        _selected[n.uuid] =
+            n.remoteUuid != null && n.visibility == NoteVisibility.visible;
+      }
+      _loadingNotes = false;
+    });
   }
 
   Future<void> _commit() async {
-    final selectedUuids = _selected.entries
-        .where((e) => e.value)
-        .map((e) => e.key)
+    final selectedRemoteUuids = _notes
+        .where((n) => _selected[n.uuid] == true && n.remoteUuid != null)
+        .map((n) => n.remoteUuid!)
         .toList();
 
     setState(() {
@@ -102,16 +105,15 @@ class _PromoteModuleWizardScreenState extends State<PromoteModuleWizardScreen> {
     final description = _descCtl.text.trim();
     try {
       await widget.connection.api!.publishModule(
-        sourceSettingUuid: widget.setting.uuid,
+        sourceSettingUuid: widget.setting.remoteUuid!,
         name: name,
         slug: _slugCtl.text.trim().toLowerCase(),
         license: _licenseCtl.text.trim(),
         description: description.isEmpty ? null : description,
-        authors: [
-          widget.connection.user?.displayName ?? '',
-        ].where((s) => s.isNotEmpty).toList(),
+        // The server credits the publisher by email automatically.
+        authors: const [],
         versionString: _versionCtl.text.trim(),
-        selectedNoteUuids: selectedUuids,
+        selectedNoteUuids: selectedRemoteUuids,
       );
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -131,8 +133,8 @@ class _PromoteModuleWizardScreenState extends State<PromoteModuleWizardScreen> {
   Widget build(BuildContext context) {
     final selectedCount = _selected.values.where((v) => v).length;
     final gamemasterChecked = _notes
-        .where((n) => n.note.visibility == NoteVisibility.gamemasterOnly)
-        .where((n) => _selected[n.note.uuid] == true)
+        .where((n) => n.visibility == NoteVisibility.gamemasterOnly)
+        .where((n) => _selected[n.uuid] == true)
         .length;
     return Scaffold(
       appBar: AppBar(title: const Text('Promote to module')),
@@ -184,7 +186,7 @@ class _PromoteModuleWizardScreenState extends State<PromoteModuleWizardScreen> {
           Step(
             title: Text('Notes ($selectedCount selected)'),
             isActive: _step >= 1,
-            content: _notesStep(gamemasterChecked),
+            content: _notesStep(),
           ),
           Step(
             title: const Text('Review & publish'),
@@ -237,7 +239,7 @@ class _PromoteModuleWizardScreenState extends State<PromoteModuleWizardScreen> {
     );
   }
 
-  Widget _notesStep(int gamemasterChecked) {
+  Widget _notesStep() {
     if (_loadingNotes) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 24),
@@ -249,11 +251,27 @@ class _PromoteModuleWizardScreenState extends State<PromoteModuleWizardScreen> {
         'This setting has no lore notes to publish yet. Cancel, add some notes, and come back.',
       );
     }
+    final unpushed = _notes.where((n) => n.remoteUuid == null).length;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (_notes.any((n) =>
-            n.note.visibility != NoteVisibility.visible))
+        if (unpushed > 0)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Theme.of(context).colorScheme.errorContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                '$unpushed note(s) haven\'t been pushed to the server yet '
+                'and can\'t be published. Go back and Push first to include '
+                'them.',
+              ),
+            ),
+          ),
+        if (_notes.any((n) => n.visibility != NoteVisibility.visible))
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
             child: Container(
@@ -274,16 +292,19 @@ class _PromoteModuleWizardScreenState extends State<PromoteModuleWizardScreen> {
           ),
         for (final n in _notes)
           CheckboxListTile(
-            value: _selected[n.note.uuid] ?? false,
-            title: Text(n.note.title),
+            value: _selected[n.uuid] ?? false,
+            title: Text(n.title),
             subtitle: Text(
-              n.tags.isEmpty
-                  ? _visibilityLabel(n.note.visibility)
-                  : '${_visibilityLabel(n.note.visibility)} · ${n.tags.map((t) => t.slug).join(' · ')}',
+              [
+                _visibilityLabel(n.visibility),
+                if (n.remoteUuid == null) 'not pushed',
+                if (n.tagSlugs.isNotEmpty) n.tagSlugs.join(' · '),
+              ].join(' · '),
             ),
             controlAffinity: ListTileControlAffinity.leading,
-            onChanged: (v) =>
-                setState(() => _selected[n.note.uuid] = v ?? false),
+            onChanged: n.remoteUuid == null
+                ? null
+                : (v) => setState(() => _selected[n.uuid] = v ?? false),
           ),
       ],
     );

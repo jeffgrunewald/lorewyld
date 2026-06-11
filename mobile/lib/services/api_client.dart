@@ -13,6 +13,7 @@ import '../types/api_v1.dart';
 import '../types/lore_note.dart';
 import '../types/setting.dart';
 import '../types/tag.dart';
+import '../types/user.dart';
 
 class ApiException implements Exception {
   final int statusCode;
@@ -86,26 +87,52 @@ class ApiClient {
 
   Future<AuthResponse> register({
     required String joinCode,
-    required String displayName,
+    required String username,
+    required String email,
+    required String password,
   }) async {
     final body = await _send(() => _http.post(
           _u('/api/users/register'),
           headers: _headers(json: true, auth: false),
           body: jsonEncode({
             'join_code': joinCode,
-            'display_name': displayName,
+            'username': username,
+            'email': email,
+            'password': password,
           }),
         ));
     return AuthResponse.fromJson(body as Map<String, dynamic>);
   }
 
-  Future<AuthResponse> login({required String displayName}) async {
+  Future<AuthResponse> login({
+    required String username,
+    required String password,
+  }) async {
     final body = await _send(() => _http.post(
           _u('/api/users/login'),
           headers: _headers(json: true, auth: false),
-          body: jsonEncode({'display_name': displayName}),
+          body: jsonEncode({'username': username, 'password': password}),
         ));
     return AuthResponse.fromJson(body as Map<String, dynamic>);
+  }
+
+  /// Revokes the current session server-side. Idempotent on the server;
+  /// callers should clear local session state regardless of outcome.
+  Future<void> logout() async {
+    await _send(() => _http.post(
+          _u('/api/users/logout'),
+          headers: _headers(),
+        ));
+  }
+
+  /// Resolves the current session token to its user — used to validate
+  /// a persisted session on app launch.
+  Future<User> me() async {
+    final body = await _send(() => _http.get(
+          _u('/api/users/me'),
+          headers: _headers(),
+        ));
+    return User.fromJson(body as Map<String, dynamic>);
   }
 
   // ── server info ─────────────────────────────────────────────────────

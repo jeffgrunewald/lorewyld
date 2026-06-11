@@ -51,25 +51,28 @@ impl DiceType {
 
 #[component]
 pub fn Roll() -> impl IntoView {
-    let rows = DiceType::all().iter().map(|dt| {
-        let label = dt.label();
-        let sides = dt.sides();
-        let img = format!("/assets/dice/{label}.png");
-        view! {
-            <div class="lw-roll-row">
-                <button
-                    class="lw-roll-die-btn"
-                    type="button"
-                    data-die=label
-                    data-sides=sides
-                    aria-label=label
-                >
-                    <img src=img alt=label/>
-                </button>
-                <span class="lw-roll-output" data-die-output=label></span>
-            </div>
-        }
-    }).collect_view();
+    let rows = DiceType::all()
+        .iter()
+        .map(|dt| {
+            let label = dt.label();
+            let sides = dt.sides();
+            let img = format!("/assets/dice/{label}.png");
+            view! {
+                <div class="lw-roll-row">
+                    <button
+                        class="lw-roll-die-btn"
+                        type="button"
+                        data-die=label
+                        data-sides=sides
+                        aria-label=label
+                    >
+                        <img src=img alt=label/>
+                    </button>
+                    <span class="lw-roll-output" data-die-output=label></span>
+                </div>
+            }
+        })
+        .collect_view();
 
     view! {
         <section class="lw-roll">

@@ -44,9 +44,17 @@ dependencies:
   # Markdown rendering for lore-note previews and read views.
   flutter_markdown: ^0.7.0
 
+  # Local SQLite database for offline-first content (characters,
+  # settings, lore notes). Mirrors the server's storage model.
+  sqflite: ^2.4.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
+
+  # Host-side SQLite implementation so LocalStore logic is unit-testable
+  # without a device emulator.
+  sqflite_common_ffi: ^2.3.0
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is

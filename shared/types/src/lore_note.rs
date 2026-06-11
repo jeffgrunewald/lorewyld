@@ -79,7 +79,10 @@ pub struct LoreNote {
     pub visibility: NoteVisibility,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub derived_from_setting_note_uuid: Option<EntityId>,
-    pub created_by_user_uuid: EntityId,
+    /// `None` when the authoring account has been deleted — content
+    /// outlives its author.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created_by_user_uuid: Option<EntityId>,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }

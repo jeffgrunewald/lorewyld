@@ -30,3 +30,4 @@ leptos_axum = "0.8"
 leptos_router = { version = "0.8", features = ["ssr"] }
 leptos_meta = { version = "0.8", features = ["ssr"] }
 tower-http = { version = "0.6", features = ["fs"] }
+argon2 = "0.5"

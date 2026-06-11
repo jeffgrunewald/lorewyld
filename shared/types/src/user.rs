@@ -3,19 +3,17 @@ use typeshare::typeshare;
 
 use crate::common::{EntityId, Timestamp};
 
-/// Per-server user identity used for attribution and authoring access.
-///
-/// V1 ships without passwords — registration is gated only by the
-/// server's `join_code`. The `display_name` is unique within a server
-/// and acts as the de facto username for login. Future tiers may add
-/// credentials, federated identity, or cross-server account linkage;
-/// any such evolution is additive on top of this row.
+/// Server-instance user account: credentials, attribution, and admin
+/// access rolled into one identity. Registration is gated by the
+/// server's `join_code`; passwords are stored as argon2 PHC hashes.
+/// `admin` unlocks server settings and user management.
 #[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct AppUser {
+pub struct User {
     pub uuid: EntityId,
-    pub server_uuid: EntityId,
-    pub display_name: String,
+    pub username: String,
+    pub email: String,
+    pub admin: bool,
     pub created_at: Timestamp,
 }
 

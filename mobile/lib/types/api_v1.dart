@@ -1,18 +1,18 @@
 // Wire types for the v1 HTTP API. Mirror of
 // `lorewyld_types::api_v1::*`.
 
-import 'app_user.dart';
 import 'content_module.dart';
 import 'lore_note.dart';
+import 'user.dart';
 
 class AuthResponse {
-  final AppUser user;
+  final User user;
   final String sessionToken;
 
   const AuthResponse({required this.user, required this.sessionToken});
 
   factory AuthResponse.fromJson(Map<String, dynamic> json) => AuthResponse(
-        user: AppUser.fromJson(json['user'] as Map<String, dynamic>),
+        user: User.fromJson(json['user'] as Map<String, dynamic>),
         sessionToken: json['session_token'] as String,
       );
 }

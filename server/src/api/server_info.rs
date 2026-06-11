@@ -11,9 +11,7 @@ use crate::api::{
     rows::{ContentModuleRow, MODULE_SELECT_ACTIVE},
 };
 
-pub async fn server_info(
-    State(state): State<ApiState>,
-) -> Result<Json<ServerInfo>, ApiError> {
+pub async fn server_info(State(state): State<ApiState>) -> Result<Json<ServerInfo>, ApiError> {
     let (id, name, version): (String, String, String) =
         sqlx::query_as("SELECT id, name, version FROM game_server LIMIT 1")
             .fetch_one(&state.db)

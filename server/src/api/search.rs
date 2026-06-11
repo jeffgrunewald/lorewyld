@@ -93,7 +93,9 @@ pub async fn search(
         .into_iter()
         .map(|row| {
             let note = row.into_dto()?;
-            let tags = tags_by_note.remove(&note.uuid.to_string()).unwrap_or_default();
+            let tags = tags_by_note
+                .remove(&note.uuid.to_string())
+                .unwrap_or_default();
             Ok(LoreNoteWithTags { note, tags })
         })
         .collect::<Result<Vec<_>, ApiError>>()?;

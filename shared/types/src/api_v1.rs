@@ -8,28 +8,30 @@ use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 
 use crate::{
-    app_user::AppUser,
     common::EntityId,
     content_module::ContentModule,
     lore_note::{LoreNote, NoteScope, NoteScopeKind, NoteVisibility},
     tag::Tag,
+    user::User,
 };
 
-/// `POST /api/users/register` payload.
+/// `POST /api/users/register` payload. The join code gates account
+/// creation; the password is hashed server-side before storage.
 #[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RegisterRequest {
     pub join_code: String,
-    pub display_name: String,
+    pub username: String,
+    pub email: String,
+    pub password: String,
 }
 
-/// `POST /api/users/login` payload. v1 ships without passwords —
-/// knowing the display name within a server is sufficient to obtain a
-/// session token. Future tiers will add credentials.
+/// `POST /api/users/login` payload.
 #[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LoginRequest {
-    pub display_name: String,
+    pub username: String,
+    pub password: String,
 }
 
 /// Response body for both registration and login: the authenticated
@@ -38,8 +40,66 @@ pub struct LoginRequest {
 #[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuthResponse {
-    pub user: AppUser,
+    pub user: User,
     pub session_token: String,
+}
+
+/// `POST /api/users/password` payload — self-service password change
+/// for the logged-in user. The current password re-proves identity;
+/// the new password must satisfy the same policy as registration.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ChangePasswordRequest {
+    pub current_password: String,
+    pub new_password: String,
+}
+
+/// `POST /api/admin/users` payload — admin-driven account creation.
+/// Same shape as registration minus the join code (admin access
+/// supersedes it).
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AdminCreateUserRequest {
+    pub username: String,
+    pub email: String,
+    pub password: String,
+}
+
+/// `PATCH /api/admin/users/:uuid` payload — toggles the admin flag.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AdminUpdateUserRequest {
+    pub admin: bool,
+}
+
+/// `GET /api/admin/users` response — one page of registered users.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UserListResponse {
+    pub users: Vec<User>,
+    pub page: u32,
+    pub limit: u32,
+    pub total: u32,
+}
+
+/// `GET /api/admin/server` response — the editable server identity
+/// plus the read-only software version for display.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ServerSettings {
+    pub name: String,
+    pub join_code: String,
+    pub version: String,
+}
+
+/// `PATCH /api/admin/server` payload. Omitted fields stay. The join
+/// code is not directly editable — `POST /api/admin/server/join-code`
+/// regenerates it server-side instead.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub struct UpdateServerSettingsRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
 }
 
 /// Server-identity summary exposed by `GET /api/server-info` — omits

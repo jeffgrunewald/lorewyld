@@ -1,29 +1,88 @@
-// Smoke tests for the mobile shell. The dice-roller flow tests from
-// the pre-content-platform shape no longer apply directly — the home
-// screen is now gated on having a connected server. Those tests are
-// removed for v1; restore them under a fake-connection test harness in
-// v1.5 when we have a proper test rig for ServerConnection.
+// Smoke tests for the local-first mobile shell: the app boots straight
+// into the home screen with no server connection, and local features
+// are reachable offline.
+//
+// LocalStore does real isolate IO (sqflite ffi), which never completes
+// inside testWidgets' FakeAsync zone — wrap open/close in
+// tester.runAsync.
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:lorewyld/main.dart';
+import 'package:lorewyld/screens/character_list_screen.dart';
+import 'package:lorewyld/services/local_store.dart';
 import 'package:lorewyld/services/server_connection.dart';
 
 void main() {
-  testWidgets('app boots and shows the lorewyld brand on the app bar',
+  TestWidgetsFlutterBinding.ensureInitialized();
+  sqfliteFfiInit();
+  databaseFactory = databaseFactoryFfi;
+
+  testWidgets('app boots offline and shows the lorewyld brand',
       (tester) async {
     final connection = ServerConnection();
-    await tester.pumpWidget(LorewyldApp(connection: connection));
+    final store = (await tester
+        .runAsync(() => LocalStore.open(path: inMemoryDatabasePath)))!;
+    await tester.pumpWidget(LorewyldApp(connection: connection, store: store));
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
     expect(find.bySemanticsLabel('Lorewyld'), findsWidgets);
+    await tester.runAsync(store.close);
   });
 
-  testWidgets('with no stored credentials, the connect screen renders',
+  testWidgets('home screen offers local features without a server',
       (tester) async {
     final connection = ServerConnection();
-    await tester.pumpWidget(LorewyldApp(connection: connection));
+    final store = (await tester
+        .runAsync(() => LocalStore.open(path: inMemoryDatabasePath)))!;
+    await tester.pumpWidget(LorewyldApp(connection: connection, store: store));
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
-    expect(find.text('Connect to a server'), findsOneWidget);
-    expect(find.text('Connect'), findsOneWidget);
+    expect(find.text('Characters'), findsOneWidget);
+    expect(find.text('Settings & lore'), findsOneWidget);
+    expect(find.text('Search'), findsOneWidget);
+    expect(find.text('Working locally — no server connection'), findsOneWidget);
+    // Modules requires a login; the button says so.
+    expect(find.text('Modules (log in)'), findsOneWidget);
+    await tester.runAsync(store.close);
+  });
+
+  testWidgets('creating a character opens its sheet (regression: setState '
+      'must not receive a Future-returning closure)', (tester) async {
+    final store = (await tester
+        .runAsync(() => LocalStore.open(path: inMemoryDatabasePath)))!;
+    await tester.pumpWidget(
+      MaterialApp(home: CharacterListScreen(store: store)),
+    );
+    // No pumpAndSettle anywhere in this test: the list's FutureBuilder
+    // futures resolve only in the real zone (runAsync), so its loading
+    // spinner would keep pumpAndSettle from ever settling. Bounded
+    // pumps instead.
+    await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 50)));
+    await tester.pump();
+
+    await tester.tap(find.byType(FloatingActionButton));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    await tester.enterText(find.byType(TextField), 'Thistle Quickfoot');
+
+    // Tap Create, then pump so the dialog pop is processed and the
+    // create flow reaches its database await; only then can the real
+    // isolate IO resolve (inside runAsync). Bounded pumps afterwards —
+    // pumpAndSettle would hang on the list's real-zone refresh future.
+    await tester.tap(find.text('Create'));
+    await tester.pump();
+    await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    // The new character's sheet screen is pushed, with its name in the
+    // app bar — and no "setState() callback argument returned a Future"
+    // exception was thrown.
+    expect(tester.takeException(), isNull);
+    expect(find.widgetWithText(AppBar, 'Thistle Quickfoot'), findsOneWidget);
+    await tester.runAsync(store.close);
   });
 }

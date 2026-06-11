@@ -53,7 +53,9 @@ class LoreNote {
   final NoteScope scope;
   final NoteVisibility visibility;
   final String? derivedFromSettingNoteUuid;
-  final String createdByUserUuid;
+
+  /// Null when the authoring account has been deleted server-side.
+  final String? createdByUserUuid;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -64,7 +66,7 @@ class LoreNote {
     required this.scope,
     required this.visibility,
     this.derivedFromSettingNoteUuid,
-    required this.createdByUserUuid,
+    this.createdByUserUuid,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -78,7 +80,7 @@ class LoreNote {
             json['visibility'] as String? ?? 'visible'),
         derivedFromSettingNoteUuid:
             json['derived_from_setting_note_uuid'] as String?,
-        createdByUserUuid: json['created_by_user_uuid'] as String,
+        createdByUserUuid: json['created_by_user_uuid'] as String?,
         createdAt: DateTime.parse(json['created_at'] as String),
         updatedAt: DateTime.parse(json['updated_at'] as String),
       );

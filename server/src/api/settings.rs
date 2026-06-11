@@ -19,7 +19,7 @@ struct SettingRow {
     uuid: String,
     name: String,
     description_note_uuid: Option<String>,
-    owner_user_uuid: String,
+    owner_user_uuid: Option<String>,
     published_as_module_uuid: Option<String>,
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
@@ -35,8 +35,11 @@ impl SettingRow {
                 .as_deref()
                 .map(|s| Uuid::parse_str(s).map_err(|e| ApiError::Internal(e.into())))
                 .transpose()?,
-            owner_user_uuid: Uuid::parse_str(&self.owner_user_uuid)
-                .map_err(|e| ApiError::Internal(e.into()))?,
+            owner_user_uuid: self
+                .owner_user_uuid
+                .as_deref()
+                .map(|s| Uuid::parse_str(s).map_err(|e| ApiError::Internal(e.into())))
+                .transpose()?,
             published_as_module_uuid: self
                 .published_as_module_uuid
                 .as_deref()
@@ -173,11 +176,10 @@ pub async fn add_collaborator(
     Json(req): Json<AddCollaboratorRequest>,
 ) -> Result<impl IntoResponse, ApiError> {
     require_owner(&state.db, &uuid, &user).await?;
-    let collaborator_exists: Option<(i64,)> =
-        sqlx::query_as("SELECT 1 FROM app_user WHERE uuid = ?")
-            .bind(req.user_uuid.to_string())
-            .fetch_optional(&state.db)
-            .await?;
+    let collaborator_exists: Option<(i64,)> = sqlx::query_as("SELECT 1 FROM users WHERE id = ?")
+        .bind(req.user_uuid.to_string())
+        .fetch_optional(&state.db)
+        .await?;
     if collaborator_exists.is_none() {
         return Err(ApiError::BadRequest("no such user".into()));
     }
@@ -197,13 +199,11 @@ pub async fn remove_collaborator(
     Path((uuid, collab_uuid)): Path<(Uuid, Uuid)>,
 ) -> Result<impl IntoResponse, ApiError> {
     require_owner(&state.db, &uuid, &user).await?;
-    sqlx::query(
-        "DELETE FROM setting_collaborator WHERE setting_uuid = ? AND user_uuid = ?",
-    )
-    .bind(uuid.to_string())
-    .bind(collab_uuid.to_string())
-    .execute(&state.db)
-    .await?;
+    sqlx::query("DELETE FROM setting_collaborator WHERE setting_uuid = ? AND user_uuid = ?")
+        .bind(uuid.to_string())
+        .bind(collab_uuid.to_string())
+        .execute(&state.db)
+        .await?;
     Ok(StatusCode::NO_CONTENT)
 }
 
@@ -212,13 +212,15 @@ async fn require_owner(
     setting_uuid: &Uuid,
     user: &CurrentUser,
 ) -> Result<(), ApiError> {
-    let row: Option<(String,)> =
+    let row: Option<(Option<String>,)> =
         sqlx::query_as("SELECT owner_user_uuid FROM setting WHERE uuid = ?")
             .bind(setting_uuid.to_string())
             .fetch_optional(db)
             .await?;
     let (owner,) = row.ok_or(ApiError::NotFound)?;
-    if owner != user.uuid.to_string() {
+    // NULL owner (deleted account) matches nobody — orphaned settings
+    // are mutable by no one until admin tooling lands.
+    if owner.as_deref() != Some(user.uuid.to_string().as_str()) {
         return Err(ApiError::Forbidden);
     }
     Ok(())

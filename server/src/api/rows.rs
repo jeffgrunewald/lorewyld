@@ -17,8 +17,10 @@ use crate::api::error::ApiError;
 /// are readable by anyone authenticated; AuthorOnly/GamemasterOnly only
 /// by their creator. v1.5 broadens GamemasterOnly to campaign DMs — this
 /// constant is the single place that check changes.
-pub const VISIBILITY_PREDICATE: &str =
-    "(n.visibility = 'visible' OR n.created_by_user_uuid = ?)";
+///
+/// A NULL author (deleted account) never matches the bound uuid, so
+/// orphaned restricted notes are invisible to everyone.
+pub const VISIBILITY_PREDICATE: &str = "(n.visibility = 'visible' OR n.created_by_user_uuid = ?)";
 
 /// Unaliased lore-note select (single-table queries).
 pub const LORE_NOTE_SELECT: &str = "SELECT uuid, title, body_markdown, scope_kind, \
@@ -44,7 +46,7 @@ pub struct LoreNoteRow {
     pub scope_target_uuid: String,
     pub visibility: String,
     pub derived_from_setting_note_uuid: Option<String>,
-    pub created_by_user_uuid: String,
+    pub created_by_user_uuid: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -65,7 +67,11 @@ impl LoreNoteRow {
                 .as_deref()
                 .map(parse_uuid)
                 .transpose()?,
-            created_by_user_uuid: parse_uuid(&self.created_by_user_uuid)?,
+            created_by_user_uuid: self
+                .created_by_user_uuid
+                .as_deref()
+                .map(parse_uuid)
+                .transpose()?,
             created_at: self.created_at,
             updated_at: self.updated_at,
         })

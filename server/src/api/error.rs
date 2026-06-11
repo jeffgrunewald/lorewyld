@@ -1,7 +1,7 @@
 use axum::{
+    Json,
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
 };
 use serde::Serialize;
 use tracing::error;
@@ -13,11 +13,13 @@ pub enum ApiError {
     /// Registration failed because the supplied join code did not match
     /// the server's `join_code`.
     InvalidJoinCode,
-    /// Registration failed because the display name is already taken on
-    /// this server.
-    DisplayNameTaken,
-    /// Login failed because no user with the given display name exists.
-    DisplayNameNotFound,
+    /// Registration failed because the username is already taken.
+    UsernameTaken,
+    /// Registration failed because the email is already in use.
+    EmailTaken,
+    /// Login failed: unknown username or wrong password. A single
+    /// variant for both so responses don't reveal which usernames exist.
+    InvalidCredentials,
     /// Request lacked a valid `Authorization: Bearer <token>` header.
     Unauthorized,
     /// Caller is authenticated but does not own / may not act on the
@@ -65,15 +67,20 @@ impl IntoResponse for ApiError {
                 "invalid_join_code",
                 "join code did not match this server".to_string(),
             ),
-            Self::DisplayNameTaken => (
+            Self::UsernameTaken => (
                 StatusCode::CONFLICT,
-                "display_name_taken",
-                "display name is already in use on this server".to_string(),
+                "username_taken",
+                "username is already in use on this server".to_string(),
             ),
-            Self::DisplayNameNotFound => (
-                StatusCode::NOT_FOUND,
-                "display_name_not_found",
-                "no user with that display name exists on this server".to_string(),
+            Self::EmailTaken => (
+                StatusCode::CONFLICT,
+                "email_taken",
+                "email is already in use on this server".to_string(),
+            ),
+            Self::InvalidCredentials => (
+                StatusCode::UNAUTHORIZED,
+                "invalid_credentials",
+                "invalid username or password".to_string(),
             ),
             Self::Unauthorized => (
                 StatusCode::UNAUTHORIZED,
@@ -90,11 +97,7 @@ impl IntoResponse for ApiError {
                 "not_found",
                 "resource not found".to_string(),
             ),
-            Self::BadRequest(detail) => (
-                StatusCode::BAD_REQUEST,
-                "bad_request",
-                detail.clone(),
-            ),
+            Self::BadRequest(detail) => (StatusCode::BAD_REQUEST, "bad_request", detail.clone()),
             Self::Internal(err) => {
                 error!(error = ?err, "internal server error");
                 (

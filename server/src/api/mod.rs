@@ -1,3 +1,4 @@
+pub mod admin;
 pub mod auth;
 pub mod error;
 pub mod lore_notes;
@@ -67,6 +68,25 @@ impl ApiServer {
             .route("/api/server-info", get(server_info::server_info))
             .route("/api/users/register", post(auth::register))
             .route("/api/users/login", post(auth::login))
+            .route("/api/users/logout", post(auth::logout))
+            .route("/api/users/me", get(auth::me))
+            .route("/api/users/password", post(auth::change_password))
+            .route(
+                "/api/admin/users",
+                get(admin::list_users).post(admin::create_user),
+            )
+            .route(
+                "/api/admin/users/{uuid}",
+                axum::routing::delete(admin::delete_user).patch(admin::set_admin),
+            )
+            .route(
+                "/api/admin/server",
+                get(admin::get_server_settings).patch(admin::update_server_settings),
+            )
+            .route(
+                "/api/admin/server/join-code",
+                post(admin::regenerate_join_code),
+            )
             .route(
                 "/api/lore-notes",
                 get(lore_notes::list_lore_notes).post(lore_notes::create_lore_note),
@@ -104,12 +124,19 @@ impl ApiServer {
             .route("/api/modules/{uuid}", get(modules::get_module))
             .with_state(api_state);
 
+        let style_version = crate::web::StyleVersion::from_asset_mtime("assets/style.css");
         let leptos_router: Router<()> = Router::new()
             .nest_service("/assets", ServeDir::new("assets"))
             .leptos_routes(&leptos, routes, {
                 let leptos = leptos.clone();
                 let instance_name = instance_name.clone();
-                move || crate::web::app::shell(leptos.clone(), instance_name.clone())
+                move || {
+                    crate::web::app::shell(
+                        leptos.clone(),
+                        instance_name.clone(),
+                        style_version.clone(),
+                    )
+                }
             })
             .with_state(leptos);
 

@@ -33,7 +33,9 @@ class _ModulesBrowseScreenState extends State<ModulesBrowseScreen> {
   }
 
   Future<void> _refresh() async {
-    setState(() => _modulesFuture = _load());
+    setState(() {
+      _modulesFuture = _load();
+    });
   }
 
   @override

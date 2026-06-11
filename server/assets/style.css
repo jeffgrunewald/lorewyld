@@ -37,9 +37,36 @@ html, body {
     height: var(--lw-header-height);
     background: var(--lw-green);
     display: flex;
-    align-items: stretch;
+    align-items: center;
+    justify-content: space-between;
     padding: 0;
     flex-shrink: 0;
+}
+
+.lw-header-auth {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding-right: 16px;
+}
+
+/* Clickable: opens the change-password modal. */
+.lw-header-username {
+    -webkit-appearance: none;
+    appearance: none;
+    background: transparent;
+    border: none;
+    padding: 4px 6px;
+    color: #fff;
+    font-family: inherit;
+    font-size: 1rem;
+    font-weight: 500;
+    margin-right: 4px;
+    cursor: pointer;
+}
+
+.lw-header-username:hover {
+    text-decoration: underline;
 }
 
 .lw-header-brand {
@@ -265,4 +292,270 @@ html, body {
     color: var(--lw-on-surface-muted);
     font-size: 1rem;
     align-self: center;
+}
+
+/* Buttons (shared system, derived from the dice-roller pill button).
+   appearance/font resets keep UA widget styling (Chrome's bevelled
+   buttons, Safari's rounded inputs) from leaking through. */
+.lw-btn {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 36px;
+    padding: 0 20px;
+    border-radius: 9999px;
+    border: none;
+    font-family: inherit;
+    font-size: 0.95rem;
+    font-weight: 500;
+    line-height: 1;
+    cursor: pointer;
+    letter-spacing: 0.02em;
+    transition: background 0.15s, opacity 0.15s;
+}
+
+.lw-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.lw-btn-filled {
+    background: var(--lw-dark);
+    color: #fff;
+}
+
+.lw-btn-filled:hover:not(:disabled) {
+    background: var(--lw-dark-hover);
+}
+
+.lw-btn-outline {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    color: #fff;
+}
+
+.lw-btn-outline:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.lw-btn-text {
+    background: transparent;
+    color: var(--lw-on-surface);
+}
+
+.lw-btn-text:hover:not(:disabled) {
+    background: rgba(103, 58, 183, 0.08);
+}
+
+.lw-btn-danger {
+    background: transparent;
+    border: 1px solid #B3261E;
+    color: #B3261E;
+}
+
+.lw-btn-danger:hover:not(:disabled) {
+    background: rgba(179, 38, 30, 0.08);
+}
+
+/* Modal dialogs */
+.lw-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+}
+
+/* display:flex would override the hidden attribute without this. */
+.lw-modal-overlay[hidden] {
+    display: none;
+}
+
+.lw-modal {
+    background: var(--lw-surface);
+    border-radius: 12px;
+    padding: 24px;
+    width: min(420px, calc(100vw - 32px));
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+}
+
+.lw-modal-title {
+    margin: 0 0 16px;
+    font-size: 1.4rem;
+    font-weight: 500;
+}
+
+.lw-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+    margin-top: 16px;
+}
+
+/* Form fields */
+.lw-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-bottom: 14px;
+    font-size: 0.9rem;
+    color: var(--lw-on-surface-muted);
+}
+
+.lw-input {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 40px;
+    padding: 0 12px;
+    border: 1px solid var(--lw-divider);
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 1rem;
+    color: var(--lw-on-surface);
+    background: var(--lw-surface);
+}
+
+.lw-input:focus {
+    outline: none;
+    border-color: var(--lw-purple);
+}
+
+.lw-input-wrap {
+    position: relative;
+    display: block;
+}
+
+.lw-input-wrap .lw-input {
+    padding-right: 44px;
+}
+
+.lw-eye-btn {
+    -webkit-appearance: none;
+    appearance: none;
+    position: absolute;
+    top: 50%;
+    right: 6px;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 1.1rem;
+    padding: 4px 8px;
+}
+
+input[type="checkbox"] {
+    accent-color: var(--lw-purple);
+}
+
+.lw-form-error {
+    color: #B3261E;
+    font-size: 0.9rem;
+    margin: 0 0 8px;
+}
+
+.lw-form-success {
+    color: var(--lw-green-dark);
+    font-size: 0.9rem;
+    margin: 0 0 8px;
+}
+
+/* Nav settings sub-menu */
+.lw-nav-subitem {
+    margin-left: 16px;
+    font-size: 0.9rem;
+    padding: 6px 14px;
+}
+
+.lw-hidden {
+    display: none;
+}
+
+/* Settings pages */
+.lw-settings {
+    padding: 24px 32px;
+    max-width: 760px;
+}
+
+.lw-settings-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+}
+
+.lw-settings-title {
+    margin: 0;
+    font-size: 1.8rem;
+    font-weight: 500;
+}
+
+.lw-settings-forbidden {
+    color: var(--lw-on-surface-muted);
+    font-size: 1.05rem;
+}
+
+.lw-settings-status {
+    color: var(--lw-on-surface-muted);
+    font-size: 0.9rem;
+    min-height: 1.2em;
+}
+
+.lw-settings-form {
+    max-width: 420px;
+}
+
+.lw-settings-version {
+    margin: 0;
+    font-size: 1rem;
+    color: var(--lw-on-surface);
+}
+
+.lw-joincode-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.lw-settings-joincode {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 1rem;
+    color: var(--lw-on-surface);
+    background: var(--lw-sidebar-bg);
+    border: 1px solid var(--lw-divider);
+    border-radius: 8px;
+    padding: 8px 12px;
+}
+
+.lw-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.lw-table th {
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--lw-on-surface-muted);
+    padding: 8px 12px;
+    border-bottom: 2px solid var(--lw-divider);
+}
+
+.lw-table td {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--lw-divider);
+    font-size: 0.95rem;
+}
+
+.lw-pager {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-top: 16px;
+}
+
+.lw-pager-label {
+    color: var(--lw-on-surface-muted);
+    font-size: 0.9rem;
 }

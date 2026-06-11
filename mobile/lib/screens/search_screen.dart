@@ -1,19 +1,18 @@
-// Unified search across lore notes. Free-text + tag-chip filters,
-// scope-faceted. Tapping a result opens the note for editing.
+// Search across local lore notes — free-text + tag-chip filters,
+// scope-faceted. Fully offline: this searches the on-device store.
+// Tapping a result opens the note for editing.
 
 import 'package:flutter/material.dart';
 
-import '../services/api_client.dart';
-import '../services/server_connection.dart';
-import '../types/api_v1.dart';
+import '../services/local_store.dart';
 import '../types/lore_note.dart';
 import '../widgets/markdown_editor.dart';
 import 'lore_note_edit_screen.dart';
 
 class SearchScreen extends StatefulWidget {
-  const SearchScreen({super.key, required this.connection});
+  const SearchScreen({super.key, required this.store});
 
-  final ServerConnection connection;
+  final LocalStore store;
 
   @override
   State<SearchScreen> createState() => _SearchScreenState();
@@ -23,7 +22,7 @@ class _SearchScreenState extends State<SearchScreen> {
   final _qCtl = TextEditingController();
   List<String> _tagSlugs = [];
   NoteScopeKind? _scopeKind;
-  Future<SearchResponse>? _resultsFuture;
+  Future<List<LocalNote>>? _resultsFuture;
 
   @override
   void dispose() {
@@ -34,7 +33,7 @@ class _SearchScreenState extends State<SearchScreen> {
   void _runSearch() {
     final q = _qCtl.text.trim();
     setState(() {
-      _resultsFuture = widget.connection.api!.search(
+      _resultsFuture = widget.store.searchNotes(
         q: q.isEmpty ? null : q,
         scopeKind: _scopeKind,
         tagSlugs: _tagSlugs,
@@ -74,7 +73,7 @@ class _SearchScreenState extends State<SearchScreen> {
             child: TextField(
               controller: _qCtl,
               decoration: InputDecoration(
-                labelText: 'Search lore',
+                labelText: 'Search your lore',
                 hintText: 'Free-text across titles + bodies',
                 border: const OutlineInputBorder(),
                 suffixIcon: IconButton(
@@ -89,7 +88,8 @@ class _SearchScreenState extends State<SearchScreen> {
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: TagChipInput(
-              api: widget.connection.api!,
+              suggestions: (pattern) =>
+                  widget.store.suggestTagSlugs(prefix: pattern),
               slugs: _tagSlugs,
               onChanged: (slugs) {
                 setState(() => _tagSlugs = slugs);
@@ -105,9 +105,9 @@ class _SearchScreenState extends State<SearchScreen> {
                 children: [
                   _scopeChip(null, 'All scopes'),
                   const SizedBox(width: 6),
-                  _scopeChip(NoteScopeKind.module, 'Modules'),
-                  const SizedBox(width: 6),
                   _scopeChip(NoteScopeKind.setting, 'Settings'),
+                  const SizedBox(width: 6),
+                  _scopeChip(NoteScopeKind.character, 'Characters'),
                   const SizedBox(width: 6),
                   TextButton(
                     onPressed: _clearFilters,
@@ -137,23 +137,21 @@ class _SearchScreenState extends State<SearchScreen> {
         ),
       );
     }
-    return FutureBuilder<SearchResponse>(
+    return FutureBuilder<List<LocalNote>>(
       future: future,
       builder: (context, snap) {
         if (snap.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
         if (snap.hasError) {
-          final err = snap.error;
-          final message = err is ApiException ? err.message : err.toString();
           return Center(
             child: Padding(
               padding: const EdgeInsets.all(24),
-              child: Text('Search failed: $message'),
+              child: Text('Search failed: ${snap.error}'),
             ),
           );
         }
-        final results = snap.data?.notes ?? const [];
+        final results = snap.data ?? const [];
         if (results.isEmpty) {
           return const Center(
             child: Text('No results.'),
@@ -163,27 +161,23 @@ class _SearchScreenState extends State<SearchScreen> {
           itemCount: results.length,
           separatorBuilder: (_, _) => const Divider(height: 1),
           itemBuilder: (_, i) {
-            final entry = results[i];
-            final tagStr = entry.tags.map((t) => t.slug).join(' · ');
+            final note = results[i];
+            final tagStr = note.tagSlugs.join(' · ');
             return ListTile(
-              title: Text(entry.note.title),
+              title: Text(note.title),
               subtitle: Text(
                 [
-                  'in ${entry.note.scope.kind.wire}',
+                  'in ${note.scope.kind.wire}',
                   if (tagStr.isNotEmpty) tagStr,
                 ].join(' · '),
               ),
               onTap: () {
-                // Setting-scope notes are editable; module-scope notes
-                // open in the editor read-only (visibility flag would
-                // gate edits; for v1 just route through the same screen
-                // and let the API enforce ownership).
                 Navigator.of(context)
                     .push(MaterialPageRoute(
                       builder: (_) => LoreNoteEditScreen(
-                        connection: widget.connection,
-                        scope: entry.note.scope,
-                        existing: entry,
+                        store: widget.store,
+                        scope: note.scope,
+                        existing: note,
                       ),
                     ))
                     // Re-run the search so an edit (or delete) made in

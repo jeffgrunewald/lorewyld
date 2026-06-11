@@ -1,23 +1,24 @@
-// Edit (or create) a LoreNote in a fixed scope. The MarkdownEditor
-// widget owns the inputs; this screen wires it to the API.
+// Edit (or create) a lore note in a fixed scope, entirely against the
+// local store — no server required. The MarkdownEditor widget owns the
+// inputs; this screen wires it to LocalStore.
 
 import 'package:flutter/material.dart';
 
-import '../services/server_connection.dart';
+import '../services/local_store.dart';
 import '../types/lore_note.dart';
 import '../widgets/markdown_editor.dart';
 
 class LoreNoteEditScreen extends StatefulWidget {
   const LoreNoteEditScreen({
     super.key,
-    required this.connection,
+    required this.store,
     required this.scope,
     this.existing,
   });
 
-  final ServerConnection connection;
+  final LocalStore store;
   final NoteScope scope;
-  final LoreNoteWithTags? existing;
+  final LocalNote? existing;
 
   @override
   State<LoreNoteEditScreen> createState() => _LoreNoteEditScreenState();
@@ -31,7 +32,7 @@ class _LoreNoteEditScreenState extends State<LoreNoteEditScreen> {
   @override
   void initState() {
     super.initState();
-    _visibility = widget.existing?.note.visibility ?? NoteVisibility.visible;
+    _visibility = widget.existing?.visibility ?? NoteVisibility.visible;
   }
 
   Future<void> _save({
@@ -47,10 +48,9 @@ class _LoreNoteEditScreenState extends State<LoreNoteEditScreen> {
     }
     setState(() => _saving = true);
     try {
-      final api = widget.connection.api!;
       final existing = widget.existing;
       if (existing == null) {
-        await api.createLoreNote(
+        await widget.store.createNote(
           title: title,
           bodyMarkdown: body,
           scope: widget.scope,
@@ -58,8 +58,8 @@ class _LoreNoteEditScreenState extends State<LoreNoteEditScreen> {
           tagSlugs: tagSlugs,
         );
       } else {
-        await api.updateLoreNote(
-          uuid: existing.note.uuid,
+        await widget.store.updateNote(
+          uuid: existing.uuid,
           title: title,
           bodyMarkdown: body,
           visibility: _visibility,
@@ -85,7 +85,7 @@ class _LoreNoteEditScreenState extends State<LoreNoteEditScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete note?'),
-        content: Text('"${existing.note.title}" will be permanently removed.'),
+        content: Text('"${existing.title}" will be permanently removed.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -104,7 +104,7 @@ class _LoreNoteEditScreenState extends State<LoreNoteEditScreen> {
     if (confirm != true) return;
     setState(() => _deleting = true);
     try {
-      await widget.connection.api!.deleteLoreNote(existing.note.uuid);
+      await widget.store.deleteNote(existing.uuid);
       if (!mounted) return;
       Navigator.of(context).pop();
     } catch (e) {
@@ -140,11 +140,11 @@ class _LoreNoteEditScreenState extends State<LoreNoteEditScreen> {
         ],
       ),
       body: MarkdownEditor(
-        api: widget.connection.api!,
-        initialTitle: existing?.note.title ?? '',
-        initialBody: existing?.note.bodyMarkdown ?? '',
-        initialTagSlugs:
-            existing?.tags.map((t) => t.slug).toList() ?? const [],
+        tagSuggestions: (pattern) =>
+            widget.store.suggestTagSlugs(prefix: pattern),
+        initialTitle: existing?.title ?? '',
+        initialBody: existing?.bodyMarkdown ?? '',
+        initialTagSlugs: existing?.tagSlugs ?? const [],
         saving: _saving,
         deleting: _deleting,
         onSave: ({required title, required body, required tagSlugs}) =>

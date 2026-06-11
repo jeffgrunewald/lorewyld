@@ -7,8 +7,7 @@ use rand::Rng;
 use sqlx::SqlitePool;
 use uuid::Uuid;
 
-const JOIN_CODE_ALPHABET: &[u8] =
-    b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+const JOIN_CODE_ALPHABET: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 const JOIN_CODE_BLOCK_LEN: usize = 6;
 const JOIN_CODE_BLOCK_COUNT: usize = 3;
 
@@ -25,6 +24,17 @@ pub fn generate_join_code() -> String {
         })
         .collect::<Vec<_>>()
         .join("-")
+}
+
+/// True when `code` matches the shape produced by [`generate_join_code`]:
+/// dash-separated blocks of alphanumerics. Admin edits must satisfy the
+/// same constraint as freshly generated codes.
+pub fn is_valid_join_code(code: &str) -> bool {
+    let blocks: Vec<&str> = code.split('-').collect();
+    blocks.len() == JOIN_CODE_BLOCK_COUNT
+        && blocks.iter().all(|block| {
+            block.len() == JOIN_CODE_BLOCK_LEN && block.bytes().all(|c| c.is_ascii_alphanumeric())
+        })
 }
 
 pub async fn get_server_name(db: &SqlitePool) -> Result<String> {

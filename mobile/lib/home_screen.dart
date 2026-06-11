@@ -3,50 +3,58 @@ import 'package:flutter/material.dart';
 import 'dice/dice_icon.dart';
 import 'dice/dice_roller_screen.dart';
 import 'dice/dice_type.dart';
+import 'screens/character_list_screen.dart';
 import 'screens/modules_browse_screen.dart';
 import 'screens/search_screen.dart';
+import 'screens/server_screen.dart';
 import 'screens/setting_list_screen.dart';
+import 'services/local_store.dart';
 import 'services/server_connection.dart';
 
-class HomeScreen extends StatelessWidget {
-  const HomeScreen({super.key, required this.connection});
+/// Navigation hub. Characters, settings & lore, and search are fully
+/// local; Modules needs a logged-in server connection.
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({
+    super.key,
+    required this.connection,
+    required this.store,
+  });
 
   final ServerConnection connection;
+  final LocalStore store;
 
-  void _openDiceRoller(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const DiceRollerScreen()),
-    );
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  @override
+  void initState() {
+    super.initState();
+    widget.connection.addListener(_onConnectionChanged);
   }
 
-  void _openSettings(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => SettingListScreen(connection: connection),
-      ),
-    );
+  @override
+  void dispose() {
+    widget.connection.removeListener(_onConnectionChanged);
+    super.dispose();
   }
 
-  void _openModules(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ModulesBrowseScreen(connection: connection),
-      ),
-    );
+  void _onConnectionChanged() {
+    if (mounted) setState(() {});
   }
 
-  void _openSearch(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => SearchScreen(connection: connection),
-      ),
-    );
+  void _push(Widget screen) {
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => screen));
   }
 
   @override
   Widget build(BuildContext context) {
-    final user = connection.user;
-    final greeting = user != null ? 'Welcome, ${user.displayName}' : 'Welcome';
+    final connection = widget.connection;
+    final loggedIn = connection.isLoggedIn;
+    final greeting = loggedIn && connection.user != null
+        ? 'Welcome, ${connection.user!.username}'
+        : 'Welcome';
     return Scaffold(
       body: Center(
         child: Column(
@@ -60,14 +68,15 @@ class HomeScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             Text(greeting, style: Theme.of(context).textTheme.titleMedium),
-            if (connection.serverUrl != null)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  connection.serverUrl!,
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                loggedIn
+                    ? 'Connected to ${connection.serverUrl}'
+                    : 'Working locally — no server connection',
+                style: Theme.of(context).textTheme.bodySmall,
               ),
+            ),
             const SizedBox(height: 24),
             Wrap(
               spacing: 8,
@@ -75,19 +84,33 @@ class HomeScreen extends StatelessWidget {
               alignment: WrapAlignment.center,
               children: [
                 FilledButton.icon(
-                  onPressed: () => _openSettings(context),
+                  onPressed: () => _push(
+                      CharacterListScreen(store: widget.store)),
+                  icon: const Icon(Icons.person_outline),
+                  label: const Text('Characters'),
+                ),
+                FilledButton.icon(
+                  onPressed: () => _push(SettingListScreen(
+                    connection: connection,
+                    store: widget.store,
+                  )),
                   icon: const Icon(Icons.library_books_outlined),
                   label: const Text('Settings & lore'),
                 ),
                 FilledButton.tonalIcon(
-                  onPressed: () => _openModules(context),
-                  icon: const Icon(Icons.collections_bookmark_outlined),
-                  label: const Text('Modules'),
-                ),
-                FilledButton.tonalIcon(
-                  onPressed: () => _openSearch(context),
+                  onPressed: () =>
+                      _push(SearchScreen(store: widget.store)),
                   icon: const Icon(Icons.search),
                   label: const Text('Search'),
+                ),
+                FilledButton.tonalIcon(
+                  // Modules live on the server; route through the
+                  // server screen when not yet logged in.
+                  onPressed: () => _push(loggedIn
+                      ? ModulesBrowseScreen(connection: connection)
+                      : ServerScreen(connection: connection)),
+                  icon: const Icon(Icons.collections_bookmark_outlined),
+                  label: Text(loggedIn ? 'Modules' : 'Modules (log in)'),
                 ),
               ],
             ),
@@ -95,7 +118,8 @@ class HomeScreen extends StatelessWidget {
         ),
       ),
       floatingActionButton: _D20FloatingButton(
-        onPressed: () => _openDiceRoller(context),
+        onPressed: () =>
+            _push(const DiceRollerScreen()),
       ),
     );
   }

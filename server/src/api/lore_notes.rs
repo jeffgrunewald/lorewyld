@@ -89,7 +89,9 @@ pub async fn list_lore_notes(
     rows.into_iter()
         .map(|row| {
             let note = row.into_dto()?;
-            let tags = tags_by_note.remove(&note.uuid.to_string()).unwrap_or_default();
+            let tags = tags_by_note
+                .remove(&note.uuid.to_string())
+                .unwrap_or_default();
             Ok(LoreNoteWithTags { note, tags })
         })
         .collect::<Result<Vec<_>, ApiError>>()
@@ -182,7 +184,9 @@ pub async fn update_lore_note(
         .await?;
     let row = row.ok_or(ApiError::NotFound)?;
     let existing = row.into_dto()?;
-    if existing.created_by_user_uuid != user.uuid {
+    // NULL author (deleted account) matches nobody — orphaned notes are
+    // editable by no one until admin tooling lands.
+    if existing.created_by_user_uuid != Some(user.uuid) {
         return Err(ApiError::Forbidden);
     }
 
@@ -252,13 +256,13 @@ pub async fn delete_lore_note(
     user: CurrentUser,
     Path(uuid): Path<Uuid>,
 ) -> Result<impl IntoResponse, ApiError> {
-    let row: Option<(String,)> =
+    let row: Option<(Option<String>,)> =
         sqlx::query_as("SELECT created_by_user_uuid FROM lore_note WHERE uuid = ?")
             .bind(uuid.to_string())
             .fetch_optional(&state.db)
             .await?;
     let (creator,) = row.ok_or(ApiError::NotFound)?;
-    if creator != user.uuid.to_string() {
+    if creator.as_deref() != Some(user.uuid.to_string().as_str()) {
         return Err(ApiError::Forbidden);
     }
     sqlx::query("DELETE FROM lore_note WHERE uuid = ?")
@@ -286,7 +290,7 @@ fn can_view(note: &LoreNote, user: &CurrentUser) -> bool {
     match note.visibility {
         NoteVisibility::Visible => true,
         NoteVisibility::AuthorOnly | NoteVisibility::GamemasterOnly => {
-            note.created_by_user_uuid == user.uuid
+            note.created_by_user_uuid == Some(user.uuid)
         }
     }
 }
@@ -303,19 +307,15 @@ async fn validate_scope_authorization(
 ) -> Result<(), ApiError> {
     match scope.kind {
         NoteScopeKind::Setting => {
-            let row: Option<(String,)> = sqlx::query_as(
-                "SELECT owner_user_uuid FROM setting WHERE uuid = ?",
-            )
-            .bind(scope.target_uuid.to_string())
-            .fetch_optional(db)
-            .await?;
+            let row: Option<(Option<String>,)> =
+                sqlx::query_as("SELECT owner_user_uuid FROM setting WHERE uuid = ?")
+                    .bind(scope.target_uuid.to_string())
+                    .fetch_optional(db)
+                    .await?;
             let (owner,) = row.ok_or_else(|| {
-                ApiError::BadRequest(format!(
-                    "no setting with uuid {} exists",
-                    scope.target_uuid
-                ))
+                ApiError::BadRequest(format!("no setting with uuid {} exists", scope.target_uuid))
             })?;
-            if owner == user.uuid.to_string() {
+            if owner.as_deref() == Some(user.uuid.to_string().as_str()) {
                 return Ok(());
             }
             let is_collaborator: Option<(i64,)> = sqlx::query_as(

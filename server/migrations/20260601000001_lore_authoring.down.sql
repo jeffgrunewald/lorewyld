@@ -22,6 +22,3 @@ DROP TABLE IF EXISTS content_module;
 
 DROP INDEX IF EXISTS idx_user_session_user_uuid;
 DROP TABLE IF EXISTS user_session;
-
-DROP INDEX IF EXISTS idx_app_user_display_name;
-DROP TABLE IF EXISTS app_user;

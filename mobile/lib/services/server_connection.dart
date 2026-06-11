@@ -1,103 +1,155 @@
-// Manages the user's current server connection: base URL + session
-// token + cached user identity. Persists across launches via
-// SharedPreferences so the user only sees the connect screen once.
+// Manages the OPTIONAL server connection: base URL + session token +
+// cached user identity. The app is fully usable offline; connecting
+// only unlocks server features (modules, publish, push/pull). Persists
+// across launches via SharedPreferences.
+
+import 'dart:convert';
 
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../types/app_user.dart';
+import '../types/user.dart';
 import 'api_client.dart';
 
 class ServerConnection extends ChangeNotifier {
   static const _kServerUrl = 'lw.server_url';
   static const _kSessionToken = 'lw.session_token';
-  static const _kUserUuid = 'lw.user_uuid';
-  static const _kDisplayName = 'lw.display_name';
-  static const _kServerUuid = 'lw.server_uuid';
+  static const _kUserJson = 'lw.user_json';
+
+  // Pre-unification session keys — cleared on load; those sessions are
+  // invalid against the new server anyway.
+  static const _kLegacyUserUuid = 'lw.user_uuid';
+  static const _kLegacyDisplayName = 'lw.display_name';
+  static const _kLegacyServerUuid = 'lw.server_uuid';
 
   String? _serverUrl;
   ApiClient? _api;
-  AppUser? _user;
+  User? _user;
 
   String? get serverUrl => _serverUrl;
   ApiClient? get api => _api;
-  AppUser? get user => _user;
-  bool get isConnected => _api != null && _api!.sessionToken != null;
+  User? get user => _user;
+  bool get isLoggedIn => _api != null && _api!.sessionToken != null;
 
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
+
+    if (prefs.containsKey(_kLegacyDisplayName)) {
+      await prefs.remove(_kLegacyUserUuid);
+      await prefs.remove(_kLegacyDisplayName);
+      await prefs.remove(_kLegacyServerUuid);
+      await prefs.remove(_kSessionToken);
+    }
+
     final url = prefs.getString(_kServerUrl);
     final token = prefs.getString(_kSessionToken);
-    final userUuid = prefs.getString(_kUserUuid);
-    final displayName = prefs.getString(_kDisplayName);
-    final serverUuid = prefs.getString(_kServerUuid);
+    final userJson = prefs.getString(_kUserJson);
 
     if (url == null) return;
     _serverUrl = url;
     _api = ApiClient(baseUri: Uri.parse(url))..setSessionToken(token);
-    if (userUuid != null && displayName != null && serverUuid != null) {
-      _user = AppUser(
-        uuid: userUuid,
-        serverUuid: serverUuid,
-        displayName: displayName,
-        // Best-effort restore — exact creation timestamp isn't critical
-        // for UI; refreshed on next login.
-        createdAt: DateTime.now(),
-      );
+    if (userJson != null) {
+      try {
+        _user = User.fromJson(jsonDecode(userJson) as Map<String, dynamic>);
+      } catch (_) {
+        _user = null;
+      }
     }
     notifyListeners();
+
+    if (token != null) {
+      // Fire-and-forget probe: a 401 means the session was revoked
+      // server-side, so drop it. Network errors are ignored — the
+      // device may simply be offline, and the token may still be good.
+      _probeSession();
+    }
   }
 
-  Future<void> connect({
+  Future<void> _probeSession() async {
+    final api = _api;
+    if (api == null) return;
+    try {
+      final me = await api.me();
+      await _storeUser(me);
+      _user = me;
+      notifyListeners();
+    } on ApiException catch (e) {
+      if (e.statusCode == 401) {
+        await _clearSession();
+      }
+    } catch (_) {
+      // Offline / unreachable — keep the persisted session.
+    }
+  }
+
+  Future<void> login({
+    required String serverUrl,
+    required String username,
+    required String password,
+  }) async {
+    final api = ApiClient(baseUri: Uri.parse(serverUrl));
+    final auth = await api.login(username: username, password: password);
+    await _adoptSession(serverUrl, api, auth.sessionToken, auth.user);
+  }
+
+  Future<void> register({
     required String serverUrl,
     required String joinCode,
-    required String displayName,
+    required String username,
+    required String email,
+    required String password,
   }) async {
     final api = ApiClient(baseUri: Uri.parse(serverUrl));
     final auth = await api.register(
       joinCode: joinCode,
-      displayName: displayName,
+      username: username,
+      email: email,
+      password: password,
     );
-    api.setSessionToken(auth.sessionToken);
+    await _adoptSession(serverUrl, api, auth.sessionToken, auth.user);
+  }
 
+  /// Revokes the session server-side (best-effort) and discards it
+  /// locally. The server URL is kept so the next login pre-fills it.
+  Future<void> logout() async {
+    final api = _api;
+    if (api != null && api.sessionToken != null) {
+      try {
+        await api.logout();
+      } catch (_) {
+        // Revocation is best-effort; the local session goes regardless.
+      }
+    }
+    await _clearSession();
+  }
+
+  Future<void> _adoptSession(
+    String serverUrl,
+    ApiClient api,
+    String token,
+    User user,
+  ) async {
+    api.setSessionToken(token);
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_kServerUrl, serverUrl);
-    await prefs.setString(_kSessionToken, auth.sessionToken);
-    await prefs.setString(_kUserUuid, auth.user.uuid);
-    await prefs.setString(_kDisplayName, auth.user.displayName);
-    await prefs.setString(_kServerUuid, auth.user.serverUuid);
-
+    await prefs.setString(_kSessionToken, token);
     _serverUrl = serverUrl;
     _api = api;
-    _user = auth.user;
+    _user = user;
+    await _storeUser(user);
     notifyListeners();
   }
 
-  Future<void> reLogin({required String displayName}) async {
-    final api = _api;
-    if (api == null) {
-      throw StateError('no server URL configured; connect() first');
-    }
-    final auth = await api.login(displayName: displayName);
-    api.setSessionToken(auth.sessionToken);
+  Future<void> _storeUser(User user) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_kSessionToken, auth.sessionToken);
-    await prefs.setString(_kUserUuid, auth.user.uuid);
-    await prefs.setString(_kDisplayName, auth.user.displayName);
-    await prefs.setString(_kServerUuid, auth.user.serverUuid);
-    _user = auth.user;
-    notifyListeners();
+    await prefs.setString(_kUserJson, jsonEncode(user.toJson()));
   }
 
-  Future<void> disconnect() async {
+  Future<void> _clearSession() async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_kServerUrl);
     await prefs.remove(_kSessionToken);
-    await prefs.remove(_kUserUuid);
-    await prefs.remove(_kDisplayName);
-    await prefs.remove(_kServerUuid);
-    _serverUrl = null;
-    _api = null;
+    await prefs.remove(_kUserJson);
+    _api?.setSessionToken(null);
     _user = null;
     notifyListeners();
   }

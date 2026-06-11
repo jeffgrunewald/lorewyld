@@ -1,24 +1,14 @@
--- v1 lore authoring schema: per-server content-author identity, content
--- modules with version chains, settings as worldbuilding workspaces,
--- markdown lore notes with FTS5 search, and a tag taxonomy.
+-- v1 lore authoring schema: content modules with version chains,
+-- settings as worldbuilding workspaces, markdown lore notes with FTS5
+-- search, and a tag taxonomy.
 --
--- The pre-existing `users` table (admin auth) is intentionally left
--- alone; `app_user` is the distinct content-authoring identity gated
--- only by the server's join code. Future tiers may unify them.
-
-CREATE TABLE app_user (
-    uuid          TEXT     PRIMARY KEY NOT NULL,
-    server_uuid   TEXT                 NOT NULL  REFERENCES game_server(id),
-    display_name  TEXT                 NOT NULL,
-    created_at    TEXT                 NOT NULL  DEFAULT (datetime('now')),
-    UNIQUE (server_uuid, display_name)
-);
-
-CREATE INDEX idx_app_user_display_name ON app_user(display_name);
+-- Authoring identity is the unified `users` table from the setup
+-- migration. Author/owner references use ON DELETE SET NULL so content
+-- outlives its author; published modules attribute authors by email.
 
 CREATE TABLE user_session (
     token       TEXT PRIMARY KEY NOT NULL,
-    user_uuid   TEXT             NOT NULL  REFERENCES app_user(uuid) ON DELETE CASCADE,
+    user_uuid   TEXT             NOT NULL  REFERENCES users(id) ON DELETE CASCADE,
     created_at  TEXT             NOT NULL  DEFAULT (datetime('now')),
     expires_at  TEXT
 );
@@ -56,7 +46,7 @@ CREATE TABLE setting (
     uuid                       TEXT     PRIMARY KEY NOT NULL,
     name                       TEXT                 NOT NULL,
     description_note_uuid      TEXT,
-    owner_user_uuid            TEXT                 NOT NULL  REFERENCES app_user(uuid),
+    owner_user_uuid            TEXT                           REFERENCES users(id) ON DELETE SET NULL,
     published_as_module_uuid   TEXT                                       REFERENCES content_module(uuid),
     created_at                 TEXT                 NOT NULL  DEFAULT (datetime('now')),
     updated_at                 TEXT                 NOT NULL  DEFAULT (datetime('now'))
@@ -66,7 +56,7 @@ CREATE INDEX idx_setting_owner ON setting(owner_user_uuid);
 
 CREATE TABLE setting_collaborator (
     setting_uuid  TEXT NOT NULL REFERENCES setting(uuid) ON DELETE CASCADE,
-    user_uuid     TEXT NOT NULL REFERENCES app_user(uuid),
+    user_uuid     TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     PRIMARY KEY (setting_uuid, user_uuid)
 );
 
@@ -82,7 +72,7 @@ CREATE TABLE lore_note (
     scope_target_uuid                 TEXT                 NOT NULL,
     visibility                        TEXT                 NOT NULL  DEFAULT 'visible',  -- 'visible' | 'author_only' | 'gamemaster_only'
     derived_from_setting_note_uuid    TEXT                                       REFERENCES lore_note(uuid),
-    created_by_user_uuid              TEXT                 NOT NULL  REFERENCES app_user(uuid),
+    created_by_user_uuid              TEXT                           REFERENCES users(id) ON DELETE SET NULL,
     created_at                        TEXT                 NOT NULL  DEFAULT (datetime('now')),
     updated_at                        TEXT                 NOT NULL  DEFAULT (datetime('now'))
 );

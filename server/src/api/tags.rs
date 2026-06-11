@@ -5,10 +5,7 @@ use axum::{
     extract::{Query, State},
 };
 use chrono::{DateTime, Utc};
-use lorewyld_types::{
-    api_v1::CreateTagRequest,
-    tag::Tag,
-};
+use lorewyld_types::{api_v1::CreateTagRequest, tag::Tag};
 use serde::Deserialize;
 use sqlx::SqlitePool;
 use uuid::Uuid;
@@ -84,7 +81,10 @@ pub async fn list_tags(
         .await?
     };
 
-    rows.into_iter().map(TagRow::into_dto).collect::<Result<_, _>>().map(Json)
+    rows.into_iter()
+        .map(TagRow::into_dto)
+        .collect::<Result<_, _>>()
+        .map(Json)
 }
 
 pub async fn create_tag(
@@ -105,18 +105,19 @@ pub async fn create_tag(
     // check-then-insert would race a concurrent create and 500 on the
     // constraint instead of returning 400.
     let uuid = Uuid::new_v4().to_string();
-    let inserted = sqlx::query(
-        "INSERT INTO tag (uuid, slug, display_name, is_system) VALUES (?, ?, ?, 0)",
-    )
-    .bind(&uuid)
-    .bind(&slug)
-    .bind(&display_name)
-    .execute(&state.db)
-    .await;
+    let inserted =
+        sqlx::query("INSERT INTO tag (uuid, slug, display_name, is_system) VALUES (?, ?, ?, 0)")
+            .bind(&uuid)
+            .bind(&slug)
+            .bind(&display_name)
+            .execute(&state.db)
+            .await;
     match inserted {
         Ok(_) => {}
         Err(e) if is_unique_violation(&e) => {
-            return Err(ApiError::BadRequest(format!("tag slug '{slug}' already exists")));
+            return Err(ApiError::BadRequest(format!(
+                "tag slug '{slug}' already exists"
+            )));
         }
         Err(e) => return Err(e.into()),
     }
@@ -157,8 +158,7 @@ pub async fn resolve_or_create_tags(
     for slug in &cleaned {
         query = query.bind(slug);
     }
-    let mut by_slug: HashMap<String, String> =
-        query.fetch_all(db).await?.into_iter().collect();
+    let mut by_slug: HashMap<String, String> = query.fetch_all(db).await?.into_iter().collect();
 
     // Missing slugs: ON CONFLICT DO NOTHING + re-select, so a concurrent
     // request creating the same slug can't turn UNIQUE(slug) into a 500.
@@ -196,10 +196,7 @@ pub async fn resolve_or_create_tags(
 }
 
 /// Load all tags attached to a given lore note.
-pub async fn load_tags_for_note(
-    db: &SqlitePool,
-    note_uuid: &str,
-) -> Result<Vec<Tag>, ApiError> {
+pub async fn load_tags_for_note(db: &SqlitePool, note_uuid: &str) -> Result<Vec<Tag>, ApiError> {
     let rows: Vec<TagRow> = sqlx::query_as(
         "SELECT t.uuid, t.slug, t.display_name, t.is_system, t.introduced_by_module_uuid, t.created_at
            FROM tag t

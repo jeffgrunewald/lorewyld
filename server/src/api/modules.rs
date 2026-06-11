@@ -74,7 +74,9 @@ pub async fn get_module(
         .into_iter()
         .map(|row| {
             let note = row.into_dto()?;
-            let tags = tags_by_note.remove(&note.uuid.to_string()).unwrap_or_default();
+            let tags = tags_by_note
+                .remove(&note.uuid.to_string())
+                .unwrap_or_default();
             Ok(LoreNoteWithTags { note, tags })
         })
         .collect::<Result<Vec<_>, ApiError>>()?;
@@ -99,15 +101,16 @@ pub async fn publish_module(
         return Err(ApiError::BadRequest("version_string is required".into()));
     }
 
-    // Verify ownership of source setting.
-    let owner_row: Option<(String, Option<String>)> = sqlx::query_as(
+    // Verify ownership of source setting. A NULL owner (deleted account)
+    // matches nobody — orphaned settings are unpublishable.
+    let owner_row: Option<(Option<String>, Option<String>)> = sqlx::query_as(
         "SELECT owner_user_uuid, published_as_module_uuid FROM setting WHERE uuid = ?",
     )
     .bind(req.source_setting_uuid.to_string())
     .fetch_optional(&state.db)
     .await?;
     let (owner_uuid, prev_published_uuid) = owner_row.ok_or(ApiError::NotFound)?;
-    if owner_uuid != user.uuid.to_string() {
+    if owner_uuid.as_deref() != Some(user.uuid.to_string().as_str()) {
         return Err(ApiError::Forbidden);
     }
 
@@ -163,13 +166,27 @@ pub async fn publish_module(
             q = q.bind(&note.uuid);
         }
         for (note_uuid, tag_uuid) in q.fetch_all(&state.db).await? {
-            tag_uuids_per_note.entry(note_uuid).or_default().push(tag_uuid);
+            tag_uuids_per_note
+                .entry(note_uuid)
+                .or_default()
+                .push(tag_uuid);
         }
     }
 
     let module_uuid = Uuid::new_v4().to_string();
-    let authors_json = serde_json::to_string(&req.authors)
-        .map_err(|e| ApiError::Internal(e.into()))?;
+    // Module authorship is attributed by email, decoupled from server
+    // user rows — published content survives account deletion. The
+    // publisher is always credited.
+    let authors = if req.authors.contains(&user.email) {
+        req.authors.clone()
+    } else {
+        req.authors
+            .iter()
+            .cloned()
+            .chain(std::iter::once(user.email.clone()))
+            .collect()
+    };
+    let authors_json = serde_json::to_string(&authors).map_err(|e| ApiError::Internal(e.into()))?;
 
     let mut tx = state.db.begin().await?;
 

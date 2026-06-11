@@ -1,18 +1,19 @@
 // Reusable markdown editor — paired text input + live preview, plus a
-// tag chip input that resolves slugs against the server (auto-creating
-// missing tags via the existing API on save). Used by lore-note edit
-// screens for backstory, setting lore, campaign notes, etc.
+// tag chip input. Tag autocomplete is supplied by the caller as a
+// callback so the editor works against the local store offline and the
+// server API alike.
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 
-import '../services/api_client.dart';
+/// Returns slug suggestions for a partial input.
+typedef TagSuggestionsProvider = Future<List<String>> Function(String pattern);
 
 class MarkdownEditor extends StatefulWidget {
   const MarkdownEditor({
     super.key,
-    required this.api,
+    required this.tagSuggestions,
     required this.initialTitle,
     required this.initialBody,
     required this.initialTagSlugs,
@@ -22,7 +23,7 @@ class MarkdownEditor extends StatefulWidget {
     this.deleting = false,
   });
 
-  final ApiClient api;
+  final TagSuggestionsProvider tagSuggestions;
   final String initialTitle;
   final String initialBody;
   final List<String> initialTagSlugs;
@@ -90,7 +91,7 @@ class _MarkdownEditorState extends State<MarkdownEditor>
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: TagChipInput(
-            api: widget.api,
+            suggestions: widget.tagSuggestions,
             slugs: _tagSlugs,
             onChanged: (slugs) => setState(() => _tagSlugs = slugs),
           ),
@@ -123,7 +124,7 @@ class _MarkdownEditorState extends State<MarkdownEditor>
                 padding: const EdgeInsets.all(16),
                 child: ListenableBuilder(
                   listenable: _bodyCtl,
-                  builder: (_, __) => Markdown(
+                  builder: (_, _) => Markdown(
                     data: _bodyCtl.text,
                     padding: EdgeInsets.zero,
                     shrinkWrap: false,
@@ -166,18 +167,18 @@ class _MarkdownEditorState extends State<MarkdownEditor>
   }
 }
 
-/// Chip-style tag input with autocomplete suggestions from the server.
-/// New (previously-unknown) slugs are sent through to the server on save;
-/// the server creates them lazily via `resolve_or_create_tags`.
+/// Chip-style tag input with caller-supplied autocomplete. Freeform
+/// slugs are allowed; unknown ones are created lazily wherever the note
+/// ends up (local store, or server-side on push).
 class TagChipInput extends StatefulWidget {
   const TagChipInput({
     super.key,
-    required this.api,
+    required this.suggestions,
     required this.slugs,
     required this.onChanged,
   });
 
-  final ApiClient api;
+  final TagSuggestionsProvider suggestions;
   final List<String> slugs;
   final ValueChanged<List<String>> onChanged;
 
@@ -207,11 +208,8 @@ class _TagChipInputState extends State<TagChipInput> {
   Future<List<String>> _suggestions(String pattern) async {
     if (pattern.isEmpty) return const [];
     try {
-      final tags = await widget.api.listTags(query: pattern, limit: 8);
-      return tags
-          .map((t) => t.slug)
-          .where((s) => !widget.slugs.contains(s))
-          .toList();
+      final slugs = await widget.suggestions(pattern);
+      return slugs.where((s) => !widget.slugs.contains(s)).toList();
     } catch (_) {
       return const [];
     }

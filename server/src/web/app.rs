@@ -1,18 +1,26 @@
 use leptos::prelude::*;
-use leptos_meta::{provide_meta_context, MetaTags, Stylesheet, Title};
+use leptos_meta::{MetaTags, Stylesheet, Title, provide_meta_context};
 use leptos_router::components::{FlatRoutes, Route, Router};
 use leptos_router::{ParamSegment, StaticSegment};
 
+use crate::web::auth_ui::{AUTH_SCRIPT, AuthModals, HeaderAuth};
 use crate::web::home::Home;
 use crate::web::modules::{ModuleDetailPage, ModulesPage};
 use crate::web::nav::Nav;
 use crate::web::roll::Roll;
-use crate::web::InstanceName;
+use crate::web::settings_server::SettingsServerPage;
+use crate::web::settings_users::SettingsUsersPage;
+use crate::web::{InstanceName, StyleVersion};
 
-pub fn shell(options: LeptosOptions, instance_name: InstanceName) -> impl IntoView {
+pub fn shell(
+    options: LeptosOptions,
+    instance_name: InstanceName,
+    style_version: StyleVersion,
+) -> impl IntoView {
     provide_meta_context();
     let title = instance_name.0.clone();
     provide_context(instance_name);
+    let stylesheet_href = format!("/assets/style.css?v={}", style_version.0);
     let _ = options;
 
     view! {
@@ -23,7 +31,7 @@ pub fn shell(options: LeptosOptions, instance_name: InstanceName) -> impl IntoVi
                 <meta name="viewport" content="width=device-width, initial-scale=1"/>
                 <MetaTags/>
                 <Title text=title/>
-                <Stylesheet id="lw-style" href="/assets/style.css"/>
+                <Stylesheet id="lw-style" href=stylesheet_href/>
             </head>
             <body>
                 <App/>
@@ -45,6 +53,7 @@ pub fn App() -> impl IntoView {
                             alt="Lorewyld"
                         />
                     </div>
+                    <HeaderAuth/>
                 </header>
                 <div class="lw-body">
                     <Nav/>
@@ -57,9 +66,22 @@ pub fn App() -> impl IntoView {
                                 path=(StaticSegment("modules"), ParamSegment("uuid"))
                                 view=ModuleDetailPage
                             />
+                            <Route
+                                path=(StaticSegment("settings"), StaticSegment("users"))
+                                view=SettingsUsersPage
+                            />
+                            <Route
+                                path=(StaticSegment("settings"), StaticSegment("server"))
+                                view=SettingsServerPage
+                            />
                         </FlatRoutes>
                     </main>
                 </div>
+                // Rendered after the page content so page scripts can
+                // register their lw-auth-ready listeners before the
+                // session probe in AUTH_SCRIPT runs.
+                <AuthModals/>
+                <script inner_html=AUTH_SCRIPT></script>
             </div>
         </Router>
     }

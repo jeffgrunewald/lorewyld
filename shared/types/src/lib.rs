@@ -9,7 +9,6 @@
 //! the workspace root to (re)generate Dart bindings.
 
 pub mod api_v1;
-pub mod app_user;
 pub mod background;
 pub mod bundle;
 pub mod character_feature;
@@ -30,10 +29,10 @@ pub mod race;
 pub mod setting;
 pub mod spell;
 pub mod tag;
+pub mod user;
 pub mod version;
 
 pub use api_v1::*;
-pub use app_user::*;
 pub use background::*;
 pub use bundle::*;
 pub use character_feature::*;
@@ -54,4 +53,5 @@ pub use race::*;
 pub use setting::*;
 pub use spell::*;
 pub use tag::*;
+pub use user::*;
 pub use version::*;
