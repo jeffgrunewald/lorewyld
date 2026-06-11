@@ -1,0 +1,120 @@
+use axum::{
+    Json,
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
+use serde::Serialize;
+use tracing::error;
+
+/// Unified API error type. Handlers return `Result<T, ApiError>`;
+/// `ApiError` knows how to render itself as a JSON error response.
+#[derive(Debug)]
+pub enum ApiError {
+    /// Registration failed because the supplied join code did not match
+    /// the server's `join_code`.
+    InvalidJoinCode,
+    /// Registration failed because the username is already taken.
+    UsernameTaken,
+    /// Registration failed because the email is already in use.
+    EmailTaken,
+    /// Login failed: unknown username or wrong password. A single
+    /// variant for both so responses don't reveal which usernames exist.
+    InvalidCredentials,
+    /// Request lacked a valid `Authorization: Bearer <token>` header.
+    Unauthorized,
+    /// Caller is authenticated but does not own / may not act on the
+    /// target resource.
+    Forbidden,
+    /// Requested resource does not exist.
+    NotFound,
+    /// Request body or path parameters were malformed beyond what serde
+    /// caught.
+    BadRequest(String),
+    /// Catch-all for unexpected failures (database errors, etc.).
+    Internal(anyhow::Error),
+}
+
+impl From<anyhow::Error> for ApiError {
+    fn from(value: anyhow::Error) -> Self {
+        Self::Internal(value)
+    }
+}
+
+impl From<sqlx::Error> for ApiError {
+    fn from(value: sqlx::Error) -> Self {
+        Self::Internal(value.into())
+    }
+}
+
+/// True when the error is a UNIQUE-constraint violation. Handlers that
+/// insert into unique columns map this to a 4xx instead of letting two
+/// concurrent requests turn the constraint into a 500.
+pub fn is_unique_violation(err: &sqlx::Error) -> bool {
+    matches!(err, sqlx::Error::Database(db) if db.is_unique_violation())
+}
+
+#[derive(Serialize)]
+struct ErrorBody<'a> {
+    code: &'a str,
+    message: &'a str,
+}
+
+impl IntoResponse for ApiError {
+    fn into_response(self) -> Response {
+        let (status, code, message) = match &self {
+            Self::InvalidJoinCode => (
+                StatusCode::FORBIDDEN,
+                "invalid_join_code",
+                "join code did not match this server".to_string(),
+            ),
+            Self::UsernameTaken => (
+                StatusCode::CONFLICT,
+                "username_taken",
+                "username is already in use on this server".to_string(),
+            ),
+            Self::EmailTaken => (
+                StatusCode::CONFLICT,
+                "email_taken",
+                "email is already in use on this server".to_string(),
+            ),
+            Self::InvalidCredentials => (
+                StatusCode::UNAUTHORIZED,
+                "invalid_credentials",
+                "invalid username or password".to_string(),
+            ),
+            Self::Unauthorized => (
+                StatusCode::UNAUTHORIZED,
+                "unauthorized",
+                "missing or invalid session token".to_string(),
+            ),
+            Self::Forbidden => (
+                StatusCode::FORBIDDEN,
+                "forbidden",
+                "you do not have permission to act on this resource".to_string(),
+            ),
+            Self::NotFound => (
+                StatusCode::NOT_FOUND,
+                "not_found",
+                "resource not found".to_string(),
+            ),
+            Self::BadRequest(detail) => (StatusCode::BAD_REQUEST, "bad_request", detail.clone()),
+            Self::Internal(err) => {
+                error!(error = ?err, "internal server error");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "internal_error",
+                    "internal server error".to_string(),
+                )
+            }
+        };
+
+        (
+            status,
+            Json(ErrorBody {
+                code,
+                message: &message,
+            }),
+        )
+            .into_response()
+    }
+}

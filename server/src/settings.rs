@@ -7,40 +7,40 @@ use std::{fs, net::SocketAddr, path::Path, str::FromStr};
 
 #[derive(Debug, Deserialize)]
 pub struct Settings {
-     #[serde(default = "default_log")]
+    #[serde(default = "default_log")]
     pub log: String,
 
-     #[serde(default = "default_listen")]
+    #[serde(default = "default_listen")]
     pub api_addr: String,
 
-     #[serde(default = "default_db_path")]
+    #[serde(default = "default_db_path")]
     pub db_path: String,
 
-     #[serde(default = "default_db_max_connections")]
+    #[serde(default = "default_db_max_connections")]
     pub db_max_connections: u32,
 
-     #[serde(default = "default_key_path")]
+    #[serde(default = "default_key_path")]
     pub jwt_key_path: String,
 }
 
 fn default_log() -> String {
-     "lorewyld=info".to_string()
+    "lorewyld=info".to_string()
 }
 
 fn default_listen() -> String {
-     "0.0.0.0:8080".to_string()
+    "0.0.0.0:8080".to_string()
 }
 
 fn default_db_path() -> String {
-     "database.db".to_string()
+    "database.db".to_string()
 }
 
 fn default_db_max_connections() -> u32 {
-     10
+    10
 }
 
 fn default_key_path() -> String {
-     "jwt_signing_key.bin".to_string()
+    "jwt_signing_key.bin".to_string()
 }
 
 impl Settings {
@@ -49,14 +49,14 @@ impl Settings {
 
         if let Some(file) = path {
             builder = builder
-                 .add_source(File::with_name(&file.as_ref().to_string_lossy()).required(false))
+                .add_source(File::with_name(&file.as_ref().to_string_lossy()).required(false))
         }
 
         builder
-             .add_source(Environment::with_prefix("LW").separator("__"))
-             .build()
-             .and_then(|config| config.try_deserialize())
-             .map_err(anyhow::Error::from)
+            .add_source(Environment::with_prefix("LW").separator("__"))
+            .build()
+            .and_then(|config| config.try_deserialize())
+            .map_err(anyhow::Error::from)
     }
 
     pub fn listen_addr(&self) -> Result<SocketAddr> {
@@ -65,10 +65,10 @@ impl Settings {
 
     pub async fn db_connect(&self) -> SqlitePool {
         SqlitePoolOptions::new()
-             .max_connections(self.db_max_connections)
-             .connect(&format!("sqlite:{}?mode=rwc", self.db_path))
-             .await
-             .expect("Failed to create pool")
+            .max_connections(self.db_max_connections)
+            .connect(&format!("sqlite:{}?mode=rwc", self.db_path))
+            .await
+            .expect("Failed to create pool")
     }
 
     pub fn jwt_keypair(&self) -> Result<Ed25519KeyPair> {
@@ -79,7 +79,7 @@ impl Settings {
             let bytes = fs::read(path)?;
             if !bytes.is_empty() {
                 return Ed25519KeyPair::from_bytes(&bytes)
-                     .map_err(|e| anyhow::anyhow!("Failed to parse JWT keypair: {}", e));
+                    .map_err(|e| anyhow::anyhow!("Failed to parse JWT keypair: {}", e));
             }
         }
 

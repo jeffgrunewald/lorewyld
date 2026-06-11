@@ -1,0 +1,23 @@
+# Typeshare configuration for Lorewyld shared types.
+#
+# Codegen entry point: run from the workspace root.
+#   typeshare . --lang=dart      --output-folder=mobile/lib/types
+#   typeshare . --lang=typescript --output-file=shared/generated/lorewyld.ts
+#   typeshare . --lang=kotlin    --output-folder=clients/android/src
+#
+# Mobile (Flutter/Dart) is the primary downstream target. Other
+# languages are configured here for future clients.
+
+[dart]
+# Emit one Dart file per Rust module so imports map onto schema groups.
+type_prefix = ""
+
+[typescript]
+type_prefix = ""
+
+[kotlin]
+package = "io.lorewyld.types"
+module_name = "lorewyld_types"
+
+[swift]
+prefix = "Lorewyld"
