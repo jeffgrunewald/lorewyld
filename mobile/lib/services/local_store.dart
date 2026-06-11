@@ -58,7 +58,73 @@ class LocalStore {
 
   LocalStore._(this._db);
 
-  static const _schemaVersion = 1;
+  static const _schemaVersion = 2;
+
+  /// SRD/content reference tables, mirroring the server's doc-style
+  /// layout: identity + a few indexed filter columns, full record JSON
+  /// in `data`. Populated by ContentStore.importBundle on first launch.
+  static const contentTables = [
+    'content_module',
+    'license',
+    'publisher',
+    'document',
+    'ability_score',
+    'skill',
+    'alignment',
+    'damage_type',
+    'condition',
+    'language',
+    'size',
+    'environment',
+    'spell_school',
+    'creature_type',
+    'item_category',
+    'weapon_property',
+    'spell',
+    'creature',
+    'class',
+    'species',
+    'feat',
+    'background',
+    'weapon',
+    'armor',
+    'item',
+  ];
+
+  static const _contentExtraColumns = {
+    'spell':
+        'level INTEGER NOT NULL DEFAULT 0, school_uuid TEXT, concentration INTEGER NOT NULL DEFAULT 0, ritual INTEGER NOT NULL DEFAULT 0,',
+    'creature':
+        'challenge_rating REAL NOT NULL DEFAULT 0, creature_type_uuid TEXT, size_uuid TEXT,',
+    'class': 'subclass_of TEXT,',
+    'species': 'is_subspecies INTEGER NOT NULL DEFAULT 0,',
+    'weapon': 'is_simple INTEGER NOT NULL DEFAULT 0,',
+    'armor': 'category TEXT,',
+    'item':
+        'category_uuid TEXT, rarity TEXT, is_magic INTEGER NOT NULL DEFAULT 0,',
+  };
+
+  static Future<void> _createContentTables(Database db) async {
+    for (final table in contentTables) {
+      final extras = _contentExtraColumns[table] ?? '';
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS "$table" (
+          uuid TEXT PRIMARY KEY NOT NULL,
+          key  TEXT NOT NULL UNIQUE,
+          slug TEXT NOT NULL,
+          name TEXT NOT NULL,
+          $extras
+          data TEXT NOT NULL
+        )
+      ''');
+    }
+    await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_spell_level ON spell(level)');
+    await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_creature_cr ON creature(challenge_rating)');
+    await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_item_magic ON item(is_magic)');
+  }
 
   static Future<LocalStore> open({String? path}) async {
     final dbPath = path ?? '${await getDatabasesPath()}/lorewyld_local.db';
@@ -100,10 +166,18 @@ class LocalStore {
         ''');
         await db.execute(
             'CREATE INDEX idx_lore_note_scope ON lore_note(scope_kind, scope_target_uuid)');
+        await _createContentTables(db);
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await _createContentTables(db);
+        }
       },
     );
     return LocalStore._(db);
   }
+
+  Database get database => _db;
 
   Future<void> close() => _db.close();
 

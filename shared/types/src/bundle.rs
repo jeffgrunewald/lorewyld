@@ -2,11 +2,9 @@ use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 
 use crate::{
-    AbilityScoreEntry, Alignment, Armor, Background, CharacterFeature, Class, Condition,
-    ContentModule, DamageType, Document, Enchantment, EquipmentCategory, EquipmentMaterial,
-    EquipmentProficiency, EquipmentSubcategory, Feat, Language, MagicItem, MagicItemCategory,
-    Monster, MonsterAction, MonsterType, Plane, Race, RacialTrait, SchemaVersion, Spell, SpellList,
-    SpellSchool, Subclass, Weapon,
+    AbilityScoreEntry, Alignment, Armor, Background, Class, Condition, ContentModule, CreatureType,
+    Creature, DamageType, Document, Environment, Feat, Item, ItemCategory, Language, License,
+    Publisher, SchemaVersion, Size, Skill, Species, Spell, SpellSchool, Weapon, WeaponPropertyDef,
 };
 
 /// A complete, self-describing import package.
@@ -15,15 +13,24 @@ use crate::{
 /// `ContentModule`s and every record that belongs to those modules. The
 /// server verifies `schema.version` against its compiled `SCHEMA_VERSION`
 /// before persisting any rows.
+///
+/// Field order is import-dependency order: importers that insert
+/// sequentially never reference a row that hasn't landed yet.
 #[typeshare]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct ContentBundle {
     pub schema: SchemaVersion,
     pub modules: Vec<ContentModule>,
     #[serde(default)]
+    pub licenses: Vec<License>,
+    #[serde(default)]
+    pub publishers: Vec<Publisher>,
+    #[serde(default)]
     pub documents: Vec<Document>,
     #[serde(default)]
     pub ability_scores: Vec<AbilityScoreEntry>,
+    #[serde(default)]
+    pub skills: Vec<Skill>,
     #[serde(default)]
     pub alignments: Vec<Alignment>,
     #[serde(default)]
@@ -33,49 +40,60 @@ pub struct ContentBundle {
     #[serde(default)]
     pub languages: Vec<Language>,
     #[serde(default)]
-    pub planes: Vec<Plane>,
+    pub sizes: Vec<Size>,
+    #[serde(default)]
+    pub environments: Vec<Environment>,
     #[serde(default)]
     pub spell_schools: Vec<SpellSchool>,
     #[serde(default)]
-    pub spell_lists: Vec<SpellList>,
+    pub creature_types: Vec<CreatureType>,
+    #[serde(default)]
+    pub item_categories: Vec<ItemCategory>,
+    #[serde(default)]
+    pub weapon_properties: Vec<WeaponPropertyDef>,
     #[serde(default)]
     pub spells: Vec<Spell>,
     #[serde(default)]
-    pub monster_types: Vec<MonsterType>,
-    #[serde(default)]
-    pub monster_actions: Vec<MonsterAction>,
-    #[serde(default)]
-    pub monsters: Vec<Monster>,
+    pub creatures: Vec<Creature>,
     #[serde(default)]
     pub classes: Vec<Class>,
     #[serde(default)]
-    pub subclasses: Vec<Subclass>,
-    #[serde(default)]
-    pub races: Vec<Race>,
-    #[serde(default)]
-    pub racial_traits: Vec<RacialTrait>,
+    pub species: Vec<Species>,
     #[serde(default)]
     pub feats: Vec<Feat>,
     #[serde(default)]
     pub backgrounds: Vec<Background>,
     #[serde(default)]
-    pub equipment_categories: Vec<EquipmentCategory>,
-    #[serde(default)]
-    pub equipment_subcategories: Vec<EquipmentSubcategory>,
-    #[serde(default)]
-    pub equipment_proficiencies: Vec<EquipmentProficiency>,
-    #[serde(default)]
-    pub equipment_materials: Vec<EquipmentMaterial>,
-    #[serde(default)]
     pub weapons: Vec<Weapon>,
     #[serde(default)]
     pub armors: Vec<Armor>,
     #[serde(default)]
-    pub magic_item_categories: Vec<MagicItemCategory>,
-    #[serde(default)]
-    pub magic_items: Vec<MagicItem>,
-    #[serde(default)]
-    pub enchantments: Vec<Enchantment>,
-    #[serde(default)]
-    pub character_features: Vec<CharacterFeature>,
+    pub items: Vec<Item>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::version::SCHEMA_VERSION;
+
+    #[test]
+    fn empty_bundle_round_trips() {
+        let bundle = ContentBundle::default();
+        let json = serde_json::to_string(&bundle).unwrap();
+        let back: ContentBundle = serde_json::from_str(&json).unwrap();
+        assert_eq!(bundle, back);
+        assert_eq!(back.schema.version, SCHEMA_VERSION);
+    }
+
+    #[test]
+    fn partial_bundle_json_fills_defaults() {
+        // A spells-only pack omits every other table.
+        let json = format!(
+            r#"{{"schema":{{"version":{SCHEMA_VERSION},"min_supported":{SCHEMA_VERSION}}},"modules":[]}}"#
+        );
+        let bundle: ContentBundle = serde_json::from_str(&json).unwrap();
+        assert!(bundle.spells.is_empty());
+        assert!(bundle.creatures.is_empty());
+        assert!(bundle.items.is_empty());
+    }
 }

@@ -12,6 +12,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:lorewyld/main.dart';
 import 'package:lorewyld/screens/character_list_screen.dart';
+import 'package:lorewyld/services/content_store.dart';
 import 'package:lorewyld/services/local_store.dart';
 import 'package:lorewyld/services/server_connection.dart';
 
@@ -20,12 +21,31 @@ void main() {
   sqfliteFfiInit();
   databaseFactory = databaseFactoryFfi;
 
+  /// Opens a store with SRD content already imported, so the app's
+  /// first-launch seed gate passes straight through (its real-zone
+  /// import IO can't run inside testWidgets' FakeAsync zone).
+  Future<LocalStore> openSeededStore(WidgetTester tester) async {
+    return (await tester.runAsync(() async {
+      final store = await LocalStore.open(path: inMemoryDatabasePath);
+      await ContentStore(store).importBundle();
+      return store;
+    }))!;
+  }
+
+  Future<void> pumpPastSeedGate(WidgetTester tester) async {
+    // The gate's importBundle early-returns on its seeded check, but
+    // that query resolves in the real zone — give it a beat, then pump.
+    await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)));
+    await tester.pump();
+  }
+
   testWidgets('app boots offline and shows the lorewyld brand',
       (tester) async {
     final connection = ServerConnection();
-    final store = (await tester
-        .runAsync(() => LocalStore.open(path: inMemoryDatabasePath)))!;
+    final store = await openSeededStore(tester);
     await tester.pumpWidget(LorewyldApp(connection: connection, store: store));
+    await pumpPastSeedGate(tester);
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
     expect(find.bySemanticsLabel('Lorewyld'), findsWidgets);
     await tester.runAsync(store.close);
@@ -34,9 +54,9 @@ void main() {
   testWidgets('home screen offers local features without a server',
       (tester) async {
     final connection = ServerConnection();
-    final store = (await tester
-        .runAsync(() => LocalStore.open(path: inMemoryDatabasePath)))!;
+    final store = await openSeededStore(tester);
     await tester.pumpWidget(LorewyldApp(connection: connection, store: store));
+    await pumpPastSeedGate(tester);
     await tester.pumpAndSettle(const Duration(milliseconds: 100));
     expect(find.text('Characters'), findsOneWidget);
     expect(find.text('Settings & lore'), findsOneWidget);

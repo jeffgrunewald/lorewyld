@@ -1,4 +1,5 @@
 pub mod api;
+pub mod content;
 pub mod settings;
 pub mod web;
 
