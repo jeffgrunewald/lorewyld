@@ -58,7 +58,7 @@ class LocalStore {
 
   LocalStore._(this._db);
 
-  static const _schemaVersion = 2;
+  static const _schemaVersion = 3;
 
   /// SRD/content reference tables, mirroring the server's doc-style
   /// layout: identity + a few indexed filter columns, full record JSON
@@ -107,12 +107,17 @@ class LocalStore {
   static Future<void> _createContentTables(Database db) async {
     for (final table in contentTables) {
       final extras = _contentExtraColumns[table] ?? '';
+      // content_module_uuid lets whole modules be uninstalled with one
+      // indexed-by-nothing-but-small-table DELETE per content table.
+      final moduleRef =
+          table == 'content_module' ? '' : 'content_module_uuid TEXT,';
       await db.execute('''
         CREATE TABLE IF NOT EXISTS "$table" (
           uuid TEXT PRIMARY KEY NOT NULL,
           key  TEXT NOT NULL UNIQUE,
           slug TEXT NOT NULL,
           name TEXT NOT NULL,
+          $moduleRef
           $extras
           data TEXT NOT NULL
         )
@@ -124,6 +129,42 @@ class LocalStore {
         'CREATE INDEX IF NOT EXISTS idx_creature_cr ON creature(challenge_rating)');
     await db.execute(
         'CREATE INDEX IF NOT EXISTS idx_item_magic ON item(is_magic)');
+    await _createTombstoneTable(db);
+  }
+
+  /// Modules the user explicitly uninstalled. The content seeder skips
+  /// these so a removed module stays removed across launches and app
+  /// updates; reinstalling clears the row.
+  static Future<void> _createTombstoneTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS removed_content_module (
+        slug       TEXT PRIMARY KEY NOT NULL,
+        removed_at TEXT NOT NULL
+      )
+    ''');
+  }
+
+  /// v2 → v3: content tables gain `content_module_uuid`, backfilled
+  /// from each record's JSON, plus the uninstall tombstone table.
+  static Future<void> _upgradeToV3(Database db) async {
+    await _createTombstoneTable(db);
+    for (final table in contentTables) {
+      if (table == 'content_module') continue;
+      await db.execute(
+          'ALTER TABLE "$table" ADD COLUMN content_module_uuid TEXT');
+      final rows = await db.query('"$table"', columns: ['uuid', 'data']);
+      final batch = db.batch();
+      for (final row in rows) {
+        final data = jsonDecode(row['data'] as String) as Map<String, dynamic>;
+        batch.update(
+          '"$table"',
+          {'content_module_uuid': data['content_module_uuid']},
+          where: 'uuid = ?',
+          whereArgs: [row['uuid']],
+        );
+      }
+      await batch.commit(noResult: true);
+    }
   }
 
   static Future<LocalStore> open({String? path}) async {
@@ -171,6 +212,11 @@ class LocalStore {
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
           await _createContentTables(db);
+        }
+        if (oldVersion >= 2 && oldVersion < 3) {
+          // Fresh v2→v3 only: the v1→v2 path above already created the
+          // tables in their v3 shape.
+          await _upgradeToV3(db);
         }
       },
     );

@@ -12,6 +12,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:sqflite/sqflite.dart';
 
+import '../types/bundled_module.dart';
 import 'local_store.dart';
 
 /// Bundle JSON field -> sqflite table, in import-dependency order, with
@@ -75,37 +76,57 @@ class ContentStore {
   static const _bundleAsset = 'assets/content/srd-bundle.json';
   static const _bundleMetaAsset = 'assets/content/srd-bundle.meta.json';
 
-  Future<Set<String>> _existingModuleSlugs() async {
+  /// The SRD module hosts the shared vocabulary (licenses, publishers,
+  /// schools, sizes, …) every other module references — it can never
+  /// be uninstalled.
+  static const pinnedModuleSlug = 'srd';
+
+  Future<Set<String>> installedModuleSlugs() async {
     final rows = await _db.query('content_module', columns: ['slug']);
     return {for (final r in rows) r['slug'] as String};
   }
 
-  /// Module slugs the shipped bundle expects, from the tiny manifest —
-  /// launches don't decode the ~20 MB bundle just to learn nothing is
-  /// missing.
-  Future<Set<String>> _bundledModuleSlugs() async {
-    final raw = await rootBundle.loadString(_bundleMetaAsset);
-    final meta = jsonDecode(raw) as Map<String, dynamic>;
+  /// slug → removed_at for modules the user explicitly uninstalled.
+  Future<Map<String, String>> removedModules() async {
+    final rows = await _db.query('removed_content_module');
     return {
-      for (final s in meta['module_slugs'] as List<dynamic>? ?? const [])
-        s as String,
+      for (final r in rows) r['slug'] as String: r['removed_at'] as String,
     };
   }
 
-  Future<bool> get isSeeded async {
-    final existing = await _existingModuleSlugs();
-    return (await _bundledModuleSlugs()).difference(existing).isEmpty;
+  /// Modules the shipped bundle contains, from the small manifest —
+  /// launches don't decode the ~20 MB bundle just to learn nothing is
+  /// missing, and the management UI can describe uninstalled modules.
+  Future<List<BundledModule>> bundledModules() async {
+    final raw = await rootBundle.loadString(_bundleMetaAsset);
+    final meta = jsonDecode(raw) as Map<String, dynamic>;
+    return [
+      for (final m in meta['modules'] as List<dynamic>? ?? const [])
+        BundledModule.fromJson(m as Map<String, dynamic>),
+    ];
   }
+
+  /// Bundled modules that should be present but aren't: not installed
+  /// and not deliberately removed by the user.
+  Future<Set<String>> _missingModuleSlugs() async {
+    final bundled = {for (final m in await bundledModules()) m.slug};
+    final existing = await installedModuleSlugs();
+    final removed = (await removedModules()).keys.toSet();
+    return bundled.difference(existing).difference(removed);
+  }
+
+  Future<bool> get isSeeded async => (await _missingModuleSlugs()).isEmpty;
 
   /// Imports every bundled record whose content module isn't installed
   /// yet — a fresh install seeds everything; an app upgraded to a
   /// bundle with additional source modules seeds only what's new.
-  /// Decoding the asset runs in an isolate so the UI thread stays
-  /// responsive; inserts run in chunked batches inside one
-  /// transaction, reporting progress in [0, 1] after each chunk.
+  /// Modules the user uninstalled stay uninstalled (tombstoned in
+  /// `removed_content_module`). Decoding the asset runs in an isolate
+  /// so the UI thread stays responsive; inserts run in chunked batches
+  /// inside one transaction, reporting progress in [0, 1] after each
+  /// chunk.
   Future<void> importBundle({void Function(double progress)? onProgress}) async {
-    final existing = await _existingModuleSlugs();
-    final missing = (await _bundledModuleSlugs()).difference(existing);
+    final missing = await _missingModuleSlugs();
     if (missing.isEmpty) return;
 
     final raw = await rootBundle.loadString(_bundleAsset);
@@ -157,6 +178,8 @@ class ContentStore {
               'key': r['key'] ?? r['slug'],
               'slug': r['slug'],
               'name': r['name'],
+              if (spec.table != 'content_module')
+                'content_module_uuid': r['content_module_uuid'],
               for (final entry in spec.extras.entries)
                 entry.key: _bindable(r[entry.value]),
               'data': jsonEncode(r),
@@ -169,6 +192,46 @@ class ContentStore {
       }
     });
     onProgress?.call(1.0);
+  }
+
+  /// Deletes one module and every record it owns, and tombstones it so
+  /// the seeder won't bring it back. The SRD module is pinned.
+  Future<void> uninstallModule(String slug) async {
+    if (slug == pinnedModuleSlug) {
+      throw ArgumentError('the $pinnedModuleSlug module cannot be removed');
+    }
+    await _db.transaction((txn) async {
+      final rows = await txn.query('content_module',
+          columns: ['uuid'], where: 'slug = ?', whereArgs: [slug]);
+      if (rows.isNotEmpty) {
+        final moduleUuid = rows.first['uuid'] as String;
+        for (final table in LocalStore.contentTables) {
+          if (table == 'content_module') continue;
+          await txn.delete('"$table"',
+              where: 'content_module_uuid = ?', whereArgs: [moduleUuid]);
+        }
+        await txn.delete('content_module',
+            where: 'slug = ?', whereArgs: [slug]);
+      }
+      await txn.insert(
+        'removed_content_module',
+        {
+          'slug': slug,
+          'removed_at': DateTime.now().toUtc().toIso8601String(),
+        },
+        conflictAlgorithm: ConflictAlgorithm.replace,
+      );
+    });
+  }
+
+  /// Clears a module's tombstone and re-seeds it from the bundle.
+  Future<void> reinstallModule(
+    String slug, {
+    void Function(double progress)? onProgress,
+  }) async {
+    await _db.delete('removed_content_module',
+        where: 'slug = ?', whereArgs: [slug]);
+    await importBundle(onProgress: onProgress);
   }
 
   static List<dynamic> _parentsFirst(List<dynamic> records, String parentField) {

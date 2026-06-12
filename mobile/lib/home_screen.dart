@@ -5,6 +5,7 @@ import 'dice/dice_roller_screen.dart';
 import 'dice/dice_type.dart';
 import 'screens/character_list_screen.dart';
 import 'screens/compendium_screen.dart';
+import 'screens/module_management_screen.dart';
 import 'screens/search_screen.dart';
 import 'screens/setting_list_screen.dart';
 import 'services/content_store.dart';
@@ -110,6 +111,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   )),
                   icon: const Icon(Icons.collections_bookmark_outlined),
                   label: const Text('Compendium'),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: () =>
+                      _push(ModuleManagementScreen(store: widget.store)),
+                  icon: const Icon(Icons.inventory_2_outlined),
+                  label: const Text('Modules'),
                 ),
               ],
             ),

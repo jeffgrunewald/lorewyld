@@ -83,4 +83,45 @@ void main() {
     expect((await content.listBackgrounds()).map((b) => b['name']),
         contains('Acolyte'));
   });
+
+  test('uninstalled modules stay uninstalled until reinstalled', () async {
+    await content.importBundle();
+    final before = await content.count('creature');
+    expect((await content.installedModuleSlugs()).contains('tob'), isTrue);
+
+    await content.uninstallModule('tob');
+    final after = await content.count('creature');
+    expect(after, lessThan(before));
+    expect((await content.installedModuleSlugs()).contains('tob'), isFalse);
+    expect((await content.removedModules()).keys, contains('tob'));
+    // Other modules' records are untouched.
+    expect((await content.listNamed('creature', query: 'Aboleth')),
+        isNotEmpty);
+
+    // The seeder respects the tombstone: reimport is a no-op.
+    expect(await content.isSeeded, isTrue);
+    await content.importBundle();
+    expect(await content.count('creature'), after);
+
+    // Reinstall clears the tombstone and restores exactly that module.
+    await content.reinstallModule('tob');
+    expect(await content.count('creature'), before);
+    expect(await content.removedModules(), isEmpty);
+    expect((await content.installedModuleSlugs()).contains('tob'), isTrue);
+  });
+
+  test('the SRD module is pinned and cannot be uninstalled', () async {
+    await content.importBundle();
+    expect(() => content.uninstallModule('srd'), throwsArgumentError);
+  });
+
+  test('bundle manifest describes every module with metadata', () async {
+    final modules = await content.bundledModules();
+    expect(modules.length, greaterThan(1));
+    final srd = modules.firstWhere((m) => m.slug == 'srd');
+    expect(srd.license, 'cc-by-4.0');
+    expect(srd.documents, hasLength(2));
+    expect(srd.recordCounts['spells'], greaterThan(300));
+    expect(srd.totalRecords, greaterThan(1000));
+  });
 }

@@ -96,4 +96,99 @@ void main() {
     expect(linked?.uuid, setting.uuid);
     expect(linked?.isLinked, isTrue);
   });
+
+  test(
+      'v2→v3 migration adds content_module_uuid (backfilled from data) '
+      'and the uninstall tombstone table', () async {
+    // A v2-shaped database needs a real file: in-memory databases
+    // vanish on close and can't be reopened by LocalStore.open.
+    final path =
+        '${await databaseFactory.getDatabasesPath()}/migration_test_v2.db';
+    await databaseFactory.deleteDatabase(path);
+    final v2 = await openDatabase(
+      path,
+      version: 2,
+      onCreate: (db, _) async {
+        // Minimal v2 content-table shape: no content_module_uuid column.
+        await db.execute('''
+          CREATE TABLE spell (
+            uuid TEXT PRIMARY KEY NOT NULL,
+            key  TEXT NOT NULL UNIQUE,
+            slug TEXT NOT NULL,
+            name TEXT NOT NULL,
+            level INTEGER NOT NULL DEFAULT 0, school_uuid TEXT,
+            concentration INTEGER NOT NULL DEFAULT 0,
+            ritual INTEGER NOT NULL DEFAULT 0,
+            data TEXT NOT NULL
+          )
+        ''');
+        for (final table in LocalStore.contentTables) {
+          if (table == 'spell' || table == 'content_module') continue;
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS "$table" (
+              uuid TEXT PRIMARY KEY NOT NULL,
+              key  TEXT NOT NULL UNIQUE,
+              slug TEXT NOT NULL,
+              name TEXT NOT NULL,
+              data TEXT NOT NULL
+            )
+          ''');
+        }
+        await db.execute('''
+          CREATE TABLE content_module (
+            uuid TEXT PRIMARY KEY NOT NULL,
+            key  TEXT NOT NULL UNIQUE,
+            slug TEXT NOT NULL,
+            name TEXT NOT NULL,
+            data TEXT NOT NULL
+          )
+        ''');
+        await db.execute('''
+          CREATE TABLE character (
+            uuid TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL,
+            data TEXT NOT NULL, created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+          )
+        ''');
+        await db.execute('''
+          CREATE TABLE setting (
+            uuid TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL,
+            remote_uuid TEXT, created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+          )
+        ''');
+        await db.execute('''
+          CREATE TABLE lore_note (
+            uuid TEXT PRIMARY KEY NOT NULL, title TEXT NOT NULL,
+            body_markdown TEXT NOT NULL DEFAULT '',
+            scope_kind TEXT NOT NULL, scope_target_uuid TEXT NOT NULL,
+            visibility TEXT NOT NULL DEFAULT 'visible',
+            tag_slugs TEXT NOT NULL DEFAULT '[]', remote_uuid TEXT,
+            created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+          )
+        ''');
+        await db.insert('spell', {
+          'uuid': 'spell-1',
+          'key': 'srd_fireball',
+          'slug': 'fireball',
+          'name': 'Fireball',
+          'data':
+              '{"uuid":"spell-1","content_module_uuid":"module-1","name":"Fireball"}',
+        });
+      },
+    );
+    await v2.close();
+
+    final migrated = await LocalStore.open(path: path);
+    final rows = await migrated.database
+        .query('spell', columns: ['uuid', 'content_module_uuid']);
+    expect(rows.single['content_module_uuid'], 'module-1');
+    // Tombstone table exists and is usable.
+    await migrated.database.insert('removed_content_module',
+        {'slug': 'tob', 'removed_at': '2026-06-12T00:00:00Z'});
+    expect(
+        (await migrated.database.query('removed_content_module')).length, 1);
+    await migrated.close();
+    await databaseFactory.deleteDatabase(path);
+  });
 }

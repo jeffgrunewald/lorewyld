@@ -63,11 +63,7 @@ fn main() -> Result<()> {
         }
         std::fs::write(path, &json).with_context(|| format!("writing {}", path.display()))?;
     }
-    let meta = serde_json::json!({
-        "module_slugs": bundle.modules.iter().map(|m| m.slug.clone()).collect::<Vec<_>>(),
-    });
-    let mut meta_json = serde_json::to_string_pretty(&meta)?;
-    meta_json.push('\n');
+    let meta_json = build_meta(&bundle)?;
     std::fs::write(&cli.mobile_meta_out, &meta_json)
         .with_context(|| format!("writing {}", cli.mobile_meta_out.display()))?;
 
@@ -1141,6 +1137,59 @@ fn build_bundle(
     sort_bundle(&mut bundle);
     validate_unique_keys(&bundle)?;
     Ok(bundle)
+}
+
+/// The mobile manifest: per-module metadata + record counts, rich
+/// enough for the app's module-management UI to describe modules that
+/// are NOT installed (uninstalled ones have no database rows) without
+/// decoding the full bundle.
+fn build_meta(bundle: &ContentBundle) -> Result<String> {
+    let mut counts: BTreeMap<EntityId, BTreeMap<&str, usize>> = BTreeMap::new();
+    let mut tally = |family: &'static str, module_uuids: Vec<EntityId>| {
+        for uuid in module_uuids {
+            *counts.entry(uuid).or_default().entry(family).or_default() += 1;
+        }
+    };
+    tally("spells", bundle.spells.iter().map(|r| r.content_module_uuid).collect());
+    tally("creatures", bundle.creatures.iter().map(|r| r.content_module_uuid).collect());
+    tally("classes", bundle.classes.iter().map(|r| r.content_module_uuid).collect());
+    tally("species", bundle.species.iter().map(|r| r.content_module_uuid).collect());
+    tally("feats", bundle.feats.iter().map(|r| r.content_module_uuid).collect());
+    tally("backgrounds", bundle.backgrounds.iter().map(|r| r.content_module_uuid).collect());
+    tally("weapons", bundle.weapons.iter().map(|r| r.content_module_uuid).collect());
+    tally("armors", bundle.armors.iter().map(|r| r.content_module_uuid).collect());
+    tally("items", bundle.items.iter().map(|r| r.content_module_uuid).collect());
+
+    let modules: Vec<Value> = bundle
+        .modules
+        .iter()
+        .map(|m| {
+            let documents: Vec<&str> = bundle
+                .documents
+                .iter()
+                .filter(|d| d.content_module_uuid == m.uuid)
+                .map(|d| d.name.as_str())
+                .collect();
+            serde_json::json!({
+                "slug": m.slug,
+                "name": m.name,
+                "license": m.license.wire_value(),
+                "license_url": m.license_url,
+                "publisher": m.publisher,
+                "authors": m.authors,
+                "description": m.description,
+                "website_url": m.website_url,
+                "documents": documents,
+                "record_counts": counts
+                    .get(&m.uuid)
+                    .map(|c| c.iter().map(|(k, v)| ((*k).to_string(), Value::from(*v))).collect::<serde_json::Map<_, _>>())
+                    .unwrap_or_default(),
+            })
+        })
+        .collect();
+    let mut json = serde_json::to_string_pretty(&serde_json::json!({ "modules": modules }))?;
+    json.push('\n');
+    Ok(json)
 }
 
 /// The 'srd' module is special-cased: it merges the SRD 5.2 base with
