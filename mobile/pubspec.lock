@@ -142,14 +142,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.0.0"
-  flutter_markdown:
+  flutter_markdown_plus:
     dependency: "direct main"
     description:
-      name: flutter_markdown
-      sha256: "08fb8315236099ff8e90cb87bb2b935e0a724a3af1623000a9cec930468e0f27"
+      name: flutter_markdown_plus
+      sha256: "039177906850278e8fb1cd364115ee0a46281135932fa8ecea8455522166d2de"
       url: "https://pub.dev"
     source: hosted
-    version: "0.7.7+1"
+    version: "1.0.7"
   flutter_test:
     dependency: "direct dev"
     description: flutter
@@ -196,18 +196,18 @@ packages:
     dependency: transitive
     description:
       name: image
-      sha256: f9881ff4998044947ec38d098bc7c8316ae1186fa786eddffdb867b9bc94dfce
+      sha256: "6300175e00616bbc832e2fc91bfa4d776af5402c81c7151bee6905bb08473c52"
       url: "https://pub.dev"
     source: hosted
-    version: "4.8.0"
+    version: "4.9.1"
   json_annotation:
     dependency: transitive
     description:
       name: json_annotation
-      sha256: cb09e7dac6210041fad964ed7fbee004f14258b4eca4040f72d1234062ace4c8
+      sha256: "2a743920d81b7910627f68ee2c9ac1fc0bfee32b9fc3403587d7c6791ca12f80"
       url: "https://pub.dev"
     source: hosted
-    version: "4.11.0"
+    version: "4.12.0"
   leak_tracker:
     dependency: transitive
     description:
@@ -380,10 +380,10 @@ packages:
     dependency: transitive
     description:
       name: shared_preferences_android
-      sha256: e8d4762b1e2e8578fc4d0fd548cebf24afd24f49719c08974df92834565e2c53
+      sha256: "93ae5884a9df5d3bb696825bceb3a17590754548b5d740eba51500afc8d088f5"
       url: "https://pub.dev"
     source: hosted
-    version: "2.4.23"
+    version: "2.4.26"
   shared_preferences_foundation:
     dependency: transitive
     description:
@@ -457,18 +457,18 @@ packages:
     dependency: transitive
     description:
       name: sqflite_common
-      sha256: cce558075afe2a83f3fd7fc123acd6b090683e4f23910d44fbb31ecd7800b014
+      sha256: "5bf6a55c166e73bf651ba7ec3ed486e577620e3dc8f3a9c6a258a8031b624590"
       url: "https://pub.dev"
     source: hosted
-    version: "2.5.9"
+    version: "2.5.11"
   sqflite_common_ffi:
     dependency: "direct dev"
     description:
       name: sqflite_common_ffi
-      sha256: "3ddad0ec96ad411d5fea45b4912c3cd5743436c9e1890c26a6e688a32d901cae"
+      sha256: "5ccd38136edb9beb3213f6927775d52db70dfdadcdb28dad1f625ca9f2b9824f"
       url: "https://pub.dev"
     source: hosted
-    version: "2.4.1"
+    version: "2.4.2"
   sqflite_darwin:
     dependency: transitive
     description:
@@ -561,10 +561,10 @@ packages:
     dependency: transitive
     description:
       name: vm_service
-      sha256: "046d3928e16fa4dc46e8350415661755ab759d9fc97fc21b5ab295f71e4f0499"
+      sha256: "0016aef94fc66495ac78af5859181e3f3bf2026bd8eecc72b9565601e19ab360"
       url: "https://pub.dev"
     source: hosted
-    version: "15.1.0"
+    version: "15.2.0"
   web:
     dependency: transitive
     description:
@@ -585,10 +585,10 @@ packages:
     dependency: transitive
     description:
       name: xml
-      sha256: "971043b3a0d3da28727e40ed3e0b5d18b742fa5a68665cca88e74b7876d5e025"
+      sha256: "67f0aff7be013d107995e9b75bf4e7f2c3ef2dfdb2c8e68024bba0a7fd5756a4"
       url: "https://pub.dev"
     source: hosted
-    version: "6.6.1"
+    version: "7.0.1"
   yaml:
     dependency: transitive
     description:

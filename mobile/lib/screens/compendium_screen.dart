@@ -7,7 +7,7 @@
 // in, via the tile at the bottom of the category list.
 
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import '../compendium/categories.dart';
 import '../compendium/filters.dart';
