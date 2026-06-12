@@ -37,10 +37,18 @@ void main() {
     expect(fireball?['name'], 'Fireball');
     expect(fireball?['damage_roll'], '8d6');
 
+    // 12 SRD base classes plus whatever other bundled sourcebooks add.
     final classes = await content.listClasses(basesOnly: true);
-    expect(classes.length, 12);
+    expect(classes.length, greaterThanOrEqualTo(12));
+    expect(classes.map((c) => c['name']), containsAll(['Barbarian', 'Wizard']));
     final species = await content.listSpecies();
     expect(species, isNotEmpty);
+
+    // Multi-module bundle: every source document became a module, and
+    // records from a non-SRD book landed with their own provenance.
+    expect(await content.count('content_module'), greaterThan(1));
+    final tob = await content.listNamed('creature', query: 'nihilith');
+    expect(tob, isNotEmpty);
 
     // Second call is a no-op, not a constraint violation.
     await content.importBundle();

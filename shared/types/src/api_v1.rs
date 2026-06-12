@@ -9,7 +9,7 @@ use typeshare::typeshare;
 
 use crate::{
     common::EntityId,
-    content_module::ContentModule,
+    content_module::{ContentModule, LicenseKind},
     lore_note::{LoreNote, NoteScope, NoteScopeKind, NoteVisibility},
     tag::Tag,
     user::User,
@@ -253,7 +253,8 @@ pub struct PublishModuleRequest {
     pub source_setting_uuid: EntityId,
     pub name: String,
     pub slug: String,
-    pub license: String,
+    /// Homebrew may publish as `Unlicensed`; bundled content may not.
+    pub license: LicenseKind,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub license_url: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

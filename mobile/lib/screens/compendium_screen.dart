@@ -10,8 +10,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 
 import '../compendium/categories.dart';
+import '../compendium/filters.dart';
 import '../services/content_store.dart';
 import '../services/server_connection.dart';
+import '../widgets/filter_sheet.dart';
+import '../widgets/source_badge.dart';
 import 'modules_browse_screen.dart';
 
 class CompendiumScreen extends StatefulWidget {
@@ -206,10 +209,12 @@ class _EntryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final subtitle = category.subtitle(record, lookups);
+    final source = lookups.sourceSlugOf(record);
     return ListTile(
       title: Text(category.displayName(record)),
       subtitle:
           (subtitle == null || subtitle.isEmpty) ? null : Text(subtitle),
+      trailing: source == null ? null : SourceBadge(source),
       onTap: () => Navigator.of(context).push(MaterialPageRoute(
         builder: (_) => CompendiumEntryScreen(
           record: record,
@@ -240,12 +245,20 @@ class CompendiumCategoryScreen extends StatefulWidget {
 
 class _CompendiumCategoryScreenState extends State<CompendiumCategoryScreen> {
   final _searchCtl = TextEditingController();
-  late Future<List<Map<String, dynamic>>> _future;
+  late final List<FilterDimension> _dimensions =
+      filterDimensionsFor(widget.category.table);
+  late final List<PickerSort> _sorts = sortOptionsFor(widget.category.table);
+  late final FilterState _filters = FilterState(_sorts.first);
+
+  List<Map<String, dynamic>>? _all;
+  String _query = '';
 
   @override
   void initState() {
     super.initState();
-    _future = widget.content.listNamed(widget.category.table);
+    widget.content.listNamed(widget.category.table).then((rows) {
+      if (mounted) setState(() => _all = rows);
+    });
   }
 
   @override
@@ -254,51 +267,81 @@ class _CompendiumCategoryScreenState extends State<CompendiumCategoryScreen> {
     super.dispose();
   }
 
-  void _search(String query) {
-    setState(() {
-      _future = widget.content.listNamed(widget.category.table, query: query);
-    });
+  List<Map<String, dynamic>> get _visible {
+    final all = _all;
+    if (all == null) return const [];
+    final q = _query.trim().toLowerCase();
+    final rows = [
+      for (final r in all)
+        if ((q.isEmpty || '${r['name']}'.toLowerCase().contains(q)) &&
+            matchesFilters(r, _dimensions, _filters.selections))
+          r,
+    ];
+    rows.sort((a, b) => _filters.sort.compare(a, b, widget.lookups));
+    return rows;
   }
 
   @override
   Widget build(BuildContext context) {
+    final rows = _visible;
     return Scaffold(
       appBar: AppBar(title: Text(widget.category.label)),
       body: Column(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: TextField(
-              controller: _searchCtl,
-              decoration: InputDecoration(
-                hintText: 'Filter ${widget.category.label.toLowerCase()}…',
-                prefixIcon: const Icon(Icons.search),
-                border: const OutlineInputBorder(),
-              ),
-              onChanged: _search,
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _searchCtl,
+                    decoration: InputDecoration(
+                      hintText:
+                          'Filter ${widget.category.label.toLowerCase()}…',
+                      prefixIcon: const Icon(Icons.search),
+                      border: const OutlineInputBorder(),
+                    ),
+                    onChanged: (q) => setState(() => _query = q),
+                  ),
+                ),
+                if (_dimensions.isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  Badge.count(
+                    count: _filters.activeCount,
+                    isLabelVisible: _filters.activeCount > 0,
+                    child: IconButton(
+                      icon: const Icon(Icons.filter_list),
+                      tooltip: 'Filter & sort',
+                      onPressed: _all == null
+                          ? null
+                          : () => showContentFilterSheet(
+                                context: context,
+                                dimensions: _dimensions,
+                                sorts: _sorts,
+                                lookups: widget.lookups,
+                                records: _all!,
+                                state: _filters,
+                                onChanged: () => setState(() {}),
+                              ),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
           Expanded(
-            child: FutureBuilder<List<Map<String, dynamic>>>(
-              future: _future,
-              builder: (context, snap) {
-                if (snap.connectionState != ConnectionState.done) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final rows = snap.data ?? const [];
-                if (rows.isEmpty) {
-                  return const Center(child: Text('No matches.'));
-                }
-                return ListView.builder(
-                  itemCount: rows.length,
-                  itemBuilder: (_, i) => _EntryTile(
-                    record: rows[i],
-                    category: widget.category,
-                    lookups: widget.lookups,
-                  ),
-                );
-              },
-            ),
+            child: _all == null
+                ? const Center(child: CircularProgressIndicator())
+                : rows.isEmpty
+                    ? const Center(child: Text('No matches.'))
+                    : ListView.builder(
+                        itemCount: rows.length,
+                        itemBuilder: (_, i) => _EntryTile(
+                          record: rows[i],
+                          category: widget.category,
+                          lookups: widget.lookups,
+                        ),
+                      ),
           ),
         ],
       ),
@@ -389,6 +432,20 @@ class CompendiumEntryScreen extends StatelessWidget {
                 ),
               ),
             const SizedBox(height: 8),
+          ],
+          // Provenance trails the playable content — valuable when
+          // planning, not during a session.
+          if (lookups.sourceNameOf(record) case final String source) ...[
+            const Divider(),
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'Source: $source',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.outline,
+                    ),
+              ),
+            ),
           ],
         ],
       ),

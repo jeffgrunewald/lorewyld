@@ -38,6 +38,11 @@ struct Cli {
     /// Mobile asset copy (byte-identical to the canonical output).
     #[arg(long, default_value = "mobile/assets/content/srd-bundle.json")]
     mobile_out: PathBuf,
+    /// Tiny manifest of module slugs — the mobile app's fast seeding
+    /// check, so launches don't decode the full bundle just to learn
+    /// nothing is missing.
+    #[arg(long, default_value = "mobile/assets/content/srd-bundle.meta.json")]
+    mobile_meta_out: PathBuf,
 }
 
 fn main() -> Result<()> {
@@ -58,6 +63,13 @@ fn main() -> Result<()> {
         }
         std::fs::write(path, &json).with_context(|| format!("writing {}", path.display()))?;
     }
+    let meta = serde_json::json!({
+        "module_slugs": bundle.modules.iter().map(|m| m.slug.clone()).collect::<Vec<_>>(),
+    });
+    let mut meta_json = serde_json::to_string_pretty(&meta)?;
+    meta_json.push('\n');
+    std::fs::write(&cli.mobile_meta_out, &meta_json)
+        .with_context(|| format!("writing {}", cli.mobile_meta_out.display()))?;
 
     report.print(&bundle, &json);
     Ok(())
@@ -73,6 +85,7 @@ impl Report {
     fn print(&self, bundle: &ContentBundle, json: &str) {
         eprintln!("\n── bundle contents ──");
         let counts: Vec<(&str, usize)> = vec![
+            ("modules", bundle.modules.len()),
             ("licenses", bundle.licenses.len()),
             ("publishers", bundle.publishers.len()),
             ("documents", bundle.documents.len()),
@@ -131,41 +144,83 @@ fn build_bundle(
     report: &mut Report,
 ) -> Result<ContentBundle> {
     let aliases = &overrides.name_aliases;
-    let in_docs = |key: &str| key == BASE_DOC || key == LEGACY_DOC;
+    let srd_module_uuid = module_uuid;
+    let is_srd = |key: &str| key == BASE_DOC || key == LEGACY_DOC;
 
     // ── Provenance ──────────────────────────────────────────────────────
+    // Every upstream document carrying a supported license ships. The
+    // SRD pair shares the 'srd' module (5.1 gap-fills 5.2); every other
+    // document becomes its own content module, so sources group cleanly
+    // and attribution stays per-book.
     let all_docs: Vec<v2::DocumentRec> = fetcher.fetch_all(&format!("{API}/v2/documents/"))?;
     let all_licenses: Vec<v2::LicenseRec> = fetcher.fetch_all(&format!("{API}/v2/licenses/"))?;
-    let our_docs: Vec<&v2::DocumentRec> =
-        all_docs.iter().filter(|d| in_docs(&d.key)).collect();
-    ensure!(our_docs.len() == 2, "expected both SRD documents upstream");
 
-    let cc_license = |doc: &v2::DocumentRec| -> Result<String> {
-        doc.licenses
-            .iter()
-            .find(|l| l.key == "cc-by-40")
-            .map(|l| l.key.clone())
-            .ok_or_else(|| anyhow::anyhow!("document {} lacks a CC-BY-4.0 license", doc.key))
+    // Preference order when a document carries several licenses.
+    let preferred_license = |doc: &v2::DocumentRec| -> Option<(LicenseKind, String)> {
+        ["cc-by-40", "ogl-10a"].iter().find_map(|key| {
+            doc.licenses
+                .iter()
+                .find(|l| l.key == *key)
+                .and_then(|l| LicenseKind::from_open5e_key(&l.key).map(|k| (k, l.key.clone())))
+        })
     };
 
-    let mut licenses = Vec::new();
-    let mut publishers = Vec::new();
+    let mut included: Vec<&v2::DocumentRec> = all_docs
+        .iter()
+        .filter(|d| {
+            let supported = preferred_license(d).is_some();
+            if !supported {
+                report
+                    .skipped
+                    .push(format!("document {} ({}): no supported license", d.key, d.name));
+            }
+            supported
+        })
+        .collect();
+    included.sort_by(|a, b| a.key.cmp(&b.key));
+    ensure!(
+        included.iter().any(|d| d.key == BASE_DOC) && included.iter().any(|d| d.key == LEGACY_DOC),
+        "expected both SRD documents upstream"
+    );
+
+    let module_uuid_for_doc = |doc_key: &str| -> EntityId {
+        if is_srd(doc_key) {
+            srd_module_uuid
+        } else {
+            content_uuid("module", doc_key)
+        }
+    };
+    let license_url_for = |kind: LicenseKind| -> Option<String> {
+        match kind {
+            LicenseKind::CcBy40 => {
+                Some("https://creativecommons.org/licenses/by/4.0/legalcode".into())
+            }
+            LicenseKind::Ogl10a | LicenseKind::Unlicensed => None,
+        }
+    };
+
+    let mut licenses: Vec<License> = Vec::new();
+    let mut publishers: Vec<Publisher> = Vec::new();
     let mut documents = Vec::new();
-    for doc in &our_docs {
-        let license_key = cc_license(doc)?;
-        let license_rec = all_licenses
-            .iter()
-            .find(|l| l.key == license_key)
-            .context("license record missing upstream")?;
+    let mut modules: Vec<ContentModule> = vec![srd_module(srd_module_uuid, epoch)];
+    for doc in &included {
+        let (license_kind, license_key) =
+            preferred_license(doc).expect("filtered to supported licenses");
         let license_uuid = content_uuid("license", &license_key);
-        if !licenses.iter().any(|l: &License| l.key == license_key) {
+        if !licenses.iter().any(|l| l.key == license_key) {
+            let license_rec = all_licenses
+                .iter()
+                .find(|l| l.key == license_key)
+                .context("license record missing upstream")?;
             licenses.push(License {
                 uuid: license_uuid,
-                content_module_uuid: module_uuid,
+                // Shared vocabulary rows live in the always-present SRD
+                // module.
+                content_module_uuid: srd_module_uuid,
                 name: license_rec.name.clone(),
                 slug: slug_from_key(&license_key),
                 key: license_key.clone(),
-                url: Some("https://creativecommons.org/licenses/by/4.0/legalcode".into()),
+                url: license_url_for(license_kind),
                 text: license_rec.desc.clone(),
                 is_restricted: false,
                 created_at: epoch,
@@ -173,10 +228,10 @@ fn build_bundle(
             });
         }
         let publisher_uuid = content_uuid("publisher", &doc.publisher.key);
-        if !publishers.iter().any(|p: &Publisher| p.key == doc.publisher.key) {
+        if !publishers.iter().any(|p| p.key == doc.publisher.key) {
             publishers.push(Publisher {
                 uuid: publisher_uuid,
-                content_module_uuid: module_uuid,
+                content_module_uuid: srd_module_uuid,
                 name: doc.publisher.name.clone(),
                 slug: slug_from_key(&doc.publisher.key),
                 key: doc.publisher.key.clone(),
@@ -186,9 +241,15 @@ fn build_bundle(
                 updated_at: epoch,
             });
         }
+
+        let owning_module = module_uuid_for_doc(&doc.key);
+        let published_on = doc
+            .publication_date
+            .as_deref()
+            .and_then(|d| NaiveDate::parse_from_str(&d[..d.len().min(10)], "%Y-%m-%d").ok());
         documents.push(Document {
             uuid: content_uuid("document", &doc.key),
-            content_module_uuid: module_uuid,
+            content_module_uuid: owning_module,
             name: doc.name.clone(),
             slug: slug_from_key(&doc.key),
             key: doc.key.clone(),
@@ -202,15 +263,42 @@ fn build_bundle(
             gamesystem_key: doc.gamesystem.key.clone(),
             permalink: doc.permalink.clone(),
             author: doc.author.clone(),
-            published_on: doc
-                .publication_date
-                .as_deref()
-                .and_then(|d| NaiveDate::parse_from_str(&d[..d.len().min(10)], "%Y-%m-%d").ok()),
+            published_on,
             is_restricted: false,
             created_at: epoch,
             updated_at: epoch,
         });
+        if !is_srd(&doc.key) {
+            modules.push(ContentModule {
+                uuid: owning_module,
+                name: doc.name.clone(),
+                slug: slug_from_key(&doc.key),
+                license: license_kind,
+                license_url: license_url_for(license_kind),
+                schema_version: SCHEMA_VERSION,
+                release_date: published_on,
+                authors: doc.author.clone().into_iter().collect(),
+                publisher: Some(doc.publisher.name.clone()),
+                description: doc.desc.clone(),
+                website_url: doc.permalink.clone(),
+                is_active: true,
+                ordering: modules.len() as i32,
+                version_string: "1.0.0".to_string(),
+                previous_version_uuid: None,
+                published_at: None,
+                created_at: epoch,
+                updated_at: epoch,
+            });
+        }
     }
+    let included_doc_keys: Vec<String> = included.iter().map(|d| d.key.clone()).collect();
+    let in_docs = |key: &str| included_doc_keys.iter().any(|k| k == key);
+    // Non-SRD documents whose content imports verbatim (no gap-fill).
+    let extra_doc_keys: Vec<String> = included_doc_keys
+        .iter()
+        .filter(|k| !is_srd(k))
+        .cloned()
+        .collect();
 
     // ── Lookup tables ───────────────────────────────────────────────────
     let school_recs: Vec<v2::SpellSchoolRec> =
@@ -497,7 +585,10 @@ fn build_bundle(
 
     // ── Mapping context ─────────────────────────────────────────────────
     let mut ctx = Ctx {
-        module_uuid,
+        modules_by_doc: included_doc_keys
+            .iter()
+            .map(|k| (k.clone(), module_uuid_for_doc(k)))
+            .collect(),
         epoch,
         documents: documents.iter().map(|d| (d.key.clone(), d.uuid)).collect(),
         schools: spell_schools.iter().map(|s| (s.key.clone(), s.uuid)).collect(),
@@ -521,13 +612,15 @@ fn build_bundle(
     };
 
     // ── Classes (needed before spells for class-key resolution) ────────
-    let fetch_doc = |endpoint: &str, doc: &str| -> String {
-        format!("{API}/v2/{endpoint}/?document__key={doc}&limit=200")
-    };
-    let class_recs_base: Vec<v2::ClassRec> =
-        fetcher.fetch_all(&fetch_doc("classes", BASE_DOC))?;
-    let class_recs_legacy: Vec<v2::ClassRec> =
-        fetcher.fetch_all(&fetch_doc("classes", LEGACY_DOC))?;
+    // Every family fetches the endpoint once unfiltered and partitions
+    // client-side by embedded document key: the upstream document__key
+    // filter is broken on several endpoints, and one fetch covers all
+    // shipped documents.
+    let class_recs_all: Vec<v2::ClassRec> =
+        fetcher.fetch_all(&format!("{API}/v2/classes/?limit=200"))?;
+    let mut class_groups = group_by_doc(class_recs_all, |r| r.document.key.clone());
+    let class_recs_base = class_groups.remove(BASE_DOC).unwrap_or_default();
+    let class_recs_legacy = class_groups.remove(LEGACY_DOC).unwrap_or_default();
     ensure!(class_recs_base.len() >= 20, "suspiciously few SRD 5.2 classes");
     ensure!(class_recs_legacy.len() >= 20, "suspiciously few SRD 5.1 classes");
 
@@ -576,45 +669,117 @@ fn build_bundle(
         classes.push(map::map_class(&ctx, rec, v1c, overrides, Some(parent_uuid))?);
     }
 
+    // Non-SRD documents import verbatim: own parents resolve first,
+    // then SRD parents (a sourcebook subclass of an SRD class). The v1
+    // sheet-math join is SRD-only. Mapping is tolerant — a record that
+    // doesn't fit the schema is reported, not fatal.
+    let mut class_keys_by_doc: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
+    for doc_key in &extra_doc_keys {
+        let recs = class_groups.remove(doc_key).unwrap_or_default();
+        let (parents, subs) = split(recs);
+        let doc_parent_keys: BTreeMap<String, String> = parents
+            .iter()
+            .map(|r| (r.name.to_lowercase(), r.key.clone()))
+            .collect();
+        for rec in &parents {
+            match map::map_class(&ctx, rec, None, overrides, None) {
+                Ok(c) => classes.push(c),
+                Err(e) => report.skipped.push(format!("class {}: {e}", rec.key)),
+            }
+        }
+        for rec in &subs {
+            let parent_stub = rec.subclass_of.as_ref().expect("partitioned as subclass");
+            let parent_name = parent_stub.name.to_lowercase();
+            let Some(parent_key) = doc_parent_keys
+                .get(&parent_name)
+                .or_else(|| parent_key_by_name.get(&parent_name))
+            else {
+                report.skipped.push(format!(
+                    "subclass {} (parent {} not shipped)",
+                    rec.key, parent_stub.name
+                ));
+                continue;
+            };
+            let parent_uuid = content_uuid("class", parent_key);
+            match map::map_class(&ctx, rec, None, overrides, Some(parent_uuid)) {
+                Ok(c) => classes.push(c),
+                Err(e) => report.skipped.push(format!("subclass {}: {e}", rec.key)),
+            }
+        }
+        class_keys_by_doc.insert(doc_key.clone(), doc_parent_keys);
+    }
+
     // ── Spells ──────────────────────────────────────────────────────────
-    let spells_base: Vec<v2::SpellRec> = fetcher.fetch_all(&fetch_doc("spells", BASE_DOC))?;
-    let spells_legacy: Vec<v2::SpellRec> =
-        fetcher.fetch_all(&fetch_doc("spells", LEGACY_DOC))?;
+    let spell_recs_all: Vec<v2::SpellRec> =
+        fetcher.fetch_all(&format!("{API}/v2/spells/?limit=200"))?;
+    let mut spell_groups = group_by_doc(spell_recs_all, |r| r.document.key.clone());
+    let spells_base = spell_groups.remove(BASE_DOC).unwrap_or_default();
+    let spells_legacy = spell_groups.remove(LEGACY_DOC).unwrap_or_default();
     ensure!(spells_base.len() >= 300, "suspiciously few SRD 5.2 spells");
     ensure!(spells_legacy.len() >= 300, "suspiciously few SRD 5.1 spells");
     let (spell_recs, filled) =
         dedup::gap_fill(spells_base, spells_legacy, |r| r.name.clone(), aliases);
     report.gap_filled.insert("spells", filled);
-    let spells = spell_recs
+    let mut spells = spell_recs
         .iter()
         .map(|r| map::map_spell(&ctx, r))
         .collect::<Result<Vec<_>>>()?;
+    for doc_key in &extra_doc_keys {
+        let recs = spell_groups.remove(doc_key).unwrap_or_default();
+        if recs.is_empty() {
+            continue;
+        }
+        // Spell→class references resolve against the spell's own
+        // document first, falling back to SRD classes.
+        let mut merged = parent_key_by_name.clone();
+        if let Some(doc_classes) = class_keys_by_doc.get(doc_key) {
+            merged.extend(doc_classes.clone());
+        }
+        ctx.class_key_by_name = merged;
+        for rec in &recs {
+            match map::map_spell(&ctx, rec) {
+                Ok(s) => spells.push(s),
+                Err(e) => report.skipped.push(format!("spell {}: {e}", rec.key)),
+            }
+        }
+    }
+    ctx.class_key_by_name = parent_key_by_name.clone();
 
     // ── Creatures ───────────────────────────────────────────────────────
-    let creatures_base: Vec<v2::CreatureRec> =
-        fetcher.fetch_all(&fetch_doc("creatures", BASE_DOC))?;
-    let creatures_legacy: Vec<v2::CreatureRec> =
-        fetcher.fetch_all(&fetch_doc("creatures", LEGACY_DOC))?;
+    let creature_recs_all: Vec<v2::CreatureRec> =
+        fetcher.fetch_all(&format!("{API}/v2/creatures/?limit=200"))?;
+    let mut creature_groups = group_by_doc(creature_recs_all, |r| r.document.key.clone());
+    let creatures_base = creature_groups.remove(BASE_DOC).unwrap_or_default();
+    let creatures_legacy = creature_groups.remove(LEGACY_DOC).unwrap_or_default();
     ensure!(creatures_base.len() >= 300, "suspiciously few SRD 5.2 creatures");
     ensure!(creatures_legacy.len() >= 300, "suspiciously few SRD 5.1 creatures");
     let (creature_recs, filled) =
         dedup::gap_fill(creatures_base, creatures_legacy, |r| r.name.clone(), aliases);
     report.gap_filled.insert("creatures", filled);
-    let creatures = creature_recs
+    let mut creatures = creature_recs
         .iter()
         .map(|r| map::map_creature(&ctx, r))
         .collect::<Result<Vec<_>>>()?;
+    for doc_key in &extra_doc_keys {
+        for rec in &creature_groups.remove(doc_key).unwrap_or_default() {
+            match map::map_creature(&ctx, rec) {
+                Ok(c) => creatures.push(c),
+                Err(e) => report.skipped.push(format!("creature {}: {e}", rec.key)),
+            }
+        }
+    }
 
     // ── Species ─────────────────────────────────────────────────────────
-    let species_base: Vec<v2::SpeciesRec> =
-        fetcher.fetch_all(&fetch_doc("species", BASE_DOC))?;
-    let species_legacy: Vec<v2::SpeciesRec> =
-        fetcher.fetch_all(&fetch_doc("species", LEGACY_DOC))?;
-    let legacy_species_name_by_key: BTreeMap<String, String> = species_legacy
+    let species_recs_all: Vec<v2::SpeciesRec> =
+        fetcher.fetch_all(&format!("{API}/v2/species/?limit=200"))?;
+    let species_name_by_key: BTreeMap<String, String> = species_recs_all
         .iter()
-        .chain(species_base.iter())
         .map(|r| (r.key.clone(), r.name.clone()))
         .collect();
+    let mut species_groups = group_by_doc(species_recs_all, |r| r.document.key.clone());
+    let species_base = species_groups.remove(BASE_DOC).unwrap_or_default();
+    let species_legacy = species_groups.remove(LEGACY_DOC).unwrap_or_default();
+    let legacy_species_name_by_key = species_name_by_key;
     let (sp_parents, sp_subs): (Vec<_>, Vec<_>) = {
         let split = |recs: Vec<v2::SpeciesRec>| -> (Vec<v2::SpeciesRec>, Vec<v2::SpeciesRec>) {
             recs.into_iter().partition(|r| !r.is_subspecies)
@@ -648,6 +813,12 @@ fn build_bundle(
                 map::sheet_math_from_v2_traits(&rec.traits, &overrides.srd24_species_asi_desc),
                 None,
             );
+        }
+        // The v1 join only describes the 2014 SRD; species from other
+        // sourcebooks parse their own typed traits (a name like "Human"
+        // must not inherit WotC's 2014 numbers).
+        if rec.document.key != LEGACY_DOC {
+            return (map::sheet_math_from_v2_traits(&rec.traits, ""), None);
         }
         let name = rec.name.to_lowercase();
         if let Some(race) = v1_race_by_name.get(&name) {
@@ -733,60 +904,135 @@ fn build_bundle(
         species.push(map::map_species(&ctx, rec, sheet, Some(parent_uuid))?);
     }
 
+    for doc_key in &extra_doc_keys {
+        let recs = species_groups.remove(doc_key).unwrap_or_default();
+        let (doc_parents, doc_subs): (Vec<_>, Vec<_>) =
+            recs.into_iter().partition(|r| !r.is_subspecies);
+        let doc_parent_key_by_name: BTreeMap<String, String> = doc_parents
+            .iter()
+            .map(|r| (r.name.to_lowercase(), r.key.clone()))
+            .collect();
+        for rec in &doc_parents {
+            let (sheet, note) = species_sheet(rec, None);
+            report.skipped.extend(note);
+            match map::map_species(&ctx, rec, sheet, None) {
+                Ok(s) => species.push(s),
+                Err(e) => report.skipped.push(format!("species {}: {e}", rec.key)),
+            }
+        }
+        for rec in &doc_subs {
+            let parent_name = rec
+                .subspecies_of
+                .as_ref()
+                .and_then(|k| legacy_species_name_by_key.get(k))
+                .map(|n| n.to_lowercase());
+            let Some(parent_key) = parent_name.as_ref().and_then(|n| {
+                doc_parent_key_by_name
+                    .get(n)
+                    .or_else(|| parent_species_key_by_name.get(n))
+            }) else {
+                report.skipped.push(format!(
+                    "subspecies {} (parent {:?} not shipped)",
+                    rec.key, rec.subspecies_of
+                ));
+                continue;
+            };
+            let (sheet, note) = species_sheet(rec, parent_name.as_deref());
+            report.skipped.extend(note);
+            let parent_uuid = content_uuid("species", parent_key);
+            match map::map_species(&ctx, rec, sheet, Some(parent_uuid)) {
+                Ok(s) => species.push(s),
+                Err(e) => report.skipped.push(format!("subspecies {}: {e}", rec.key)),
+            }
+        }
+    }
+
     // ── Backgrounds & feats ─────────────────────────────────────────────
-    let bg_base: Vec<v2::BackgroundRec> =
-        fetcher.fetch_all(&fetch_doc("backgrounds", BASE_DOC))?;
-    let bg_legacy: Vec<v2::BackgroundRec> =
-        fetcher.fetch_all(&fetch_doc("backgrounds", LEGACY_DOC))?;
+    let bg_recs_all: Vec<v2::BackgroundRec> =
+        fetcher.fetch_all(&format!("{API}/v2/backgrounds/?limit=200"))?;
+    let mut bg_groups = group_by_doc(bg_recs_all, |r| r.document.key.clone());
+    let bg_base = bg_groups.remove(BASE_DOC).unwrap_or_default();
+    let bg_legacy = bg_groups.remove(LEGACY_DOC).unwrap_or_default();
     let (bg_recs, filled) = dedup::gap_fill(bg_base, bg_legacy, |r| r.name.clone(), aliases);
     report.gap_filled.insert("backgrounds", filled);
-    let backgrounds = bg_recs
+    let mut backgrounds = bg_recs
         .iter()
         .map(|r| map::map_background(&ctx, r))
         .collect::<Result<Vec<_>>>()?;
+    for doc_key in &extra_doc_keys {
+        for rec in &bg_groups.remove(doc_key).unwrap_or_default() {
+            match map::map_background(&ctx, rec) {
+                Ok(b) => backgrounds.push(b),
+                Err(e) => report.skipped.push(format!("background {}: {e}", rec.key)),
+            }
+        }
+    }
 
-    let feat_base: Vec<v2::FeatRec> = fetcher.fetch_all(&fetch_doc("feats", BASE_DOC))?;
-    let feat_legacy: Vec<v2::FeatRec> = fetcher.fetch_all(&fetch_doc("feats", LEGACY_DOC))?;
+    let feat_recs_all: Vec<v2::FeatRec> =
+        fetcher.fetch_all(&format!("{API}/v2/feats/?limit=200"))?;
+    let mut feat_groups = group_by_doc(feat_recs_all, |r| r.document.key.clone());
+    let feat_base = feat_groups.remove(BASE_DOC).unwrap_or_default();
+    let feat_legacy = feat_groups.remove(LEGACY_DOC).unwrap_or_default();
     let (feat_recs, filled) =
         dedup::gap_fill(feat_base, feat_legacy, |r| r.name.clone(), aliases);
     report.gap_filled.insert("feats", filled);
-    let feats = feat_recs
+    let mut feats = feat_recs
         .iter()
         .map(|r| map::map_feat(&ctx, r))
         .collect::<Result<Vec<_>>>()?;
+    for doc_key in &extra_doc_keys {
+        for rec in &feat_groups.remove(doc_key).unwrap_or_default() {
+            match map::map_feat(&ctx, rec) {
+                Ok(f) => feats.push(f),
+                Err(e) => report.skipped.push(format!("feat {}: {e}", rec.key)),
+            }
+        }
+    }
 
     // ── Gear: weapons, armor, items ─────────────────────────────────────
-    // The document__key filter is broken on some of these endpoints
-    // (returns the unfiltered set), so always filter client-side on the
-    // embedded document key.
     let weapon_recs_all: Vec<v2::WeaponRec> =
         fetcher.fetch_all(&format!("{API}/v2/weapons/?limit=200"))?;
-    let (w_base, w_legacy): (Vec<_>, Vec<_>) = weapon_recs_all
-        .into_iter()
-        .filter(|r| in_docs(&r.document.key))
-        .partition(|r| r.document.key == BASE_DOC);
+    let mut weapon_groups =
+        group_by_doc(weapon_recs_all, |r| r.document.key.clone());
+    let w_base = weapon_groups.remove(BASE_DOC).unwrap_or_default();
+    let w_legacy = weapon_groups.remove(LEGACY_DOC).unwrap_or_default();
     ensure!(w_base.len() >= 30, "suspiciously few SRD 5.2 weapons");
     let (weapon_recs, filled) =
         dedup::gap_fill(w_base, w_legacy, |r| r.name.clone(), aliases);
     report.gap_filled.insert("weapons", filled);
-    let weapons = weapon_recs
+    let mut weapons = weapon_recs
         .iter()
         .map(|r| map::map_weapon(&ctx, r))
         .collect::<Result<Vec<_>>>()?;
+    for doc_key in &extra_doc_keys {
+        for rec in &weapon_groups.remove(doc_key).unwrap_or_default() {
+            match map::map_weapon(&ctx, rec) {
+                Ok(w) => weapons.push(w),
+                Err(e) => report.skipped.push(format!("weapon {}: {e}", rec.key)),
+            }
+        }
+    }
 
     let armor_recs_all: Vec<v2::ArmorRec> =
         fetcher.fetch_all(&format!("{API}/v2/armor/?limit=200"))?;
-    let (a_base, a_legacy): (Vec<_>, Vec<_>) = armor_recs_all
-        .into_iter()
-        .filter(|r| in_docs(&r.document.key))
-        .partition(|r| r.document.key == BASE_DOC);
+    let mut armor_groups = group_by_doc(armor_recs_all, |r| r.document.key.clone());
+    let a_base = armor_groups.remove(BASE_DOC).unwrap_or_default();
+    let a_legacy = armor_groups.remove(LEGACY_DOC).unwrap_or_default();
     ensure!(a_base.len() >= 10, "suspiciously few SRD 5.2 armors");
     let (armor_recs, filled) = dedup::gap_fill(a_base, a_legacy, |r| r.name.clone(), aliases);
     report.gap_filled.insert("armors", filled);
-    let armors = armor_recs
+    let mut armors = armor_recs
         .iter()
         .map(|r| map::map_armor(&ctx, r))
         .collect::<Result<Vec<_>>>()?;
+    for doc_key in &extra_doc_keys {
+        for rec in &armor_groups.remove(doc_key).unwrap_or_default() {
+            match map::map_armor(&ctx, rec) {
+                Ok(a) => armors.push(a),
+                Err(e) => report.skipped.push(format!("armor {}: {e}", rec.key)),
+            }
+        }
+    }
 
     let weapon_uuid_by_key: BTreeMap<&str, EntityId> =
         weapons.iter().map(|w| (w.key.as_str(), w.uuid)).collect();
@@ -806,79 +1052,67 @@ fn build_bundle(
     let magic_recs_all: Vec<v2::ItemRec> =
         fetcher.fetch_all(&format!("{API}/v2/magicitems/?limit=200"))?;
     type TaggedItems = Vec<(v2::ItemRec, bool)>;
-    let partition_items = |recs: Vec<v2::ItemRec>, is_magic: bool| -> (TaggedItems, TaggedItems) {
-        recs.into_iter()
-            .filter(|r| in_docs(&r.document.key))
-            .map(|r| (r, is_magic))
-            .partition(|(r, _)| r.document.key == BASE_DOC)
-    };
-    let (mut i_base, mut i_legacy) = partition_items(item_recs_all, false);
-    let (m_base, m_legacy) = partition_items(magic_recs_all, true);
-    i_base.extend(m_base);
-    i_legacy.extend(m_legacy);
+    let mut i_base: TaggedItems = Vec::new();
+    let mut i_legacy: TaggedItems = Vec::new();
+    let mut extra_items: TaggedItems = Vec::new();
+    for (recs, is_magic) in [(item_recs_all, false), (magic_recs_all, true)] {
+        for rec in recs {
+            match rec.document.key.as_str() {
+                BASE_DOC => i_base.push((rec, is_magic)),
+                LEGACY_DOC => i_legacy.push((rec, is_magic)),
+                key if in_docs(key) => extra_items.push((rec, is_magic)),
+                _ => {}
+            }
+        }
+    }
     ensure!(i_base.len() >= 200, "suspiciously few SRD 5.2 items");
     ensure!(i_legacy.len() >= 200, "suspiciously few SRD 5.1 items");
     let (item_recs, filled) =
         dedup::gap_fill(i_base, i_legacy, |(r, _)| r.name.clone(), aliases);
     report.gap_filled.insert("items", filled);
 
+    // Extra-doc items sort by key for deterministic output.
+    extra_items.sort_by(|(a, _), (b, _)| a.key.cmp(&b.key));
+
     let mut items = Vec::new();
-    for (rec, is_magic) in &item_recs {
-        let resolve = |embed: &Option<v2::EmbeddedKeyed>,
-                       by_key: &BTreeMap<&str, EntityId>,
-                       by_name: &BTreeMap<String, EntityId>|
-         -> Option<EntityId> {
-            let embed = embed.as_ref()?;
-            by_key
-                .get(embed.key.as_str())
-                .or_else(|| by_name.get(&dedup::normalize(&embed.name, aliases)))
-                .copied()
-        };
-        let weapon_uuid = resolve(&rec.weapon, &weapon_uuid_by_key, &weapon_uuid_by_name);
-        let armor_uuid = resolve(&rec.armor, &armor_uuid_by_key, &armor_uuid_by_name);
-        if rec.weapon.is_some() && weapon_uuid.is_none() {
-            report
-                .skipped
-                .push(format!("item {}: unresolved base weapon ref", rec.key));
+    let resolve = |embed: &Option<v2::EmbeddedKeyed>,
+                   by_key: &BTreeMap<&str, EntityId>,
+                   by_name: &BTreeMap<String, EntityId>|
+     -> Option<EntityId> {
+        let embed = embed.as_ref()?;
+        by_key
+            .get(embed.key.as_str())
+            .or_else(|| by_name.get(&dedup::normalize(&embed.name, aliases)))
+            .copied()
+    };
+    for (strict, group) in [(true, &item_recs), (false, &extra_items)] {
+        for (rec, is_magic) in group {
+            let weapon_uuid = resolve(&rec.weapon, &weapon_uuid_by_key, &weapon_uuid_by_name);
+            let armor_uuid = resolve(&rec.armor, &armor_uuid_by_key, &armor_uuid_by_name);
+            if rec.weapon.is_some() && weapon_uuid.is_none() {
+                report
+                    .skipped
+                    .push(format!("item {}: unresolved base weapon ref", rec.key));
+            }
+            if rec.armor.is_some() && armor_uuid.is_none() {
+                report
+                    .skipped
+                    .push(format!("item {}: unresolved base armor ref", rec.key));
+            }
+            match map::map_item(&ctx, rec, *is_magic, weapon_uuid, armor_uuid) {
+                Ok(i) => items.push(i),
+                Err(e) if !strict => {
+                    report.skipped.push(format!("item {}: {e}", rec.key));
+                }
+                Err(e) => return Err(e),
+            }
         }
-        if rec.armor.is_some() && armor_uuid.is_none() {
-            report
-                .skipped
-                .push(format!("item {}: unresolved base armor ref", rec.key));
-        }
-        items.push(map::map_item(&ctx, rec, *is_magic, weapon_uuid, armor_uuid)?);
     }
 
-    // ── Module + assembly ───────────────────────────────────────────────
-    let module = ContentModule {
-        uuid: module_uuid,
-        name: "System Reference Document".to_string(),
-        slug: "srd".to_string(),
-        license: "CC-BY-4.0".to_string(),
-        license_url: Some("https://creativecommons.org/licenses/by/4.0/legalcode".to_string()),
-        schema_version: SCHEMA_VERSION,
-        release_date: None,
-        authors: vec!["Wizards of the Coast".to_string()],
-        publisher: Some("Wizards of the Coast".to_string()),
-        description: Some(
-            "D&D 5e System Reference Document content: SRD 5.2 (2024 rules) as the base, \
-             gap-filled with SRD 5.1 (2014 rules) records absent from 5.2. \
-             Sourced via the Open5e API."
-                .to_string(),
-        ),
-        website_url: Some("https://open5e.com".to_string()),
-        is_active: true,
-        ordering: 0,
-        version_string: "1.0.0".to_string(),
-        previous_version_uuid: None,
-        published_at: None,
-        created_at: epoch,
-        updated_at: epoch,
-    };
-
+    // ── Assembly ────────────────────────────────────────────────────────
     let mut bundle = ContentBundle {
         schema: SchemaVersion::current(),
-        modules: vec![module],
+        modules,
         licenses,
         publishers,
         documents,
@@ -907,6 +1141,45 @@ fn build_bundle(
     sort_bundle(&mut bundle);
     validate_unique_keys(&bundle)?;
     Ok(bundle)
+}
+
+/// The 'srd' module is special-cased: it merges the SRD 5.2 base with
+/// SRD 5.1 gap-fill into one logical WotC source.
+fn srd_module(uuid: EntityId, epoch: Timestamp) -> ContentModule {
+    ContentModule {
+        uuid,
+        name: "System Reference Document".to_string(),
+        slug: "srd".to_string(),
+        license: LicenseKind::CcBy40,
+        license_url: Some("https://creativecommons.org/licenses/by/4.0/legalcode".to_string()),
+        schema_version: SCHEMA_VERSION,
+        release_date: None,
+        authors: vec!["Wizards of the Coast".to_string()],
+        publisher: Some("Wizards of the Coast".to_string()),
+        description: Some(
+            "D&D 5e System Reference Document content: SRD 5.2 (2024 rules) as the base, \
+             gap-filled with SRD 5.1 (2014 rules) records absent from 5.2. \
+             Sourced via the Open5e API."
+                .to_string(),
+        ),
+        website_url: Some("https://open5e.com".to_string()),
+        is_active: true,
+        ordering: 0,
+        version_string: "1.0.0".to_string(),
+        previous_version_uuid: None,
+        published_at: None,
+        created_at: epoch,
+        updated_at: epoch,
+    }
+}
+
+/// Buckets fetched records by their embedded document key.
+fn group_by_doc<T>(recs: Vec<T>, doc_key: impl Fn(&T) -> String) -> BTreeMap<String, Vec<T>> {
+    let mut groups: BTreeMap<String, Vec<T>> = BTreeMap::new();
+    for rec in recs {
+        groups.entry(doc_key(&rec)).or_default().push(rec);
+    }
+    groups
 }
 
 fn sort_bundle(bundle: &mut ContentBundle) {

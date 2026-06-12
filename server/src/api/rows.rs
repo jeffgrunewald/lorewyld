@@ -123,7 +123,10 @@ impl ContentModuleRow {
             uuid: parse_uuid(&self.uuid)?,
             name: self.name,
             slug: self.slug,
-            license: self.license,
+            // Rows predating the license enumeration (or hand-edited
+            // values) degrade to Unlicensed rather than erroring.
+            license: lorewyld_types::LicenseKind::from_wire(&self.license)
+                .unwrap_or(lorewyld_types::LicenseKind::Unlicensed),
             license_url: self.license_url,
             schema_version: self.schema_version as u32,
             release_date: self.release_date,

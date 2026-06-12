@@ -153,10 +153,12 @@ pub fn pick_desc(descs: &[v2::EditionDesc]) -> String {
 
 // ─── Mapping context ─────────────────────────────────────────────────────
 
-/// Resolution state shared by all record mappers: the module identity,
-/// per-document UUIDs, and key→UUID maps for every lookup table.
+/// Resolution state shared by all record mappers: per-document module
+/// and document UUIDs, and key→UUID maps for every lookup table.
 pub struct Ctx {
-    pub module_uuid: EntityId,
+    /// Document key → owning content module. The SRD pair shares one
+    /// module; every other source document is its own module.
+    pub modules_by_doc: BTreeMap<String, EntityId>,
     pub epoch: Timestamp,
     pub documents: BTreeMap<String, EntityId>,
     pub schools: BTreeMap<String, EntityId>,
@@ -173,6 +175,13 @@ pub struct Ctx {
 }
 
 impl Ctx {
+    pub fn module_uuid_for(&self, doc_key: &str) -> Result<EntityId> {
+        self.modules_by_doc
+            .get(doc_key)
+            .copied()
+            .ok_or_else(|| anyhow!("record references document {doc_key:?} with no module"))
+    }
+
     pub fn document_uuid(&self, doc_key: &str) -> Result<EntityId> {
         self.documents
             .get(doc_key)
@@ -196,7 +205,7 @@ pub fn map_spell(ctx: &Ctx, rec: &v2::SpellRec) -> Result<Spell> {
         .collect();
     Ok(Spell {
         uuid: content_uuid("spell", &rec.key),
-        content_module_uuid: ctx.module_uuid,
+        content_module_uuid: ctx.module_uuid_for(&rec.document.key)?,
         document_uuid: ctx.document_uuid(&rec.document.key)?,
         name: rec.name.clone(),
         slug: slug_from_key(&rec.key),
@@ -372,7 +381,7 @@ pub fn map_creature(ctx: &Ctx, rec: &v2::CreatureRec) -> Result<Creature> {
 
     Ok(Creature {
         uuid: content_uuid("creature", &rec.key),
-        content_module_uuid: ctx.module_uuid,
+        content_module_uuid: ctx.module_uuid_for(&rec.document.key)?,
         document_uuid: ctx.document_uuid(&rec.document.key)?,
         name: rec.name.clone(),
         slug: slug_from_key(&rec.key),
@@ -524,7 +533,7 @@ pub fn map_class(
     let is_subclass = parent_uuid.is_some();
     Ok(Class {
         uuid: content_uuid("class", &rec.key),
-        content_module_uuid: ctx.module_uuid,
+        content_module_uuid: ctx.module_uuid_for(&rec.document.key)?,
         document_uuid: ctx.document_uuid(&rec.document.key)?,
         name: rec.name.clone(),
         slug,
@@ -692,7 +701,7 @@ pub fn map_species(
         .ok_or_else(|| anyhow!("species {} has unknown size {:?}", rec.key, sheet.size_name))?;
     Ok(Species {
         uuid: content_uuid("species", &rec.key),
-        content_module_uuid: ctx.module_uuid,
+        content_module_uuid: ctx.module_uuid_for(&rec.document.key)?,
         document_uuid: ctx.document_uuid(&rec.document.key)?,
         name: rec.name.clone(),
         slug: slug_from_key(&rec.key),
@@ -726,7 +735,7 @@ pub fn map_species(
 pub fn map_background(ctx: &Ctx, rec: &v2::BackgroundRec) -> Result<Background> {
     Ok(Background {
         uuid: content_uuid("background", &rec.key),
-        content_module_uuid: ctx.module_uuid,
+        content_module_uuid: ctx.module_uuid_for(&rec.document.key)?,
         document_uuid: ctx.document_uuid(&rec.document.key)?,
         name: rec.name.clone(),
         slug: slug_from_key(&rec.key),
@@ -750,7 +759,7 @@ pub fn map_background(ctx: &Ctx, rec: &v2::BackgroundRec) -> Result<Background> 
 pub fn map_feat(ctx: &Ctx, rec: &v2::FeatRec) -> Result<Feat> {
     Ok(Feat {
         uuid: content_uuid("feat", &rec.key),
-        content_module_uuid: ctx.module_uuid,
+        content_module_uuid: ctx.module_uuid_for(&rec.document.key)?,
         document_uuid: ctx.document_uuid(&rec.document.key)?,
         name: rec.name.clone(),
         slug: slug_from_key(&rec.key),
@@ -776,7 +785,7 @@ pub fn map_feat(ctx: &Ctx, rec: &v2::FeatRec) -> Result<Feat> {
 pub fn map_weapon(ctx: &Ctx, rec: &v2::WeaponRec) -> Result<Weapon> {
     Ok(Weapon {
         uuid: content_uuid("weapon", &rec.key),
-        content_module_uuid: ctx.module_uuid,
+        content_module_uuid: ctx.module_uuid_for(&rec.document.key)?,
         document_uuid: ctx.document_uuid(&rec.document.key)?,
         name: rec.name.clone(),
         slug: slug_from_key(&rec.key),
@@ -811,7 +820,7 @@ pub fn map_weapon(ctx: &Ctx, rec: &v2::WeaponRec) -> Result<Weapon> {
 pub fn map_armor(ctx: &Ctx, rec: &v2::ArmorRec) -> Result<Armor> {
     Ok(Armor {
         uuid: content_uuid("armor", &rec.key),
-        content_module_uuid: ctx.module_uuid,
+        content_module_uuid: ctx.module_uuid_for(&rec.document.key)?,
         document_uuid: ctx.document_uuid(&rec.document.key)?,
         name: rec.name.clone(),
         slug: slug_from_key(&rec.key),
@@ -847,7 +856,7 @@ pub fn map_item(
         .ok_or_else(|| anyhow!("item {} has unknown category {}", rec.key, category.key))?;
     Ok(Item {
         uuid: content_uuid("item", &rec.key),
-        content_module_uuid: ctx.module_uuid,
+        content_module_uuid: ctx.module_uuid_for(&rec.document.key)?,
         document_uuid: ctx.document_uuid(&rec.document.key)?,
         name: rec.name.clone(),
         slug: slug_from_key(&rec.key),

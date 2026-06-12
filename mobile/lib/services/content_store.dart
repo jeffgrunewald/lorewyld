@@ -73,28 +73,69 @@ class ContentStore {
   Database get _db => _store.database;
 
   static const _bundleAsset = 'assets/content/srd-bundle.json';
-  static const _srdModuleSlug = 'srd';
+  static const _bundleMetaAsset = 'assets/content/srd-bundle.meta.json';
 
-  Future<bool> get isSeeded async {
-    final rows = await _db.query('content_module',
-        columns: ['uuid'], where: 'slug = ?', whereArgs: [_srdModuleSlug]);
-    return rows.isNotEmpty;
+  Future<Set<String>> _existingModuleSlugs() async {
+    final rows = await _db.query('content_module', columns: ['slug']);
+    return {for (final r in rows) r['slug'] as String};
   }
 
-  /// Loads the bundled SRD JSON and imports every record. Decoding the
-  /// ~4 MB asset runs in an isolate so the UI thread stays responsive;
-  /// inserts run in chunked batches inside one transaction, reporting
-  /// progress in [0, 1] after each chunk.
+  /// Module slugs the shipped bundle expects, from the tiny manifest —
+  /// launches don't decode the ~20 MB bundle just to learn nothing is
+  /// missing.
+  Future<Set<String>> _bundledModuleSlugs() async {
+    final raw = await rootBundle.loadString(_bundleMetaAsset);
+    final meta = jsonDecode(raw) as Map<String, dynamic>;
+    return {
+      for (final s in meta['module_slugs'] as List<dynamic>? ?? const [])
+        s as String,
+    };
+  }
+
+  Future<bool> get isSeeded async {
+    final existing = await _existingModuleSlugs();
+    return (await _bundledModuleSlugs()).difference(existing).isEmpty;
+  }
+
+  /// Imports every bundled record whose content module isn't installed
+  /// yet — a fresh install seeds everything; an app upgraded to a
+  /// bundle with additional source modules seeds only what's new.
+  /// Decoding the asset runs in an isolate so the UI thread stays
+  /// responsive; inserts run in chunked batches inside one
+  /// transaction, reporting progress in [0, 1] after each chunk.
   Future<void> importBundle({void Function(double progress)? onProgress}) async {
-    if (await isSeeded) return;
+    final existing = await _existingModuleSlugs();
+    final missing = (await _bundledModuleSlugs()).difference(existing);
+    if (missing.isEmpty) return;
+
     final raw = await rootBundle.loadString(_bundleAsset);
     final bundle = await compute(_decodeJson, raw);
 
-    final tables = <(_TableSpec, List<dynamic>)>[
+    final allowedModuleUuids = {
+      for (final m in bundle['modules'] as List<dynamic>? ?? const [])
+        if (missing.contains((m as Map<String, dynamic>)['slug']))
+          m['uuid'] as String,
+    };
+    // Module rows are matched by slug; every other record rides along
+    // only when its owning module is being seeded.
+    bool allowed(_TableSpec spec, Map<String, dynamic> r) =>
+        spec.table == 'content_module'
+            ? missing.contains(r['slug'])
+            : allowedModuleUuids.contains(r['content_module_uuid']);
+
+    final tables = <(_TableSpec, List<Map<String, dynamic>>)>[
       for (final spec in _specs)
-        (spec, (bundle[spec.bundleField] as List<dynamic>? ?? const [])),
+        (
+          spec,
+          [
+            for (final r
+                in bundle[spec.bundleField] as List<dynamic>? ?? const [])
+              if (allowed(spec, r as Map<String, dynamic>)) r,
+          ],
+        ),
     ];
     final total = tables.fold<int>(0, (sum, t) => sum + t.$2.length);
+    if (total == 0) return;
     var inserted = 0;
 
     await _db.transaction((txn) async {
@@ -207,10 +248,15 @@ class ContentStore {
 
   /// uuid → display name for a lookup table (spell schools, sizes,
   /// creature types, item categories). Small tables; load whole.
-  Future<Map<String, String>> lookupNames(String table) async {
-    final rows = await _db.query('"$table"', columns: ['uuid', 'name']);
+  Future<Map<String, String>> lookupNames(String table) =>
+      lookupColumn(table, 'name');
+
+  /// uuid → an arbitrary indexed column ('key', 'slug', …).
+  Future<Map<String, String>> lookupColumn(String table, String column) async {
+    final rows = await _db.query('"$table"', columns: ['uuid', column]);
     return {
-      for (final r in rows) r['uuid'] as String: r['name'] as String,
+      for (final r in rows)
+        if (r[column] != null) r['uuid'] as String: r[column] as String,
     };
   }
 

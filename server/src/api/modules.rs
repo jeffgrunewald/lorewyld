@@ -203,7 +203,7 @@ pub async fn publish_module(
     .bind(&module_uuid)
     .bind(req.name.trim())
     .bind(&slug)
-    .bind(&req.license)
+    .bind(req.license.wire_value())
     .bind(&req.license_url)
     .bind(&authors_json)
     .bind(&req.description)

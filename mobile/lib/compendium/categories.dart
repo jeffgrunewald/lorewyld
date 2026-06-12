@@ -33,6 +33,18 @@ class ContentLookups {
   final Map<String, String> classes;
   final Map<String, String> species;
   final Map<String, String> weaponProperties;
+  final Map<String, String> documents;
+  final Map<String, String> contentModules;
+
+  /// uuid → ordering rank from the size table (Tiny 1 … Gargantuan 6),
+  /// for sorting creatures by size.
+  final Map<String, int> sizeRanks;
+
+  /// uuid → abbreviated source slug ('srd-2024', 'tob', 'a5e-mm', …)
+  /// for the per-record source badge that disambiguates same-name
+  /// records from different books.
+  final Map<String, String> documentKeys;
+  final Map<String, String> moduleSlugs;
 
   const ContentLookups({
     this.spellSchools = const {},
@@ -42,7 +54,23 @@ class ContentLookups {
     this.classes = const {},
     this.species = const {},
     this.weaponProperties = const {},
+    this.documents = const {},
+    this.contentModules = const {},
+    this.sizeRanks = const {},
+    this.documentKeys = const {},
+    this.moduleSlugs = const {},
   });
+
+  /// Abbreviated source label for a record: its document's key, or its
+  /// module's slug for tables with no document reference.
+  String? sourceSlugOf(Map<String, dynamic> record) =>
+      documentKeys[record['document_uuid']] ??
+      moduleSlugs[record['content_module_uuid']];
+
+  /// Full source name (document name, falling back to module name).
+  String? sourceNameOf(Map<String, dynamic> record) =>
+      documents[record['document_uuid']] ??
+      contentModules[record['content_module_uuid']];
 
   static Future<ContentLookups> load(ContentStore content) async {
     final maps = await Future.wait([
@@ -53,7 +81,12 @@ class ContentLookups {
       content.lookupNames('class'),
       content.lookupNames('species'),
       content.lookupNames('weapon_property'),
+      content.lookupNames('document'),
+      content.lookupNames('content_module'),
+      content.lookupColumn('document', 'key'),
+      content.lookupColumn('content_module', 'slug'),
     ]);
+    final sizeRecords = await content.listNamed('size');
     // Schools and creature types carry lowercase wire names
     // ("evocation"); title-case them once here. Class/species names are
     // already display-ready — and must not be re-split ("Half-Elf").
@@ -67,6 +100,15 @@ class ContentLookups {
       classes: maps[4],
       species: maps[5],
       weaponProperties: maps[6],
+      documents: maps[7],
+      contentModules: maps[8],
+      documentKeys: maps[9],
+      moduleSlugs: maps[10],
+      sizeRanks: {
+        for (final s in sizeRecords)
+          if (s case {'uuid': final String uuid, 'rank': final int rank})
+            uuid: rank,
+      },
     );
   }
 

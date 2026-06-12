@@ -2,11 +2,19 @@
 // sheet. Used everywhere the character builder selects from installed
 // content (species, classes, backgrounds, spells, items) instead of
 // accepting free text.
+//
+// The funnel icon opens per-table filters (source document everywhere;
+// type/rarity for items; level/school for spells) plus sort order.
+// Records load once; search, filters, and sort all apply in memory —
+// the largest table is ~1.2k rows.
 
 import 'package:flutter/material.dart';
 
 import '../compendium/categories.dart';
+import '../compendium/filters.dart';
 import '../services/content_store.dart';
+import 'filter_sheet.dart';
+import 'source_badge.dart';
 
 /// Opens the picker and resolves to the chosen record, or null if the
 /// sheet is dismissed without a choice.
@@ -54,14 +62,26 @@ class _ContentPickerSheet extends StatefulWidget {
 class _ContentPickerSheetState extends State<_ContentPickerSheet> {
   final _searchCtl = TextEditingController();
   late final CompendiumCategory _category = categoryFor(widget.table);
+  late final List<FilterDimension> _dimensions =
+      filterDimensionsFor(widget.table);
+  late final List<PickerSort> _sorts = sortOptionsFor(widget.table);
+  late final FilterState _filters = FilterState(_sorts.first);
+
   ContentLookups _lookups = const ContentLookups();
-  late Future<List<Map<String, dynamic>>> _future = _query('');
+  List<Map<String, dynamic>>? _all;
+  String _query = '';
 
   @override
   void initState() {
     super.initState();
     ContentLookups.load(widget.content).then((l) {
       if (mounted) setState(() => _lookups = l);
+    });
+    widget.content
+        .listNamed(widget.table,
+            where: widget.where, whereArgs: widget.whereArgs)
+        .then((rows) {
+      if (mounted) setState(() => _all = rows);
     });
   }
 
@@ -71,18 +91,25 @@ class _ContentPickerSheetState extends State<_ContentPickerSheet> {
     super.dispose();
   }
 
-  Future<List<Map<String, dynamic>>> _query(String query) =>
-      widget.content.listNamed(
-        widget.table,
-        query: query,
-        where: widget.where,
-        whereArgs: widget.whereArgs,
-      );
+  List<Map<String, dynamic>> get _visible {
+    final all = _all;
+    if (all == null) return const [];
+    final q = _query.trim().toLowerCase();
+    final rows = [
+      for (final r in all)
+        if ((q.isEmpty || '${r['name']}'.toLowerCase().contains(q)) &&
+            matchesFilters(r, _dimensions, _filters.selections))
+          r,
+    ];
+    rows.sort((a, b) => _filters.sort.compare(a, b, _lookups));
+    return rows;
+  }
 
   @override
   Widget build(BuildContext context) {
     final height = MediaQuery.of(context).size.height * 0.85;
     final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final rows = _visible;
     return SizedBox(
       height: height,
       child: Padding(
@@ -96,46 +123,72 @@ class _ContentPickerSheetState extends State<_ContentPickerSheet> {
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: TextField(
-                controller: _searchCtl,
-                autofocus: true,
-                decoration: const InputDecoration(
-                  hintText: 'Search by name…',
-                  prefixIcon: Icon(Icons.search),
-                  border: OutlineInputBorder(),
-                ),
-                onChanged: (q) => setState(() {
-                  _future = _query(q);
-                }),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _searchCtl,
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        hintText: 'Search by name…',
+                        prefixIcon: Icon(Icons.search),
+                        border: OutlineInputBorder(),
+                      ),
+                      onChanged: (q) => setState(() => _query = q),
+                    ),
+                  ),
+                  if (_dimensions.isNotEmpty) ...[
+                    const SizedBox(width: 8),
+                    Badge.count(
+                      count: _filters.activeCount,
+                      isLabelVisible: _filters.activeCount > 0,
+                      child: IconButton(
+                        icon: const Icon(Icons.filter_list),
+                        tooltip: 'Filter & sort',
+                        onPressed: _all == null
+                            ? null
+                            : () => showContentFilterSheet(
+                                  context: context,
+                                  dimensions: _dimensions,
+                                  sorts: _sorts,
+                                  lookups: _lookups,
+                                  records: _all!,
+                                  state: _filters,
+                                  onChanged: () => setState(() {}),
+                                ),
+                      ),
+                    ),
+                  ],
+                ],
               ),
             ),
             Expanded(
-              child: FutureBuilder<List<Map<String, dynamic>>>(
-                future: _future,
-                builder: (context, snap) {
-                  if (snap.connectionState != ConnectionState.done) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  final rows = snap.data ?? const [];
-                  if (rows.isEmpty) {
-                    return const Center(child: Text('No matches.'));
-                  }
-                  return ListView.builder(
-                    itemCount: rows.length,
-                    itemBuilder: (_, i) {
-                      final record = rows[i];
-                      final subtitle = _category.subtitle(record, _lookups);
-                      return ListTile(
-                        title: Text(_category.displayName(record)),
-                        subtitle: (subtitle == null || subtitle.isEmpty)
-                            ? null
-                            : Text(subtitle),
-                        onTap: () => Navigator.of(context).pop(record),
-                      );
-                    },
-                  );
-                },
-              ),
+              child: _all == null
+                  ? const Center(child: CircularProgressIndicator())
+                  : rows.isEmpty
+                      ? const Center(child: Text('No matches.'))
+                      : ListView.builder(
+                          itemCount: rows.length,
+                          itemBuilder: (_, i) {
+                            final record = rows[i];
+                            final subtitle =
+                                _category.subtitle(record, _lookups);
+                            final source = _lookups.sourceSlugOf(record);
+                            return ListTile(
+                              title:
+                                  Text(_category.displayName(record)),
+                              subtitle:
+                                  (subtitle == null || subtitle.isEmpty)
+                                      ? null
+                                      : Text(subtitle),
+                              trailing: source == null
+                                  ? null
+                                  : SourceBadge(source),
+                              onTap: () =>
+                                  Navigator.of(context).pop(record),
+                            );
+                          },
+                        ),
             ),
           ],
         ),

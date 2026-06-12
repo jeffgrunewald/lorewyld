@@ -11,55 +11,72 @@ use serde_json::Value;
 use sqlx::{Sqlite, SqlitePool, Transaction};
 
 const SRD_BUNDLE_JSON: &str = include_str!("../../content/srd-bundle.json");
-const SRD_MODULE_SLUG: &str = "srd";
 
-/// Imports the shipped SRD bundle unless its module is already present.
+/// Imports the shipped content bundle. Modules already present (by
+/// slug) are skipped along with their records, so a server upgraded to
+/// a bundle with additional source modules seeds only what's new.
 pub async fn seed_srd_content(db: &SqlitePool) -> Result<()> {
-    let exists: bool =
-        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM content_module WHERE slug = ?)")
-            .bind(SRD_MODULE_SLUG)
-            .fetch_one(db)
-            .await?;
-    if exists {
-        return Ok(());
-    }
-
     let bundle: ContentBundle =
-        serde_json::from_str(SRD_BUNDLE_JSON).context("decoding embedded SRD bundle")?;
+        serde_json::from_str(SRD_BUNDLE_JSON).context("decoding embedded content bundle")?;
     if bundle.schema.version < MIN_SUPPORTED_SCHEMA_VERSION
         || bundle.schema.min_supported > SCHEMA_VERSION
     {
         bail!(
-            "embedded SRD bundle schema v{} is outside the supported window {}..={}",
+            "embedded content bundle schema v{} is outside the supported window {}..={}",
             bundle.schema.version,
             MIN_SUPPORTED_SCHEMA_VERSION,
             SCHEMA_VERSION
         );
     }
+    // Shipped content must carry a supported license; `unlicensed` is
+    // reserved for user-published homebrew.
+    for module in &bundle.modules {
+        if !module.license.is_supported_for_bundling() {
+            bail!(
+                "bundled module '{}' carries unsupported license {:?}",
+                module.slug,
+                module.license
+            );
+        }
+    }
+
+    let existing_slugs: Vec<String> = sqlx::query_scalar("SELECT slug FROM content_module")
+        .fetch_all(db)
+        .await?;
+    let missing: Vec<&ContentModule> = bundle
+        .modules
+        .iter()
+        .filter(|m| !existing_slugs.contains(&m.slug))
+        .collect();
+    if missing.is_empty() {
+        return Ok(());
+    }
+    // Records ride along only when their module is being seeded.
+    let allowed: std::collections::HashSet<String> =
+        missing.iter().map(|m| m.uuid.to_string()).collect();
 
     let mut tx = db.begin().await?;
-    for module in &bundle.modules {
+    for module in &missing {
         insert_module(&mut tx, module).await?;
     }
 
     // Insertion follows the bundle's import-dependency order.
-    insert_records(&mut tx, "license", &[], &bundle.licenses).await?;
-    insert_records(&mut tx, "publisher", &[], &bundle.publishers).await?;
-    insert_records(&mut tx, "document", &[], &bundle.documents).await?;
-    insert_records(&mut tx, "ability_score", &[], &bundle.ability_scores).await?;
-    insert_records(&mut tx, "skill", &[], &bundle.skills).await?;
-    insert_records(&mut tx, "alignment", &[], &bundle.alignments).await?;
-    insert_records(&mut tx, "damage_type", &[], &bundle.damage_types).await?;
-    insert_records(&mut tx, "condition", &[], &bundle.conditions).await?;
-    insert_records(&mut tx, "language", &[], &bundle.languages).await?;
-    insert_records(&mut tx, "size", &[], &bundle.sizes).await?;
-    insert_records(&mut tx, "environment", &[], &bundle.environments).await?;
-    insert_records(&mut tx, "spell_school", &[], &bundle.spell_schools).await?;
-    insert_records(&mut tx, "creature_type", &[], &bundle.creature_types).await?;
-    insert_records(&mut tx, "item_category", &[], &bundle.item_categories).await?;
-    insert_records(&mut tx, "weapon_property", &[], &bundle.weapon_properties).await?;
-    insert_records(
-        &mut tx,
+    insert_records(&mut tx, &allowed, "license", &[], &bundle.licenses).await?;
+    insert_records(&mut tx, &allowed, "publisher", &[], &bundle.publishers).await?;
+    insert_records(&mut tx, &allowed, "document", &[], &bundle.documents).await?;
+    insert_records(&mut tx, &allowed, "ability_score", &[], &bundle.ability_scores).await?;
+    insert_records(&mut tx, &allowed, "skill", &[], &bundle.skills).await?;
+    insert_records(&mut tx, &allowed, "alignment", &[], &bundle.alignments).await?;
+    insert_records(&mut tx, &allowed, "damage_type", &[], &bundle.damage_types).await?;
+    insert_records(&mut tx, &allowed, "condition", &[], &bundle.conditions).await?;
+    insert_records(&mut tx, &allowed, "language", &[], &bundle.languages).await?;
+    insert_records(&mut tx, &allowed, "size", &[], &bundle.sizes).await?;
+    insert_records(&mut tx, &allowed, "environment", &[], &bundle.environments).await?;
+    insert_records(&mut tx, &allowed, "spell_school", &[], &bundle.spell_schools).await?;
+    insert_records(&mut tx, &allowed, "creature_type", &[], &bundle.creature_types).await?;
+    insert_records(&mut tx, &allowed, "item_category", &[], &bundle.item_categories).await?;
+    insert_records(&mut tx, &allowed, "weapon_property", &[], &bundle.weapon_properties).await?;
+    insert_records(&mut tx, &allowed,
         "spell",
         &[
             ("level", "/level"),
@@ -70,8 +87,7 @@ pub async fn seed_srd_content(db: &SqlitePool) -> Result<()> {
         &bundle.spells,
     )
     .await?;
-    insert_records(
-        &mut tx,
+    insert_records(&mut tx, &allowed,
         "creature",
         &[
             ("challenge_rating", "/challenge_rating"),
@@ -88,22 +104,21 @@ pub async fn seed_srd_content(db: &SqlitePool) -> Result<()> {
         .iter()
         .cloned()
         .partition(|c| c.subclass_of.is_none());
-    insert_records(&mut tx, "class", &[("subclass_of", "/subclass_of")], &base_classes).await?;
-    insert_records(&mut tx, "class", &[("subclass_of", "/subclass_of")], &subclasses).await?;
+    insert_records(&mut tx, &allowed, "class", &[("subclass_of", "/subclass_of")], &base_classes).await?;
+    insert_records(&mut tx, &allowed, "class", &[("subclass_of", "/subclass_of")], &subclasses).await?;
     let (base_species, subspecies): (Vec<_>, Vec<_>) = bundle
         .species
         .iter()
         .cloned()
         .partition(|s| s.subspecies_of.is_none());
     let species_extras = [("is_subspecies", "/is_subspecies")];
-    insert_records(&mut tx, "species", &species_extras, &base_species).await?;
-    insert_records(&mut tx, "species", &species_extras, &subspecies).await?;
-    insert_records(&mut tx, "feat", &[], &bundle.feats).await?;
-    insert_records(&mut tx, "background", &[], &bundle.backgrounds).await?;
-    insert_records(&mut tx, "weapon", &[("is_simple", "/is_simple")], &bundle.weapons).await?;
-    insert_records(&mut tx, "armor", &[("category", "/category")], &bundle.armors).await?;
-    insert_records(
-        &mut tx,
+    insert_records(&mut tx, &allowed, "species", &species_extras, &base_species).await?;
+    insert_records(&mut tx, &allowed, "species", &species_extras, &subspecies).await?;
+    insert_records(&mut tx, &allowed, "feat", &[], &bundle.feats).await?;
+    insert_records(&mut tx, &allowed, "background", &[], &bundle.backgrounds).await?;
+    insert_records(&mut tx, &allowed, "weapon", &[("is_simple", "/is_simple")], &bundle.weapons).await?;
+    insert_records(&mut tx, &allowed, "armor", &[("category", "/category")], &bundle.armors).await?;
+    insert_records(&mut tx, &allowed,
         "item",
         &[
             ("category_uuid", "/category_uuid"),
@@ -125,7 +140,7 @@ pub async fn seed_srd_content(db: &SqlitePool) -> Result<()> {
         armors = bundle.armors.len(),
         feats = bundle.feats.len(),
         backgrounds = bundle.backgrounds.len(),
-        "seeded SRD content bundle"
+        "seeded content bundle"
     );
     Ok(())
 }
@@ -140,7 +155,7 @@ async fn insert_module(tx: &mut Transaction<'_, Sqlite>, module: &ContentModule)
     .bind(module.uuid.to_string())
     .bind(&module.name)
     .bind(&module.slug)
-    .bind(&module.license)
+    .bind(module.license.wire_value())
     .bind(&module.license_url)
     .bind(module.schema_version)
     .bind(module.release_date.map(|d| d.to_string()))
@@ -165,6 +180,7 @@ async fn insert_module(tx: &mut Transaction<'_, Sqlite>, module: &ContentModule)
 /// `data` verbatim.
 async fn insert_records<T: Serialize>(
     tx: &mut Transaction<'_, Sqlite>,
+    allowed_modules: &std::collections::HashSet<String>,
     table: &str,
     extras: &[(&str, &str)],
     records: &[T],
@@ -184,6 +200,14 @@ async fn insert_records<T: Serialize>(
 
     for record in records {
         let value = serde_json::to_value(record)?;
+        // Records belonging to an already-seeded module are skipped.
+        if !value
+            .pointer("/content_module_uuid")
+            .and_then(Value::as_str)
+            .is_some_and(|uuid| allowed_modules.contains(uuid))
+        {
+            continue;
+        }
         let data = serde_json::to_string(&value)?;
         let field = |ptr: &str| -> Result<&Value> {
             value

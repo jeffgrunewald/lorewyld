@@ -84,7 +84,7 @@ class _ModuleTile extends StatelessWidget {
       ),
       subtitle: Text(
         [
-          module.license,
+          licenseDisplayName(module.license),
           'by ${module.authors.isEmpty ? "unknown" : module.authors.join(", ")}',
         ].join(' · '),
       ),
