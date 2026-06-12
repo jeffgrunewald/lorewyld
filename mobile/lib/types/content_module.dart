@@ -1,5 +1,18 @@
 // Mirror of `lorewyld_types::content_module::ContentModule`.
 
+/// Mirror of `lorewyld_types::content_module::LicenseKind` wire values.
+/// CC-BY-4.0 and OGL 1.0a are the supported distribution licenses;
+/// `unlicensed` marks homebrew published without one (never valid for
+/// pre-bundled content).
+const licenseKinds = ['cc-by-4.0', 'ogl-1.0a', 'unlicensed'];
+
+String licenseDisplayName(String wire) => switch (wire) {
+      'cc-by-4.0' => 'CC-BY-4.0',
+      'ogl-1.0a' => 'OGL 1.0a',
+      'unlicensed' => 'Unlicensed',
+      _ => wire,
+    };
+
 class ContentModule {
   final String uuid;
   final String name;

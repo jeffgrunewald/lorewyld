@@ -4,15 +4,16 @@ import 'dice/dice_icon.dart';
 import 'dice/dice_roller_screen.dart';
 import 'dice/dice_type.dart';
 import 'screens/character_list_screen.dart';
-import 'screens/modules_browse_screen.dart';
+import 'screens/compendium_screen.dart';
+import 'screens/module_management_screen.dart';
 import 'screens/search_screen.dart';
-import 'screens/server_screen.dart';
 import 'screens/setting_list_screen.dart';
+import 'services/content_store.dart';
 import 'services/local_store.dart';
 import 'services/server_connection.dart';
 
-/// Navigation hub. Characters, settings & lore, and search are fully
-/// local; Modules needs a logged-in server connection.
+/// Navigation hub. Everything here works fully offline — the Compendium
+/// browses the locally installed content modules.
 class HomeScreen extends StatefulWidget {
   const HomeScreen({
     super.key,
@@ -104,13 +105,18 @@ class _HomeScreenState extends State<HomeScreen> {
                   label: const Text('Search'),
                 ),
                 FilledButton.tonalIcon(
-                  // Modules live on the server; route through the
-                  // server screen when not yet logged in.
-                  onPressed: () => _push(loggedIn
-                      ? ModulesBrowseScreen(connection: connection)
-                      : ServerScreen(connection: connection)),
+                  onPressed: () => _push(CompendiumScreen(
+                    content: ContentStore(widget.store),
+                    connection: connection,
+                  )),
                   icon: const Icon(Icons.collections_bookmark_outlined),
-                  label: Text(loggedIn ? 'Modules' : 'Modules (log in)'),
+                  label: const Text('Compendium'),
+                ),
+                FilledButton.tonalIcon(
+                  onPressed: () =>
+                      _push(ModuleManagementScreen(store: widget.store)),
+                  icon: const Icon(Icons.inventory_2_outlined),
+                  label: const Text('Modules'),
                 ),
               ],
             ),

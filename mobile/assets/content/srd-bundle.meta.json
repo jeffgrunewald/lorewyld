@@ -1,0 +1,419 @@
+{
+  "modules": [
+    {
+      "authors": [
+        "Wizards of the Coast"
+      ],
+      "description": "D&D 5e System Reference Document content: SRD 5.2 (2024 rules) as the base, gap-filled with SRD 5.1 (2014 rules) records absent from 5.2. Sourced via the Open5e API.",
+      "documents": [
+        "System Reference Document 5.1",
+        "System Reference Document 5.2"
+      ],
+      "license": "cc-by-4.0",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/legalcode",
+      "name": "System Reference Document",
+      "publisher": "Wizards of the Coast",
+      "record_counts": {
+        "armors": 20,
+        "backgrounds": 4,
+        "classes": 28,
+        "creatures": 369,
+        "feats": 17,
+        "items": 1205,
+        "species": 15,
+        "spells": 339,
+        "weapons": 39
+      },
+      "slug": "srd",
+      "website_url": "https://open5e.com"
+    },
+    {
+      "authors": [
+        "EN Publishing"
+      ],
+      "description": "In this guide to Level Up, the advanced roleplaying game, you will find everything you need to play. Create diverse and unique heroes, engage in epic combat with villainous foes, cast powerful spells, and build mighty strongholds!",
+      "documents": [
+        "Adventurer's Guide"
+      ],
+      "license": "cc-by-4.0",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/legalcode",
+      "name": "Adventurer's Guide",
+      "publisher": "EN Publishing",
+      "record_counts": {
+        "backgrounds": 21,
+        "classes": 4,
+        "feats": 59,
+        "spells": 370
+      },
+      "slug": "a5e-ag",
+      "website_url": "https://a5esrd.com/a5esrd"
+    },
+    {
+      "authors": [
+        "EN Publishing"
+      ],
+      "description": "The Dungeon Delver's Guide is a resource for Narrators that want to create compelling and deadly mazes and lairs, and adventurers who want to venture below and return to the surface alive.",
+      "documents": [
+        "Dungeon Delver’s Guide"
+      ],
+      "license": "cc-by-4.0",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/legalcode",
+      "name": "Dungeon Delver’s Guide",
+      "publisher": "EN Publishing",
+      "record_counts": {
+        "backgrounds": 4
+      },
+      "slug": "a5e-ddg",
+      "website_url": "https://a5esrd.com/a5esrd"
+    },
+    {
+      "authors": [
+        "EN Publishing"
+      ],
+      "description": "The Gate Pass Gazette is the official monthly magazine for Level Up: Advanced 5th Edition. You can subscribe to it on Patreon. The content below includes mechanical elements of the magazine, but not the full text or context of the articles.\r\n\r\nThe first issue (which we called Issue #0) of the Gate Pass Gazette included the artificer class, lycanthropy rules, the construct heritage, and the jabberwock monster. We release an issue every month, including new heritages, archetypes, monsters, magic items, and much much more.",
+      "documents": [
+        "Gate Pass Gazette"
+      ],
+      "license": "cc-by-4.0",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/legalcode",
+      "name": "Gate Pass Gazette",
+      "publisher": "EN Publishing",
+      "record_counts": {
+        "backgrounds": 2
+      },
+      "slug": "a5e-gpg",
+      "website_url": "https://a5esrd.com/a5esrd"
+    },
+    {
+      "authors": [
+        "Paul Hughes"
+      ],
+      "description": "The Monstrous Menagerie provides nearly 600 monsters, variants, monster templates, and hordes for your Level Up: Advanced 5th Edition game. Populate your game world with classic monsters ranging from the lowly stirge to the terrifying tarrasque, along with new horrors like the khalkos and the phase monster. Challenge even the mightiest adventurers with elite monsters like great wyrm dragons and the Medusa Queen. Use simple templates to create new monsters like zombie sea serpents and merfolk alchemists. Overwhelm opposition with stat blocks representing hordes of guards, skeletons, or demons.",
+      "documents": [
+        "Monstrous Menagerie"
+      ],
+      "license": "ogl-1.0a",
+      "license_url": null,
+      "name": "Monstrous Menagerie",
+      "publisher": "EN Publishing",
+      "record_counts": {
+        "creatures": 586
+      },
+      "slug": "a5e-mm",
+      "website_url": "https://enpublishingrpg.com/collections/level-up-advanced-5th-edition-a5e/products/level-up-monstrous-menagerie-a5e"
+    },
+    {
+      "authors": [
+        "Open Design LLC d/b/a Kobold Press"
+      ],
+      "description": "Black Flag Roleplaying Reference Document v0.2",
+      "documents": [
+        "Black Flag SRD"
+      ],
+      "license": "cc-by-4.0",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/legalcode",
+      "name": "Black Flag SRD",
+      "publisher": "Kobold Press",
+      "record_counts": {
+        "classes": 2,
+        "creatures": 360
+      },
+      "slug": "bfrd",
+      "website_url": "https://koboldpress.com/black-flag-reference-document/"
+    },
+    {
+      "authors": [
+        "Wolfgang Baur, Dan Dillon, Richard Green, James Haeck, Chris Harris, Jeremy Hochhalter, James Introcaso, Chris Lockey, Shawn Merwin, and Jon Sawatsky"
+      ],
+      "description": "Whether you need scuttling dungeon denizens, alien horrors, or sentient avatars of the World Tree, the Creature Codex has you covered! Nearly 400 new foes for your 5th Edition game—everything from acid ants and grave behemoths to void giants and zombie lords.\r\n\r\nThe 424 PAGES OF THE CREATURE CODEX INCLUDE:\r\n\r\n    A dozen new demons and five new angels\r\n    Wasteland dragons and dinosaurs\r\n    All-new golems, including the altar flame golem, doom golem, and keg golem\r\n    Elemental lords and animal lords to challenge powerful parties\r\n    Chieftains and other leaders for ratfolk, centaurs, goblins, trollkin, and more\r\n    New undead, including a heirophant lich to menace lower-level characters\r\n\r\n…and much more! Use them in your favorite published setting, or populate the dungeons in a world of your own creation. Pick up Creature Codex and surprise your players with monsters they won’t be expecting!\r\n\r\nCOMPATIBLE WITH THE 5TH EDITION OF THE WORLD’S FIRST ROLEPLAYING GAME!",
+      "documents": [
+        "Creature Codex"
+      ],
+      "license": "ogl-1.0a",
+      "license_url": null,
+      "name": "Creature Codex",
+      "publisher": "Kobold Press",
+      "record_counts": {
+        "creatures": 356
+      },
+      "slug": "ccdx",
+      "website_url": "https://koboldpress.com/kpstore/product/creature-codex-for-5th-edition-dnd/"
+    },
+    {
+      "authors": [
+        "Mike Mearls, Jeremy Crawford, Chris Perkins, Rodney Thompson, Peter Lee, James Wyatt, Robert J. Schwalb, Bruce R. Cordell, Chris Sims, and Steve Townshend, based on original material by E. Gary Gygax and Dave Arneson."
+      ],
+      "description": "This document is related to the core concepts of 5e for all gamesystems and documents. For example, Charisma as a concept is shared across all implementations of 5e. It was initially defined by Wizards of the Coast (in SRD 2014), and then adopted in all other subsequent add-ons and documents.",
+      "documents": [
+        "5e Core Concepts"
+      ],
+      "license": "cc-by-4.0",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/legalcode",
+      "name": "5e Core Concepts",
+      "publisher": "Open5e",
+      "record_counts": {},
+      "slug": "core",
+      "website_url": "https://dnd.wizards.com/resources/systems-reference-document"
+    },
+    {
+      "authors": [
+        "Dan Dillon, Chris Harris, and Jeff Lee"
+      ],
+      "description": "*Command 700 New Spells for 5th Edition!*\r\n\r\nNo matter how you slice it, magic is at the heart of fantasy—and nothing says magic like a massive tome of spells.\r\n\r\nThis tome collects, updates, tweaks, and expands spells from years of the Deep Magic for Fifth Edition series—more than 700 new and revised spells. And it adds a lot more:\r\n\r\n* 19 divine domains from Beer to Mountain and Speed to Winter;\r\n* 13 new wizard specialties, such as the elementalist and the timekeeper;\r\n* 6 new sorcerous origins, including the Aristocrat and the Farseer;\r\n* 3 otherworldly patrons for warlocks, including the Sibyl;\r\n* expanded treatments of familiars and other wizardly servants;\r\n* and much more!\r\n\r\nThis 356-page tome is not just for wizards, warlocks, and sorcerers. Deep Magic also expands the horizons of what’s possible for bards, clerics, druids, and even rangers and paladins. It offers something new for every spellcasting class!\r\n\r\nWith these new spells and options, your characters (or your villains) can become masters of winter magic, chaos magic, or shadow magic. Seek out hidden colleges and academies of lost lore. Learn new runes, hieroglyphs, and cantrips to break down the walls of reality, or just bend them a bit.\r\n\r\nDeep Magic contains nothing but magic from start to finish!",
+      "documents": [
+        "Deep Magic for 5th Edition"
+      ],
+      "license": "ogl-1.0a",
+      "license_url": null,
+      "name": "Deep Magic for 5th Edition",
+      "publisher": "Kobold Press",
+      "record_counts": {
+        "spells": 515
+      },
+      "slug": "deepm",
+      "website_url": "https://koboldpress.com/kpstore/product/deep-magic-for-5th-edition-hardcover/"
+    },
+    {
+      "authors": [
+        "Not sure."
+      ],
+      "description": "?",
+      "documents": [
+        "Deep Magic Extended"
+      ],
+      "license": "ogl-1.0a",
+      "license_url": null,
+      "name": "Deep Magic Extended",
+      "publisher": "Kobold Press",
+      "record_counts": {
+        "spells": 64
+      },
+      "slug": "deepmx",
+      "website_url": "https://koboldpress.com/deepmagic"
+    },
+    {
+      "authors": [
+        "Various"
+      ],
+      "description": "Kobold Press Community Use Policy",
+      "documents": [
+        "Kobold Press Compilation"
+      ],
+      "license": "ogl-1.0a",
+      "license_url": null,
+      "name": "Kobold Press Compilation",
+      "publisher": "Kobold Press",
+      "record_counts": {
+        "spells": 31
+      },
+      "slug": "kp",
+      "website_url": "https://koboldpress.com/"
+    },
+    {
+      "authors": [
+        "Ean Moody, Various"
+      ],
+      "description": "Original items from Open5e",
+      "documents": [
+        "Open5e Originals"
+      ],
+      "license": "ogl-1.0a",
+      "license_url": null,
+      "name": "Open5e Originals",
+      "publisher": "Open5e",
+      "record_counts": {
+        "backgrounds": 2,
+        "classes": 17,
+        "species": 1,
+        "spells": 2
+      },
+      "slug": "open5e",
+      "website_url": "https://open5e.com/"
+    },
+    {
+      "authors": [
+        "Ean Moody, Various"
+      ],
+      "description": "Original items from Open5e",
+      "documents": [
+        "Open5e Originals"
+      ],
+      "license": "ogl-1.0a",
+      "license_url": null,
+      "name": "Open5e Originals",
+      "publisher": "Open5e",
+      "record_counts": {},
+      "slug": "open5e-2024",
+      "website_url": "https://open5e.com/"
+    },
+    {
+      "authors": [
+        "Ben Somers / somanyrobots, Omega Ankh"
+      ],
+      "description": "Spells That Don't Suck is a package of replacement spells for problematic ones in core 5E - typically rebalancing under- or over-powered spells. All content contained within is licensed CC-BY and free to reuse. Includes spells from Spells That Don't Suck by Omega Ankh and somanyrobots, which is licensed CC-BY and available here https://www.somanyrobots.com/s/Spells-That-Dont-Suck-compressed.pdf. Includes spells from Kibbles' Casting Compendium 2.0 by KibblesTasty Homebrewc LLC, which is licensed CC-BY and available here: https://www.kthomebrew.com/krd.",
+      "documents": [
+        "Spells That Don't Suck"
+      ],
+      "license": "cc-by-4.0",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/legalcode",
+      "name": "Spells That Don't Suck",
+      "publisher": "Somanyrobots",
+      "record_counts": {
+        "spells": 180
+      },
+      "slug": "spells-that-dont-suck",
+      "website_url": "https://www.somanyrobots.com/s/Spells-That-Dont-Suck-compressed.pdf"
+    },
+    {
+      "authors": [
+        "Matthew Mercer, James Haeck"
+      ],
+      "description": "Critical Role: Tal'Dorei Campaign Setting is a sourcebook that details the continent of Tal'Dorei from the Critical Role campaign setting for the 5th edition of the Dungeons & Dragons fantasy role-playing game. It was published by Green Ronin Publishing and released on August 17, 2017.",
+      "documents": [
+        "Tal'dorei Campaign Setting"
+      ],
+      "license": "ogl-1.0a",
+      "license_url": null,
+      "name": "Tal'dorei Campaign Setting",
+      "publisher": "Green Ronin Publishing",
+      "record_counts": {
+        "backgrounds": 5,
+        "classes": 4,
+        "creatures": 4,
+        "feats": 1
+      },
+      "slug": "tdcs",
+      "website_url": "https://en.wikipedia.org/wiki/Critical_Role%3A_Tal'Dorei_Campaign_Setting"
+    },
+    {
+      "authors": [
+        "Chris Harris, Dan Dillon, Rodrigo Garcia Carmona, and Wolfgang Baur"
+      ],
+      "description": "Tome of Beasts from Kobold Press brings more than 400 new monsters to the 5th Edition! Use them in your favorite setting for fantasy adventure! Pick up Tome of Beasts and give your players an encounter they won’t soon forget.",
+      "documents": [
+        "Tome of Beasts"
+      ],
+      "license": "ogl-1.0a",
+      "license_url": null,
+      "name": "Tome of Beasts",
+      "publisher": "Kobold Press",
+      "record_counts": {
+        "creatures": 391
+      },
+      "slug": "tob",
+      "website_url": "https://koboldpress.com/tome-of-beasts/"
+    },
+    {
+      "authors": [
+        "Dan Dillon, Chris Harris, Rodrigo Garcia Carmona, Wolfgang Baur"
+      ],
+      "description": "Whether you need dungeon vermin or world-shaking villains, the Tome of Beasts 1 (2023 Edition) has it. This book presents more than 400 foes suitable for any campaign setting—from tiny drakes and peculiar spiders to demon lords and ancient dragons.\r\n\r\nTome of Beasts 1 (2023 Edition) introduces new foes and upgrades monsters that originally appeared in Tome of Beasts, including:\r\n\r\n    Updates to include errata and streamline mechanics\r\n    11 new creatures like the ashwalker, planewatcher, and the ancient cave dragon\r\n    Expanded tables by creature type and terrain\r\n    New monster art—and much more!",
+      "documents": [
+        "Tome of Beasts 1 (2023 Edition)"
+      ],
+      "license": "ogl-1.0a",
+      "license_url": null,
+      "name": "Tome of Beasts 1 (2023 Edition)",
+      "publisher": "Kobold Press",
+      "record_counts": {
+        "creatures": 408
+      },
+      "slug": "tob-2023",
+      "website_url": "https://koboldpress.com/kpstore/product/tome-of-beasts-1-2023-edition-hardcover/"
+    },
+    {
+      "authors": [
+        "Wolfgang Baur, Celeste Conowitch, Darrin Drader, James Introcaso, Philip Larwood, Jeff Lee, Kelly Pawlik, Brian Suskind, Mike Welham"
+      ],
+      "description": "From the creators of the original Tome of Beasts! Kobold Press has wrangled a new horde of wildly original, often lethal, and highly entertaining 5E-compatible monsters to challenge new players and veterans alike.\r\n\r\nThe Tome of Beasts 2 brings 400 new monsters to 5th edition, from angelic enforcers, sasquatch, and shriekbats, to psychic vampires, zombie dragons, and so much more.\r\n\r\nIn addition to the hardcover volume and PDFs, there’s also Tome of Beasts 2: Pawns and Tome of Beasts 2: Lairs with beautiful maps and more!",
+      "documents": [
+        "Tome of Beasts 2"
+      ],
+      "license": "ogl-1.0a",
+      "license_url": null,
+      "name": "Tome of Beasts 2",
+      "publisher": "Kobold Press",
+      "record_counts": {
+        "creatures": 383
+      },
+      "slug": "tob2",
+      "website_url": "https://koboldpress.com/tome-of-beasts-2/"
+    },
+    {
+      "authors": [
+        "Wolfgang Baur, Celeste Conowitch, Darrin Drader, James Introcaso, Philip Larwood, Jeff Lee, Kelly Pawlik, Brian Suskind, Mike Welham"
+      ],
+      "description": "Coming soon to Kickstarter, with over 400 monsters at your fingertips, Tome of Beasts 3 is sure to challenge, delight, and even terrify your players:\r\n\r\n    An appendix filled with NPCs\r\n    Monsters designed by guest designers, such as B. Dave Walters, Gail Simone, and many more\r\n    Monsters designed by our very own backers\r\n    Monsters ranging from familiars to coastal environments to towering undead to forest-haunting dragons\r\n    Backers can playtest the monsters!\r\n\r\nTome of Beasts 3 Lairs contains 18 mapped adventures, plus any reached stretch-goal adventures, including:\r\n\r\n    A shipwreck filled with treasure—and danger!\r\n    A bakery-owning drake with a spooky problem\r\n    A cult hunting a fey that can allow them to travel the planes\r\n    A farmer whose prize-winning sheep are disappearing",
+      "documents": [
+        "Tome of Beasts 3"
+      ],
+      "license": "ogl-1.0a",
+      "license_url": null,
+      "name": "Tome of Beasts 3",
+      "publisher": "Kobold Press",
+      "record_counts": {
+        "creatures": 397
+      },
+      "slug": "tob3",
+      "website_url": "https://koboldpress.com/tome-of-beasts-3/"
+    },
+    {
+      "authors": [
+        "Kelly Pawlik, Ben Mcfarland, and Briand Suskind"
+      ],
+      "description": "Tome of Heroes Open-Gaming License Content by Kobold Press",
+      "documents": [
+        "Tome of Heroes"
+      ],
+      "license": "ogl-1.0a",
+      "license_url": null,
+      "name": "Tome of Heroes",
+      "publisher": "Kobold Press",
+      "record_counts": {
+        "backgrounds": 19,
+        "classes": 76,
+        "feats": 13,
+        "species": 40,
+        "spells": 91
+      },
+      "slug": "toh",
+      "website_url": "https://koboldpress.com/kpstore/product/tome-of-heroes-for-5th-edition/"
+    },
+    {
+      "authors": [
+        "Phillip Larwood, Jeff Lee, and Christopher Lockey"
+      ],
+      "description": "Inside Vault of Magic, you’ll find a vast treasure trove of enchanted items of every imaginable use—more than 900 in all! There are plenty of armors, weapons, potions, rings, and wands, but that’s just for starters. From mirrors to masks, edibles to earrings, and lanterns to lockets, it’s all here, ready for you to use in your 5th Edition game.\r\n\r\nThis 240-page volume includes:\r\n\r\n    More than 30 unique items developed by special guests, including Patrick Rothfuss, Gail Simone, Deborah Ann Woll, and Luke Gygax\r\n    Fabled items that grow in power as characters rise in levels\r\n    New item themes, such as monster-inspired, clockwork, and apprentice wizards\r\n    Hundreds of full-color illustrations\r\n    25 treasure-generation tables sorted by rarity and including magic items from the core rules\r\n\r\nAmaze and delight your players and spice up your 5th Edition campaign with fresh, new enchanted items from Vault of Magic. It’ll turn that next treasure hoard into something . . . wondrous!\r\n\r\nSKU: KOB-9245-DnD-5E",
+      "documents": [
+        "Vault of Magic"
+      ],
+      "license": "ogl-1.0a",
+      "license_url": null,
+      "name": "Vault of Magic",
+      "publisher": "Kobold Press",
+      "record_counts": {
+        "items": 1063
+      },
+      "slug": "vom",
+      "website_url": "https://koboldpress.com/kpstore/product/vault-of-magic-for-5th-edition/"
+    },
+    {
+      "authors": [
+        "Woflgang Baur, others."
+      ],
+      "description": "The Warlock zines published and available on KP's Warlock booklets.",
+      "documents": [
+        "Warlock Zine"
+      ],
+      "license": "ogl-1.0a",
+      "license_url": null,
+      "name": "Warlock Zine",
+      "publisher": "Kobold Press",
+      "record_counts": {
+        "spells": 43
+      },
+      "slug": "wz",
+      "website_url": "https://koboldpress.com/kpstore/product-category/all-products/warlock-5th-edition-dnd/"
+    }
+  ]
+}

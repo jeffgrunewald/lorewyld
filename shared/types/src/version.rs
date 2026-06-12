@@ -6,12 +6,12 @@ use typeshare::typeshare;
 /// Bumped whenever any schema in this crate gains, removes, or renames a
 /// required field. Importers compare a bundle's declared version against
 /// this constant before attempting to load records.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 /// Minimum schema version this build can still import. Bundles authored
 /// at any version in `MIN_SUPPORTED_SCHEMA_VERSION..=SCHEMA_VERSION` are
 /// accepted; older ones must be re-exported by a newer authoring tool.
-pub const MIN_SUPPORTED_SCHEMA_VERSION: u32 = 1;
+pub const MIN_SUPPORTED_SCHEMA_VERSION: u32 = 2;
 
 /// Envelope metadata exposed at the top of every `ContentBundle`.
 #[typeshare]

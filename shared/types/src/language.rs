@@ -3,7 +3,7 @@ use typeshare::typeshare;
 
 use crate::common::{EntityId, Timestamp};
 
-/// A language from the SRD with its script, speakers, and classification.
+/// A language, structured per the Open5e v2 schema.
 #[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Language {
@@ -11,16 +11,20 @@ pub struct Language {
     pub content_module_uuid: EntityId,
     pub name: String,
     pub slug: String,
-    pub script: String,
-    /// Where the language originates (Core, Underdark, Abyss…).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub region: Option<String>,
-    /// Typical speaker groups (Humans, Elves, etc.).
+    /// Stable external identifier (Open5e key for imported content).
+    pub key: String,
     #[serde(default)]
-    pub speakers: Vec<String>,
-    pub is_independent: bool,
-    pub is_tonal: bool,
-    pub is_alphabetical: bool,
+    pub desc: String,
+    /// Exotic languages need explicit DM permission in some campaigns.
+    #[serde(default)]
+    pub is_exotic: bool,
+    /// Secret languages (Druidic, Thieves' Cant) aren't generally
+    /// learnable.
+    #[serde(default)]
+    pub is_secret: bool,
+    /// Key of the language whose script this one uses, when written.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub script: Option<String>,
     pub is_restricted: bool,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,

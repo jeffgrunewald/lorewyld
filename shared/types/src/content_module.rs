@@ -3,6 +3,64 @@ use typeshare::typeshare;
 
 use crate::common::{EntityId, Timestamp};
 
+/// Licenses the platform recognizes on content modules.
+///
+/// `Unlicensed` exists for homebrew that hasn't been released under
+/// any license; it is valid for user-published modules but never for
+/// the pre-bundled content shipped with the app and server, which must
+/// carry one of the supported licenses.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LicenseKind {
+    #[serde(rename = "cc-by-4.0")]
+    CcBy40,
+    #[serde(rename = "ogl-1.0a")]
+    Ogl10a,
+    #[serde(rename = "unlicensed")]
+    Unlicensed,
+}
+
+impl LicenseKind {
+    pub fn display_name(self) -> &'static str {
+        match self {
+            Self::CcBy40 => "CC-BY-4.0",
+            Self::Ogl10a => "OGL 1.0a",
+            Self::Unlicensed => "Unlicensed",
+        }
+    }
+
+    /// The serialized wire/storage value (matches the serde renames).
+    pub fn wire_value(self) -> &'static str {
+        match self {
+            Self::CcBy40 => "cc-by-4.0",
+            Self::Ogl10a => "ogl-1.0a",
+            Self::Unlicensed => "unlicensed",
+        }
+    }
+
+    pub fn from_wire(s: &str) -> Option<Self> {
+        match s {
+            "cc-by-4.0" => Some(Self::CcBy40),
+            "ogl-1.0a" => Some(Self::Ogl10a),
+            "unlicensed" => Some(Self::Unlicensed),
+            _ => None,
+        }
+    }
+
+    pub fn is_supported_for_bundling(self) -> bool {
+        !matches!(self, Self::Unlicensed)
+    }
+
+    /// Maps an Open5e license key to the corresponding kind.
+    pub fn from_open5e_key(key: &str) -> Option<Self> {
+        match key {
+            "cc-by-40" => Some(Self::CcBy40),
+            "ogl-10a" => Some(Self::Ogl10a),
+            _ => None,
+        }
+    }
+}
+
 /// A content pack (source book, supplement, or homebrew set).
 ///
 /// Every other entity references this through `content_module_uuid` so
@@ -17,7 +75,7 @@ pub struct ContentModule {
     pub uuid: EntityId,
     pub name: String,
     pub slug: String,
-    pub license: String,
+    pub license: LicenseKind,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub license_url: Option<String>,
     /// Schema version this module was authored against. Defaults to the

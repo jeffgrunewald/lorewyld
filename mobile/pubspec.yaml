@@ -42,11 +42,10 @@ dependencies:
   shared_preferences: ^2.3.0
 
   # Markdown rendering for lore-note previews and read views.
-  flutter_markdown: ^0.7.0
-
   # Local SQLite database for offline-first content (characters,
   # settings, lore notes). Mirrors the server's storage model.
   sqflite: ^2.4.0
+  flutter_markdown_plus: ^1.0.7
 
 dev_dependencies:
   flutter_test:
@@ -98,6 +97,8 @@ flutter:
   assets:
     - assets/dice/
     - assets/branding/wordmark.png
+    - assets/content/srd-bundle.json
+    - assets/content/srd-bundle.meta.json
 
   # To add assets to your application, add an assets section, like this:
   # assets:

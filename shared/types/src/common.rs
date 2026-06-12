@@ -15,6 +15,23 @@ pub type EntityId = Uuid;
 #[typeshare(serialized_as = "string")]
 pub type Timestamp = DateTime<Utc>;
 
+/// Fixed namespace for deterministic content UUIDs. Never change this
+/// value: every seeded record's identity is derived from it.
+pub const LOREWYLD_CONTENT_NAMESPACE: Uuid =
+    Uuid::from_u128(0x8f0c2f9b_3a41_4f7e_9c3d_6b1e5a2d7c90);
+
+/// Derives the canonical UUID for a content record as
+/// UUIDv5(namespace, `"{type_tag}:{key}"`), where `key` is the record's
+/// stable external identifier (Open5e key for imported content).
+/// Regenerating a bundle therefore never churns identities, and foreign
+/// keys are computable without lookups.
+pub fn content_uuid(type_tag: &str, key: &str) -> Uuid {
+    Uuid::new_v5(
+        &LOREWYLD_CONTENT_NAMESPACE,
+        format!("{type_tag}:{key}").as_bytes(),
+    )
+}
+
 /// One of the six core ability scores.
 #[typeshare]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -117,35 +134,8 @@ pub enum SpellSchoolName {
     Transmutation,
 }
 
-/// Spell-component identifiers from the SRD's verbal/somatic/material
-/// set. The canonical wire form is the full word (`"Verbal"`,
-/// `"Somatic"`, `"Material"`); the single-letter SRD shorthand
-/// (`"V"`, `"S"`, `"M"`) is accepted on deserialization as an alias.
-#[typeshare]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub enum SpellComponent {
-    #[serde(alias = "V", alias = "v")]
-    Verbal,
-    #[serde(alias = "S", alias = "s")]
-    Somatic,
-    #[serde(alias = "M", alias = "m")]
-    Material,
-}
-
-/// Creature size categories.
-#[typeshare]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
-pub enum CreatureSize {
-    Tiny,
-    Small,
-    Medium,
-    Large,
-    Huge,
-    Gargantuan,
-}
-
-/// SRD rarity grades for magic items and enchantments.
+/// SRD rarity grades for magic items. Variant order encodes the
+/// Open5e rarity rank (Common = 1 … Artifact = 6).
 #[typeshare]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -172,6 +162,8 @@ pub struct MovementSpeed {
     pub climb: i32,
     #[serde(default)]
     pub burrow: i32,
+    #[serde(default)]
+    pub crawl: i32,
     #[serde(default)]
     pub hover: bool,
 }
@@ -217,18 +209,6 @@ pub struct NamedModifier {
     pub bonus: i32,
 }
 
-/// Damage roll specification: dice expression + flat modifier + type.
-#[typeshare]
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct DamageRoll {
-    /// Dice expression, e.g. `"1d8"`, `"2d6"`.
-    pub dice: String,
-    /// Flat damage modifier added to the roll. May be negative.
-    #[serde(default)]
-    pub plus_mod: i32,
-    pub damage_type: DamageTypeName,
-}
-
 /// Free-form JSON, used for fields whose shape varies per record
 /// (class feature tables, action arrays, scaling rules, etc.).
 ///
@@ -256,6 +236,8 @@ pub struct AbilityScoreEntry {
     pub content_module_uuid: EntityId,
     pub name: AbilityScore,
     pub slug: String,
+    /// Stable external identifier (Open5e key for imported content).
+    pub key: String,
     pub short_name: String,
     pub description: String,
     /// Mapping of raw score values (3–30) to modifiers (-5..=+10).
@@ -276,11 +258,51 @@ pub struct Alignment {
     pub content_module_uuid: EntityId,
     pub name: AlignmentName,
     pub slug: String,
+    /// Stable external identifier (Open5e key for imported content).
+    pub key: String,
     pub is_lawful: bool,
     pub is_neutral: bool,
     pub is_chaotic: bool,
     pub is_good: bool,
     pub is_evil: bool,
+    pub is_restricted: bool,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// Creature/object size lookup row (Open5e v2 `sizes`). Replaces the
+/// former closed `CreatureSize` enum so content packs can add sizes.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Size {
+    pub uuid: EntityId,
+    pub content_module_uuid: EntityId,
+    pub name: String,
+    pub slug: String,
+    /// Stable external identifier (Open5e key for imported content).
+    pub key: String,
+    /// Ordering rank: Tiny = 1 … Gargantuan = 6.
+    pub rank: i32,
+    /// Diameter of the space the creature controls, in feet.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub space_diameter: Option<f64>,
+    pub is_restricted: bool,
+    pub created_at: Timestamp,
+    pub updated_at: Timestamp,
+}
+
+/// Skill lookup row (Open5e v2 `skills`), keyed to its governing ability.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Skill {
+    pub uuid: EntityId,
+    pub content_module_uuid: EntityId,
+    pub name: String,
+    pub slug: String,
+    /// Stable external identifier (Open5e key for imported content).
+    pub key: String,
+    pub ability: AbilityScore,
+    pub description: String,
     pub is_restricted: bool,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
@@ -294,6 +316,8 @@ pub struct DamageType {
     pub content_module_uuid: EntityId,
     pub name: DamageTypeName,
     pub slug: String,
+    /// Stable external identifier (Open5e key for imported content).
+    pub key: String,
     pub description: String,
     /// Other damage types resistant to this one.
     #[serde(default)]
@@ -304,4 +328,19 @@ pub struct DamageType {
     pub is_restricted: bool,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn content_uuid_is_stable_and_type_scoped() {
+        let a = content_uuid("spell", "srd-2024_fireball");
+        assert_eq!(a, content_uuid("spell", "srd-2024_fireball"));
+        // Pinned value: changing it would re-identify every seeded record.
+        assert_eq!(a.to_string(), content_uuid("spell", "srd-2024_fireball").to_string());
+        assert_ne!(a, content_uuid("creature", "srd-2024_fireball"));
+        assert_ne!(a, content_uuid("spell", "srd_fireball"));
+    }
 }

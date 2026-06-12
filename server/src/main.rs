@@ -53,6 +53,7 @@ impl Server {
         let db_pool = settings.db_connect().await;
         sqlx::migrate!().run(&db_pool).await?;
         lorewyld::setup_game_server(&db_pool).await?;
+        lorewyld::content::seed_srd_content(&db_pool).await?;
 
         let shutdown_listener = shutdown_listener();
 

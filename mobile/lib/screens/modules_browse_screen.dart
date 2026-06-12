@@ -3,7 +3,7 @@
 // its lore notes).
 
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import '../services/server_connection.dart';
 import '../types/content_module.dart';
@@ -84,7 +84,7 @@ class _ModuleTile extends StatelessWidget {
       ),
       subtitle: Text(
         [
-          module.license,
+          licenseDisplayName(module.license),
           'by ${module.authors.isEmpty ? "unknown" : module.authors.join(", ")}',
         ].join(' · '),
       ),

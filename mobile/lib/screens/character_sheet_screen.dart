@@ -2,13 +2,20 @@
 // modifiers, proficiency, save/skill bonuses are derived live — but
 // never blocks a value the player wants to write down.
 //
+// Species, class, background, spells, and equipment are chosen from
+// the installed content modules; alignment from the seeded alignment
+// table.
+//
 // Edits autosave when the screen is popped; the save icon persists
 // immediately.
 
 import 'package:flutter/material.dart';
 
+import '../compendium/categories.dart';
+import '../services/content_store.dart';
 import '../services/local_store.dart';
 import '../types/character.dart';
+import '../widgets/content_picker.dart';
 import 'character_notes_screen.dart';
 
 class CharacterSheetScreen extends StatefulWidget {
@@ -29,11 +36,10 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
   late CharacterSheet _sheet;
   bool _dirty = false;
 
+  late final ContentStore _content = ContentStore(widget.store);
+  List<Map<String, dynamic>> _alignments = const [];
+
   late final TextEditingController _nameCtl;
-  late final TextEditingController _raceCtl;
-  late final TextEditingController _classCtl;
-  late final TextEditingController _backgroundCtl;
-  late final TextEditingController _alignmentCtl;
   late final TextEditingController _hitDiceCtl;
 
   @override
@@ -41,20 +47,15 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
     super.initState();
     _sheet = widget.sheet;
     _nameCtl = TextEditingController(text: _sheet.name);
-    _raceCtl = TextEditingController(text: _sheet.race);
-    _classCtl = TextEditingController(text: _sheet.className);
-    _backgroundCtl = TextEditingController(text: _sheet.background);
-    _alignmentCtl = TextEditingController(text: _sheet.alignment);
     _hitDiceCtl = TextEditingController(text: _sheet.hitDice);
+    _content.listAlignments().then((rows) {
+      if (mounted) setState(() => _alignments = rows);
+    });
   }
 
   @override
   void dispose() {
     _nameCtl.dispose();
-    _raceCtl.dispose();
-    _classCtl.dispose();
-    _backgroundCtl.dispose();
-    _alignmentCtl.dispose();
     _hitDiceCtl.dispose();
     super.dispose();
   }
@@ -68,10 +69,6 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
 
   CharacterSheet _withTextFields() => _sheet.copyWith(
         name: _nameCtl.text.trim().isEmpty ? _sheet.name : _nameCtl.text.trim(),
-        race: _raceCtl.text.trim(),
-        className: _classCtl.text.trim(),
-        background: _backgroundCtl.text.trim(),
-        alignment: _alignmentCtl.text.trim(),
         hitDice: _hitDiceCtl.text.trim(),
       );
 
@@ -185,10 +182,6 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
 
   bool _textFieldsChanged() =>
       _nameCtl.text.trim() != _sheet.name ||
-      _raceCtl.text.trim() != _sheet.race ||
-      _classCtl.text.trim() != _sheet.className ||
-      _backgroundCtl.text.trim() != _sheet.background ||
-      _alignmentCtl.text.trim() != _sheet.alignment ||
       _hitDiceCtl.text.trim() != _sheet.hitDice;
 
   // ── sections ────────────────────────────────────────────────────────
@@ -220,20 +213,20 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
       const SizedBox(height: 12),
       Row(children: [
         Expanded(
-          child: TextField(
-            controller: _raceCtl,
-            decoration: const InputDecoration(
-                labelText: 'Race', border: OutlineInputBorder()),
-            onChanged: (_) => _dirty = true,
+          child: ContentPickerField(
+            label: 'Species',
+            value: _sheet.race,
+            onTap: _pickSpecies,
+            onCleared: () => _mutate(_sheet.copyWith(race: '')),
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: TextField(
-            controller: _classCtl,
-            decoration: const InputDecoration(
-                labelText: 'Class', border: OutlineInputBorder()),
-            onChanged: (_) => _dirty = true,
+          child: ContentPickerField(
+            label: 'Class',
+            value: _sheet.className,
+            onTap: _pickClass,
+            onCleared: () => _mutate(_sheet.copyWith(className: '')),
           ),
         ),
       ]),
@@ -259,24 +252,100 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
       const SizedBox(height: 12),
       Row(children: [
         Expanded(
-          child: TextField(
-            controller: _backgroundCtl,
-            decoration: const InputDecoration(
-                labelText: 'Background', border: OutlineInputBorder()),
-            onChanged: (_) => _dirty = true,
+          child: ContentPickerField(
+            label: 'Background',
+            value: _sheet.background,
+            onTap: _pickBackground,
+            onCleared: () => _mutate(_sheet.copyWith(background: '')),
           ),
         ),
         const SizedBox(width: 12),
-        Expanded(
-          child: TextField(
-            controller: _alignmentCtl,
-            decoration: const InputDecoration(
-                labelText: 'Alignment', border: OutlineInputBorder()),
-            onChanged: (_) => _dirty = true,
-          ),
-        ),
+        Expanded(child: _alignmentDropdown()),
       ]),
     ]);
+  }
+
+  Widget _alignmentDropdown() {
+    final options = [
+      for (final a in _alignments) humanizeSlug('${a['name']}'),
+    ];
+    // A previously saved free-text value stays selectable so opening
+    // the dropdown never silently discards it.
+    final current = _sheet.alignment;
+    if (current.isNotEmpty && !options.contains(current)) {
+      options.insert(0, current);
+    }
+    return DropdownButtonFormField<String>(
+      initialValue: current.isEmpty ? null : current,
+      // The field gets half a Row; without isExpanded the selected
+      // value sizes to its natural width and overflows.
+      isExpanded: true,
+      decoration: const InputDecoration(
+        labelText: 'Alignment',
+        border: OutlineInputBorder(),
+      ),
+      items: [
+        for (final o in options)
+          DropdownMenuItem(
+            value: o,
+            child: Text(o, overflow: TextOverflow.ellipsis),
+          ),
+      ],
+      onChanged: (v) => _mutate(_sheet.copyWith(alignment: v ?? '')),
+    );
+  }
+
+  Future<Map<String, dynamic>?> _pickContent(String table, String title,
+      {String? where}) {
+    return showContentPicker(
+      context: context,
+      content: _content,
+      table: table,
+      title: title,
+      where: where,
+    );
+  }
+
+  Future<void> _pickSpecies() async {
+    final record = await _pickContent('species', 'Choose a species');
+    if (record == null) return;
+    _mutate(_sheet.copyWith(race: record['name'] as String? ?? ''));
+  }
+
+  Future<void> _pickClass() async {
+    final record = await _pickContent('class', 'Choose a class',
+        where: 'subclass_of IS NULL');
+    if (record == null) return;
+    final saves = record['prof_saving_throws'];
+    final hitDie = record['hit_dice'];
+
+    var next = _sheet.copyWith(
+      className: record['name'] as String? ?? '',
+      // Switching class re-derives save proficiencies from the new
+      // class — the checkboxes stay editable afterwards.
+      savingThrowProficiencies:
+          saves is List ? Ability.parseWireSet(saves) : null,
+    );
+    // Compute 1st-level HP (hit die max + Con modifier) only while HP
+    // is still at the placeholder — never clobber a tracked value.
+    if (next.maxHp <= 1 && hitDie is num) {
+      final hp = (hitDie.truncate() +
+              next.abilityModifier(Ability.constitution))
+          .clamp(1, 999);
+      next = next.copyWith(maxHp: hp, currentHp: hp);
+    }
+    _mutate(next);
+
+    // Suggest hit dice from the class when none are recorded yet.
+    if (_hitDiceCtl.text.trim().isEmpty && hitDie is num) {
+      _hitDiceCtl.text = '${_sheet.level}d${hitDie.truncate()}';
+    }
+  }
+
+  Future<void> _pickBackground() async {
+    final record = await _pickContent('background', 'Choose a background');
+    if (record == null) return;
+    _mutate(_sheet.copyWith(background: record['name'] as String? ?? ''));
   }
 
   Widget _abilitiesSection() {
@@ -503,25 +572,24 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
   }
 
   Future<void> _addEquipment() async {
-    final nameCtl = TextEditingController();
+    final record = await _pickContent('item', 'Add an item');
+    if (record == null || !mounted) return;
+    final name = record['name'] as String? ?? '';
+
     final qtyCtl = TextEditingController(text: '1');
     final notesCtl = TextEditingController();
     final added = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Add item'),
+        title: Text(name),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             TextField(
-              controller: nameCtl,
-              decoration: const InputDecoration(labelText: 'Name'),
-              autofocus: true,
-            ),
-            TextField(
               controller: qtyCtl,
               decoration: const InputDecoration(labelText: 'Quantity'),
               keyboardType: TextInputType.number,
+              autofocus: true,
             ),
             TextField(
               controller: notesCtl,
@@ -539,9 +607,9 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
         ],
       ),
     );
-    if (added != true || nameCtl.text.trim().isEmpty) return;
+    if (added != true || name.isEmpty) return;
     final item = EquipmentItem(
-      name: nameCtl.text.trim(),
+      name: name,
       quantity: int.tryParse(qtyCtl.text.trim()) ?? 1,
       notes: notesCtl.text.trim(),
     );
@@ -549,55 +617,13 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
   }
 
   Future<void> _addSpell() async {
-    final nameCtl = TextEditingController();
-    final notesCtl = TextEditingController();
-    var level = 0;
-    final added = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('Add spell'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameCtl,
-                decoration: const InputDecoration(labelText: 'Name'),
-                autofocus: true,
-              ),
-              DropdownButtonFormField<int>(
-                initialValue: level,
-                decoration: const InputDecoration(labelText: 'Level'),
-                items: [
-                  const DropdownMenuItem(value: 0, child: Text('Cantrip')),
-                  for (var l = 1; l <= 9; l++)
-                    DropdownMenuItem(value: l, child: Text('Level $l')),
-                ],
-                onChanged: (v) => setDialogState(() => level = v ?? 0),
-              ),
-              TextField(
-                controller: notesCtl,
-                decoration:
-                    const InputDecoration(labelText: 'Notes (optional)'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-                onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancel')),
-            FilledButton(
-                onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Add')),
-          ],
-        ),
-      ),
-    );
-    if (added != true || nameCtl.text.trim().isEmpty) return;
+    final record = await _pickContent('spell', 'Add a spell');
+    if (record == null) return;
+    final name = record['name'] as String? ?? '';
+    if (name.isEmpty) return;
     final spell = SpellEntry(
-      name: nameCtl.text.trim(),
-      level: level,
-      notes: notesCtl.text.trim(),
+      name: name,
+      level: record['level'] as int? ?? 0,
     );
     _mutate(_sheet.copyWith(spells: [..._sheet.spells, spell]));
   }

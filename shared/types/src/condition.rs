@@ -11,6 +11,10 @@ pub struct Condition {
     pub content_module_uuid: EntityId,
     pub name: ConditionName,
     pub slug: String,
+    /// Stable external identifier (Open5e key for imported content).
+    pub key: String,
+    /// Description matching the module's game edition (Open5e v2 ships
+    /// multi-edition descriptions; the generator selects one).
     pub desc: String,
     pub is_restricted: bool,
     pub created_at: Timestamp,

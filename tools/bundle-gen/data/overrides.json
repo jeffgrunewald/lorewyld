@@ -1,0 +1,72 @@
+{
+  "comment": "Curated data the Open5e APIs don't carry in structured form. spell_slot_tables maps class level -> slots per spell level (identical in the 2014 and 2024 rules; warlock Pact Magic uses the same array shape with zeros below its slot level).",
+  "spell_slot_tables": {
+    "full": {
+      "1": [2], "2": [3], "3": [4, 2], "4": [4, 3], "5": [4, 3, 2],
+      "6": [4, 3, 3], "7": [4, 3, 3, 1], "8": [4, 3, 3, 2], "9": [4, 3, 3, 3, 1],
+      "10": [4, 3, 3, 3, 2], "11": [4, 3, 3, 3, 2, 1], "12": [4, 3, 3, 3, 2, 1],
+      "13": [4, 3, 3, 3, 2, 1, 1], "14": [4, 3, 3, 3, 2, 1, 1],
+      "15": [4, 3, 3, 3, 2, 1, 1, 1], "16": [4, 3, 3, 3, 2, 1, 1, 1],
+      "17": [4, 3, 3, 3, 2, 1, 1, 1, 1], "18": [4, 3, 3, 3, 3, 1, 1, 1, 1],
+      "19": [4, 3, 3, 3, 3, 2, 1, 1, 1], "20": [4, 3, 3, 3, 3, 2, 2, 1, 1]
+    },
+    "half": {
+      "1": [], "2": [2], "3": [3], "4": [3], "5": [4, 2],
+      "6": [4, 2], "7": [4, 3], "8": [4, 3], "9": [4, 3, 2],
+      "10": [4, 3, 2], "11": [4, 3, 3], "12": [4, 3, 3],
+      "13": [4, 3, 3, 1], "14": [4, 3, 3, 1], "15": [4, 3, 3, 2],
+      "16": [4, 3, 3, 2], "17": [4, 3, 3, 3, 1], "18": [4, 3, 3, 3, 1],
+      "19": [4, 3, 3, 3, 2], "20": [4, 3, 3, 3, 2]
+    },
+    "pact": {
+      "1": [1], "2": [2], "3": [0, 2], "4": [0, 2], "5": [0, 0, 2],
+      "6": [0, 0, 2], "7": [0, 0, 0, 2], "8": [0, 0, 0, 2], "9": [0, 0, 0, 0, 2],
+      "10": [0, 0, 0, 0, 2], "11": [0, 0, 0, 0, 3], "12": [0, 0, 0, 0, 3],
+      "13": [0, 0, 0, 0, 3], "14": [0, 0, 0, 0, 3], "15": [0, 0, 0, 0, 3],
+      "16": [0, 0, 0, 0, 3], "17": [0, 0, 0, 0, 4], "18": [0, 0, 0, 0, 4],
+      "19": [0, 0, 0, 0, 4], "20": [0, 0, 0, 0, 4]
+    }
+  },
+  "class_caster_kind": {
+    "bard": "full",
+    "cleric": "full",
+    "druid": "full",
+    "sorcerer": "full",
+    "wizard": "full",
+    "paladin": "half",
+    "ranger": "half",
+    "warlock": "pact"
+  },
+  "name_aliases": {
+    "Feeblemind": "Befuddlement",
+    "Branding Smite": "Shining Smite",
+    "Crossbow, hand": "Hand Crossbow",
+    "Crossbow, heavy": "Heavy Crossbow",
+    "Crossbow, light": "Light Crossbow",
+    "Gnome, Deep (Svirfneblin)": "Deep Gnome (Svirfneblin)",
+    "Elf, Drow": "Drow",
+    "Acid (vial)": "Acid",
+    "Alchemist's Fire (Flask)": "Alchemist's Fire",
+    "Antitoxin (Vial)": "Antitoxin",
+    "Ball Bearings (bag of 1000)": "Ball Bearings",
+    "Caltrops (bag of 20)": "Caltrops",
+    "Chain (10 feet)": "Chain",
+    "Holy Water (flask)": "Holy Water",
+    "Ink (1 ounce bottle)": "Ink",
+    "Ladder (10-foot)": "Ladder",
+    "Paper (one sheet)": "Paper",
+    "Parchment (one sheet)": "Parchment",
+    "Perfume (vial)": "Perfume",
+    "Pole (10-foot)": "Pole",
+    "Rations (1 day)": "Rations"
+  },
+  "srd24_species_asi_desc": "Ability score increases come from your background under the 2024 rules; this species grants none directly.",
+  "documents": {
+    "srd-2024": {
+      "attribution": "This work includes material from the System Reference Document 5.2.1 (\"SRD 5.2.1\") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2.1 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode."
+    },
+    "srd-2014": {
+      "attribution": "This work includes material from the System Reference Document 5.1 (\"SRD 5.1\") by Wizards of the Coast LLC, available at https://dnd.wizards.com/resources/systems-reference-document. The SRD 5.1 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode."
+    }
+  }
+}

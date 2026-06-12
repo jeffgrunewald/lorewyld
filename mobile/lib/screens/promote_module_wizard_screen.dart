@@ -14,6 +14,7 @@ import 'package:flutter/material.dart';
 import '../services/api_client.dart';
 import '../services/local_store.dart';
 import '../services/server_connection.dart';
+import '../types/content_module.dart';
 import '../types/lore_note.dart';
 
 class PromoteModuleWizardScreen extends StatefulWidget {
@@ -42,7 +43,9 @@ class _PromoteModuleWizardScreenState extends State<PromoteModuleWizardScreen> {
   // metadata
   late final TextEditingController _nameCtl;
   late final TextEditingController _slugCtl;
-  final _licenseCtl = TextEditingController(text: 'CC-BY 4.0');
+  // Homebrew defaults to unlicensed; pick a supported license to
+  // distribute under one.
+  String _license = 'unlicensed';
   final _versionCtl = TextEditingController(text: '1.0.0');
   final _descCtl = TextEditingController();
 
@@ -62,7 +65,6 @@ class _PromoteModuleWizardScreenState extends State<PromoteModuleWizardScreen> {
   void dispose() {
     _nameCtl.dispose();
     _slugCtl.dispose();
-    _licenseCtl.dispose();
     _versionCtl.dispose();
     _descCtl.dispose();
     super.dispose();
@@ -108,7 +110,7 @@ class _PromoteModuleWizardScreenState extends State<PromoteModuleWizardScreen> {
         sourceSettingUuid: widget.setting.remoteUuid!,
         name: name,
         slug: _slugCtl.text.trim().toLowerCase(),
-        license: _licenseCtl.text.trim(),
+        license: _license,
         description: description.isEmpty ? null : description,
         // The server credits the publisher by email automatically.
         authors: const [],
@@ -216,9 +218,18 @@ class _PromoteModuleWizardScreenState extends State<PromoteModuleWizardScreen> {
             helperText: 'URL-safe identifier, lowercase + dashes',
           ),
         ),
-        TextField(
-          controller: _licenseCtl,
+        DropdownButtonFormField<String>(
+          initialValue: _license,
+          isExpanded: true,
           decoration: const InputDecoration(labelText: 'License'),
+          items: [
+            for (final kind in licenseKinds)
+              DropdownMenuItem(
+                value: kind,
+                child: Text(licenseDisplayName(kind)),
+              ),
+          ],
+          onChanged: (v) => setState(() => _license = v ?? 'unlicensed'),
         ),
         TextField(
           controller: _versionCtl,
@@ -324,7 +335,7 @@ class _PromoteModuleWizardScreenState extends State<PromoteModuleWizardScreen> {
           ),
         Text('Module: ${_nameCtl.text.trim()} v${_versionCtl.text.trim()}'),
         Text('Slug: ${_slugCtl.text.trim()}'),
-        Text('License: ${_licenseCtl.text.trim()}'),
+        Text('License: ${licenseDisplayName(_license)}'),
         Text('Notes selected: $selectedCount'),
         if (gamemasterChecked > 0)
           Padding(
