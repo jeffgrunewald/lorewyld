@@ -45,4 +45,34 @@ void main() {
     // Second call is a no-op, not a constraint violation.
     await content.importBundle();
   });
+
+  test('compendium reads: name search, counts, lookups', () async {
+    await content.importBundle();
+
+    // LIKE search matches substrings case-insensitively.
+    final fire = await content.listNamed('spell', query: 'fire');
+    expect(fire.map((s) => s['name']), contains('Fireball'));
+
+    // Extra where-clause composes with the name query.
+    final bases = await content.listNamed(
+      'class',
+      query: 'a',
+      where: 'subclass_of IS NULL',
+    );
+    expect(bases.map((c) => c['name']), contains('Barbarian'));
+    expect(bases.every((c) => c['subclass_of'] == null), isTrue);
+
+    expect(await content.count('background'), greaterThan(0));
+    expect(await content.count('alignment'), 9);
+
+    // Raw lookup reads stay wire-true; display humanizing happens in
+    // ContentLookups.load.
+    final schools = await content.lookupNames('spell_school');
+    expect(schools.values, contains('evocation'));
+
+    final alignments = await content.listAlignments();
+    expect(alignments.map((a) => a['name']), contains('lawful_good'));
+    expect((await content.listBackgrounds()).map((b) => b['name']),
+        contains('Acolyte'));
+  });
 }

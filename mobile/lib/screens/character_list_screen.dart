@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../services/local_store.dart';
 import '../types/character.dart';
 import '../widgets/async_list_view.dart';
+import 'character_create_wizard_screen.dart';
 import 'character_sheet_screen.dart';
 
 class CharacterListScreen extends StatefulWidget {
@@ -35,34 +36,12 @@ class _CharacterListScreenState extends State<CharacterListScreen> {
   }
 
   Future<void> _createCharacter() async {
-    final ctl = TextEditingController();
-    final name = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('New character'),
-        content: TextField(
-          controller: ctl,
-          decoration: const InputDecoration(
-            labelText: 'Name',
-            hintText: 'e.g. Thistle Quickfoot',
-          ),
-          autofocus: true,
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => Navigator.pop(ctx, ctl.text.trim()),
-            child: const Text('Create'),
-          ),
-        ],
+    final sheet = await Navigator.of(context).push<CharacterSheet>(
+      MaterialPageRoute(
+        builder: (_) => CharacterCreateWizardScreen(store: widget.store),
       ),
     );
-    if (name == null || name.isEmpty) return;
-    final sheet = await widget.store.createCharacter(name);
-    if (!mounted) return;
+    if (sheet == null || !mounted) return;
     await _refresh();
     _openSheet(sheet);
   }

@@ -164,6 +164,10 @@ class ContentStore {
 
   Future<List<Map<String, dynamic>>> listSpecies() => _list('species');
 
+  Future<List<Map<String, dynamic>>> listBackgrounds() => _list('background');
+
+  Future<List<Map<String, dynamic>>> listAlignments() => _list('alignment');
+
   Future<Map<String, dynamic>?> getByKey(String table, String key) async {
     final rows = await _db.query('"$table"',
         columns: ['data'], where: 'key = ?', whereArgs: [key]);
@@ -171,16 +175,57 @@ class ContentStore {
     return jsonDecode(rows.first['data'] as String) as Map<String, dynamic>;
   }
 
+  /// Name-search within one content table. Combines an optional LIKE
+  /// match on [query] with an optional extra [where] clause.
+  Future<List<Map<String, dynamic>>> listNamed(
+    String table, {
+    String? query,
+    String? where,
+    List<Object?>? whereArgs,
+    int? limit,
+  }) {
+    final hasQuery = query != null && query.trim().isNotEmpty;
+    final clauses = [
+      if (where != null) '($where)',
+      if (hasQuery) 'name LIKE ?',
+    ];
+    return _list(
+      table,
+      where: clauses.isEmpty ? null : clauses.join(' AND '),
+      whereArgs: [
+        ...?whereArgs,
+        if (hasQuery) '%${query.trim()}%',
+      ],
+      limit: limit,
+    );
+  }
+
+  Future<int> count(String table) async {
+    final rows = await _db.rawQuery('SELECT COUNT(*) AS n FROM "$table"');
+    return rows.first['n'] as int? ?? 0;
+  }
+
+  /// uuid → display name for a lookup table (spell schools, sizes,
+  /// creature types, item categories). Small tables; load whole.
+  Future<Map<String, String>> lookupNames(String table) async {
+    final rows = await _db.query('"$table"', columns: ['uuid', 'name']);
+    return {
+      for (final r in rows) r['uuid'] as String: r['name'] as String,
+    };
+  }
+
   Future<List<Map<String, dynamic>>> _list(
     String table, {
     String? where,
     List<Object?>? whereArgs,
+    int? limit,
   }) async {
     final rows = await _db.query('"$table"',
         columns: ['data'],
         where: where,
         whereArgs: whereArgs,
-        orderBy: 'name COLLATE NOCASE');
+        orderBy: 'name COLLATE NOCASE',
+        limit: limit);
     return rows
         .map((r) => jsonDecode(r['data'] as String) as Map<String, dynamic>)
         .toList();

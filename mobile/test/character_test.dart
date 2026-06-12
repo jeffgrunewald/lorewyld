@@ -108,4 +108,19 @@ void main() {
     expect(restored.equipment.single.notes, 'silvered');
     expect(restored.spells.first.level, 3);
   });
+
+  test('parseWireSet maps content ability names, skipping unknowns', () {
+    // Shape of a class record's prof_saving_throws in the SRD bundle.
+    expect(
+      Ability.parseWireSet(['dexterity', 'strength']),
+      {Ability.dexterity, Ability.strength},
+    );
+    // Content is external data — unrecognized entries are dropped, not
+    // thrown on.
+    expect(
+      Ability.parseWireSet(['wisdom', 'luck', 42]),
+      {Ability.wisdom},
+    );
+    expect(Ability.parseWireSet([]), isEmpty);
+  });
 }

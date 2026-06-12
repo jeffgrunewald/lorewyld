@@ -62,15 +62,36 @@ void main() {
     expect(find.text('Settings & lore'), findsOneWidget);
     expect(find.text('Search'), findsOneWidget);
     expect(find.text('Working locally — no server connection'), findsOneWidget);
-    // Modules requires a login; the button says so.
-    expect(find.text('Modules (log in)'), findsOneWidget);
+    // The Compendium is fully local — available without a login.
+    expect(find.text('Compendium'), findsOneWidget);
+    await tester.runAsync(store.close);
+  });
+
+  testWidgets('compendium lists content categories offline', (tester) async {
+    final connection = ServerConnection();
+    final store = await openSeededStore(tester);
+    await tester.pumpWidget(LorewyldApp(connection: connection, store: store));
+    await pumpPastSeedGate(tester);
+    await tester.pumpAndSettle(const Duration(milliseconds: 100));
+
+    await tester.tap(find.text('Compendium'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    // Category counts/lookups resolve in the real zone.
+    await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)));
+    await tester.pump();
+
+    expect(find.text('Spells'), findsOneWidget);
+    expect(find.text('Creatures'), findsOneWidget);
+    expect(find.text('Species'), findsOneWidget);
+    expect(find.text('Backgrounds'), findsOneWidget);
     await tester.runAsync(store.close);
   });
 
   testWidgets('creating a character opens its sheet (regression: setState '
       'must not receive a Future-returning closure)', (tester) async {
-    final store = (await tester
-        .runAsync(() => LocalStore.open(path: inMemoryDatabasePath)))!;
+    final store = await openSeededStore(tester);
     await tester.pumpWidget(
       MaterialApp(home: CharacterListScreen(store: store)),
     );
@@ -82,17 +103,26 @@ void main() {
         () => Future<void>.delayed(const Duration(milliseconds: 50)));
     await tester.pump();
 
+    // The + button opens the creation wizard.
     await tester.tap(find.byType(FloatingActionButton));
     await tester.pump();
-    await tester.pump(const Duration(milliseconds: 200));
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.enterText(find.byType(TextField), 'Thistle Quickfoot');
+    await tester.pump();
 
-    // Tap Create, then pump so the dialog pop is processed and the
-    // create flow reaches its database await; only then can the real
-    // isolate IO resolve (inside runAsync). Bounded pumps afterwards —
-    // pumpAndSettle would hang on the list's real-zone refresh future.
+    // Species/class/background are optional — jump straight to the last
+    // step via its header and create.
+    await tester.tap(find.text('Background & alignment'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
     await tester.tap(find.text('Create'));
     await tester.pump();
+    await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 100)));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    // The wizard pops to the list, which refreshes (real-zone IO) and
+    // then pushes the sheet.
     await tester.runAsync(
         () => Future<void>.delayed(const Duration(milliseconds: 100)));
     await tester.pump();

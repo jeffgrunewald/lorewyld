@@ -19,6 +19,13 @@ enum Ability {
 
   static Ability fromWire(String s) =>
       Ability.values.firstWhere((a) => a.name == s);
+
+  /// Parses a content record's ability-name list (e.g. a class's
+  /// `prof_saving_throws`), silently skipping unrecognized entries —
+  /// content is data we read, not data we control.
+  static Set<Ability> parseWireSet(Iterable<dynamic> names) => {
+        for (final n in names) ...Ability.values.where((a) => a.name == n),
+      };
 }
 
 enum Skill {
