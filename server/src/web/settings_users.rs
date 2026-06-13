@@ -1,5 +1,7 @@
 use leptos::prelude::*;
 
+use crate::web::breadcrumbs::{Breadcrumbs, Crumb};
+
 /// Admin user-management page: paginated user table with delete /
 /// admin-toggle actions and a manual add-user modal. Skeleton rendered
 /// server-side; JS gates on the `lw-auth-ready` probe and populates
@@ -9,6 +11,11 @@ use leptos::prelude::*;
 pub fn SettingsUsersPage() -> impl IntoView {
     view! {
         <section class="lw-settings">
+            <Breadcrumbs trail=vec![
+                Crumb::link("Home", "/"),
+                Crumb::here("Admin"),
+                Crumb::here("Users"),
+            ]/>
             <p id="lw-settings-forbidden" class="lw-settings-forbidden" hidden=true>
                 "You must be logged in as an administrator to view this page."
             </p>

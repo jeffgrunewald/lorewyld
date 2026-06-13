@@ -27,6 +27,22 @@ pub fn HeaderAuth() -> impl IntoView {
     }
 }
 
+/// Centered login prompt for gated pages. Pages render their real
+/// content inside a `hidden` root plus this prompt; page scripts call
+/// `lwContent.requireAuth(init)` which reveals the right one once the
+/// session probe settles. Login reloads the page, re-running the gate.
+#[component]
+pub fn LoginRequired() -> impl IntoView {
+    view! {
+        <div id="lw-login-required" class="lw-login-required" hidden=true>
+            <p>"Log in to view this page."</p>
+            <button id="lw-login-required-btn" class="lw-btn lw-btn-filled" type="button">
+                "Log in"
+            </button>
+        </div>
+    }
+}
+
 /// Login + registration modal dialogs, rendered (hidden) on every page.
 /// All dynamic text is set via `textContent` in [`AUTH_SCRIPT`] —
 /// consistent with the codebase's XSS-safe pure-DOM convention.

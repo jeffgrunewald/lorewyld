@@ -295,7 +295,7 @@ class _PromoteModuleWizardScreenState extends State<PromoteModuleWizardScreen> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Text(
-                'Hidden (Only me / DM only) notes are unchecked to prevent '
+                'Hidden (Only me / GMs only) notes are unchecked to prevent '
                 'accidental spoiler publication. Re-check explicitly if you '
                 'do mean to publish them.',
               ),
@@ -347,7 +347,7 @@ class _PromoteModuleWizardScreenState extends State<PromoteModuleWizardScreen> {
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
-                'Heads up: $gamemasterChecked DM-only note(s) are included. '
+                'Heads up: $gamemasterChecked GM-only note(s) are included. '
                 'These will be visible to everyone who imports the module.',
               ),
             ),
@@ -359,6 +359,6 @@ class _PromoteModuleWizardScreenState extends State<PromoteModuleWizardScreen> {
   String _visibilityLabel(NoteVisibility v) => switch (v) {
         NoteVisibility.visible => 'Visible',
         NoteVisibility.authorOnly => 'Only me',
-        NoteVisibility.gamemasterOnly => 'DM only',
+        NoteVisibility.gamemasterOnly => 'GMs only',
       };
 }

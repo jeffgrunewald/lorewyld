@@ -27,18 +27,31 @@ async fn count(pool: &SqlitePool, sql: &str) -> i64 {
 async fn seeds_multi_module_bundle_idempotently_and_incrementally() {
     let pool = fresh_pool().await;
 
-    lorewyld::content::seed_srd_content(&pool).await.expect("first seed");
+    lorewyld::content::seed_srd_content(&pool)
+        .await
+        .expect("first seed");
     let modules = count(&pool, "SELECT COUNT(*) FROM content_module").await;
     let creatures = count(&pool, "SELECT COUNT(*) FROM creature").await;
     let spells = count(&pool, "SELECT COUNT(*) FROM spell").await;
     assert!(modules > 1, "expected one module per source, got {modules}");
-    assert!(creatures > 3000, "expected the full creature set, got {creatures}");
+    assert!(
+        creatures > 3000,
+        "expected the full creature set, got {creatures}"
+    );
     assert!(spells > 1000, "expected the full spell set, got {spells}");
 
     // Reseeding an up-to-date database changes nothing.
-    lorewyld::content::seed_srd_content(&pool).await.expect("reseed");
-    assert_eq!(count(&pool, "SELECT COUNT(*) FROM content_module").await, modules);
-    assert_eq!(count(&pool, "SELECT COUNT(*) FROM creature").await, creatures);
+    lorewyld::content::seed_srd_content(&pool)
+        .await
+        .expect("reseed");
+    assert_eq!(
+        count(&pool, "SELECT COUNT(*) FROM content_module").await,
+        modules
+    );
+    assert_eq!(
+        count(&pool, "SELECT COUNT(*) FROM creature").await,
+        creatures
+    );
 
     // Simulate an install that predates one module: drop it and its
     // records, then reseed — only the missing module comes back.
@@ -54,7 +67,15 @@ async fn seeds_multi_module_bundle_idempotently_and_incrementally() {
     let creatures_without_tob = count(&pool, "SELECT COUNT(*) FROM creature").await;
     assert!(creatures_without_tob < creatures);
 
-    lorewyld::content::seed_srd_content(&pool).await.expect("incremental seed");
-    assert_eq!(count(&pool, "SELECT COUNT(*) FROM content_module").await, modules);
-    assert_eq!(count(&pool, "SELECT COUNT(*) FROM creature").await, creatures);
+    lorewyld::content::seed_srd_content(&pool)
+        .await
+        .expect("incremental seed");
+    assert_eq!(
+        count(&pool, "SELECT COUNT(*) FROM content_module").await,
+        modules
+    );
+    assert_eq!(
+        count(&pool, "SELECT COUNT(*) FROM creature").await,
+        creatures
+    );
 }

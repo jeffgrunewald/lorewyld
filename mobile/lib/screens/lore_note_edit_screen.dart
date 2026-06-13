@@ -157,7 +157,7 @@ class _LoreNoteEditScreenState extends State<LoreNoteEditScreen> {
   String _visibilityLabel(NoteVisibility v) => switch (v) {
         NoteVisibility.visible => 'Visible to everyone',
         NoteVisibility.authorOnly => 'Only me',
-        NoteVisibility.gamemasterOnly => 'DM only',
+        NoteVisibility.gamemasterOnly => 'GMs only',
       };
 
   IconData _visibilityIcon(NoteVisibility v) => switch (v) {

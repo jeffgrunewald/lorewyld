@@ -166,9 +166,10 @@ fn build_bundle(
         .filter(|d| {
             let supported = preferred_license(d).is_some();
             if !supported {
-                report
-                    .skipped
-                    .push(format!("document {} ({}): no supported license", d.key, d.name));
+                report.skipped.push(format!(
+                    "document {} ({}): no supported license",
+                    d.key, d.name
+                ));
             }
             supported
         })
@@ -354,8 +355,7 @@ fn build_bundle(
         })
         .collect();
 
-    let language_recs: Vec<v2::LanguageRec> =
-        fetcher.fetch_all(&format!("{API}/v2/languages/"))?;
+    let language_recs: Vec<v2::LanguageRec> = fetcher.fetch_all(&format!("{API}/v2/languages/"))?;
     let languages: Vec<Language> = language_recs
         .iter()
         .map(|r| Language {
@@ -514,8 +514,7 @@ fn build_bundle(
             name: r.name.clone(),
             slug: slug_from_key(&r.key),
             key: r.key.clone(),
-            description: Some(r.desc.clone())
-                .filter(|d| !d.is_empty() && d != "[None provided]"),
+            description: Some(r.desc.clone()).filter(|d| !d.is_empty() && d != "[None provided]"),
             is_restricted: false,
             created_at: epoch,
             updated_at: epoch,
@@ -587,8 +586,14 @@ fn build_bundle(
             .collect(),
         epoch,
         documents: documents.iter().map(|d| (d.key.clone(), d.uuid)).collect(),
-        schools: spell_schools.iter().map(|s| (s.key.clone(), s.uuid)).collect(),
-        creature_types: creature_types.iter().map(|c| (c.key.clone(), c.uuid)).collect(),
+        schools: spell_schools
+            .iter()
+            .map(|s| (s.key.clone(), s.uuid))
+            .collect(),
+        creature_types: creature_types
+            .iter()
+            .map(|c| (c.key.clone(), c.uuid))
+            .collect(),
         sizes: sizes.iter().map(|s| (s.key.clone(), s.uuid)).collect(),
         size_uuid_by_name: sizes
             .iter()
@@ -599,7 +604,10 @@ fn build_bundle(
             .iter()
             .map(|l| (l.name.to_lowercase(), l.uuid))
             .collect(),
-        item_categories: item_categories.iter().map(|c| (c.key.clone(), c.uuid)).collect(),
+        item_categories: item_categories
+            .iter()
+            .map(|c| (c.key.clone(), c.uuid))
+            .collect(),
         weapon_property_uuid_by_name: weapon_properties
             .iter()
             .map(|w| (w.name.to_lowercase(), w.uuid))
@@ -617,8 +625,14 @@ fn build_bundle(
     let mut class_groups = group_by_doc(class_recs_all, |r| r.document.key.clone());
     let class_recs_base = class_groups.remove(BASE_DOC).unwrap_or_default();
     let class_recs_legacy = class_groups.remove(LEGACY_DOC).unwrap_or_default();
-    ensure!(class_recs_base.len() >= 20, "suspiciously few SRD 5.2 classes");
-    ensure!(class_recs_legacy.len() >= 20, "suspiciously few SRD 5.1 classes");
+    ensure!(
+        class_recs_base.len() >= 20,
+        "suspiciously few SRD 5.2 classes"
+    );
+    ensure!(
+        class_recs_legacy.len() >= 20,
+        "suspiciously few SRD 5.1 classes"
+    );
 
     let split = |recs: Vec<v2::ClassRec>| -> (Vec<v2::ClassRec>, Vec<v2::ClassRec>) {
         recs.into_iter().partition(|r| r.subclass_of.is_none())
@@ -628,12 +642,12 @@ fn build_bundle(
     let (parent_recs, filled) =
         dedup::gap_fill(base_parents, legacy_parents, |r| r.name.clone(), aliases);
     report.gap_filled.insert("classes", filled);
-    let (sub_recs, filled) =
-        dedup::gap_fill(base_subs, legacy_subs, |r| r.name.clone(), aliases);
+    let (sub_recs, filled) = dedup::gap_fill(base_subs, legacy_subs, |r| r.name.clone(), aliases);
     report.gap_filled.insert("subclasses", filled);
 
-    let v1_classes: Vec<v1::V1Class> =
-        fetcher.fetch_all(&format!("{API}/v1/classes/?document__slug={V1_DOC_SLUG}&limit=50"))?;
+    let v1_classes: Vec<v1::V1Class> = fetcher.fetch_all(&format!(
+        "{API}/v1/classes/?document__slug={V1_DOC_SLUG}&limit=50"
+    ))?;
     let v1_class_by_name: BTreeMap<String, &v1::V1Class> = v1_classes
         .iter()
         .map(|c| (c.name.to_lowercase(), c))
@@ -653,16 +667,23 @@ fn build_bundle(
     for rec in &sub_recs {
         let parent_stub = rec.subclass_of.as_ref().expect("partitioned as subclass");
         let Some(parent_key) = parent_key_by_name.get(&parent_stub.name.to_lowercase()) else {
-            report
-                .skipped
-                .push(format!("subclass {} (parent {} not shipped)", rec.key, parent_stub.name));
+            report.skipped.push(format!(
+                "subclass {} (parent {} not shipped)",
+                rec.key, parent_stub.name
+            ));
             continue;
         };
         let parent_uuid = content_uuid("class", parent_key);
         let v1c = v1_class_by_name
             .get(&parent_stub.name.to_lowercase())
             .copied();
-        classes.push(map::map_class(&ctx, rec, v1c, overrides, Some(parent_uuid))?);
+        classes.push(map::map_class(
+            &ctx,
+            rec,
+            v1c,
+            overrides,
+            Some(parent_uuid),
+        )?);
     }
 
     // Non-SRD documents import verbatim: own parents resolve first,
@@ -712,7 +733,10 @@ fn build_bundle(
     let spells_base = spell_groups.remove(BASE_DOC).unwrap_or_default();
     let spells_legacy = spell_groups.remove(LEGACY_DOC).unwrap_or_default();
     ensure!(spells_base.len() >= 300, "suspiciously few SRD 5.2 spells");
-    ensure!(spells_legacy.len() >= 300, "suspiciously few SRD 5.1 spells");
+    ensure!(
+        spells_legacy.len() >= 300,
+        "suspiciously few SRD 5.1 spells"
+    );
     let (spell_recs, filled) =
         dedup::gap_fill(spells_base, spells_legacy, |r| r.name.clone(), aliases);
     report.gap_filled.insert("spells", filled);
@@ -747,10 +771,20 @@ fn build_bundle(
     let mut creature_groups = group_by_doc(creature_recs_all, |r| r.document.key.clone());
     let creatures_base = creature_groups.remove(BASE_DOC).unwrap_or_default();
     let creatures_legacy = creature_groups.remove(LEGACY_DOC).unwrap_or_default();
-    ensure!(creatures_base.len() >= 300, "suspiciously few SRD 5.2 creatures");
-    ensure!(creatures_legacy.len() >= 300, "suspiciously few SRD 5.1 creatures");
-    let (creature_recs, filled) =
-        dedup::gap_fill(creatures_base, creatures_legacy, |r| r.name.clone(), aliases);
+    ensure!(
+        creatures_base.len() >= 300,
+        "suspiciously few SRD 5.2 creatures"
+    );
+    ensure!(
+        creatures_legacy.len() >= 300,
+        "suspiciously few SRD 5.1 creatures"
+    );
+    let (creature_recs, filled) = dedup::gap_fill(
+        creatures_base,
+        creatures_legacy,
+        |r| r.name.clone(),
+        aliases,
+    );
     report.gap_filled.insert("creatures", filled);
     let mut creatures = creature_recs
         .iter()
@@ -789,10 +823,13 @@ fn build_bundle(
         (parents, subs)
     };
 
-    let v1_races: Vec<v1::V1Race> =
-        fetcher.fetch_all(&format!("{API}/v1/races/?document__slug={V1_DOC_SLUG}&limit=50"))?;
-    let v1_race_by_name: BTreeMap<String, &v1::V1Race> =
-        v1_races.iter().map(|r| (r.name.to_lowercase(), r)).collect();
+    let v1_races: Vec<v1::V1Race> = fetcher.fetch_all(&format!(
+        "{API}/v1/races/?document__slug={V1_DOC_SLUG}&limit=50"
+    ))?;
+    let v1_race_by_name: BTreeMap<String, &v1::V1Race> = v1_races
+        .iter()
+        .map(|r| (r.name.to_lowercase(), r))
+        .collect();
     let v1_subrace_by_name: BTreeMap<String, (&v1::V1Race, &v1::V1Subrace)> = v1_races
         .iter()
         .flat_map(|race| race.subraces.iter().map(move |sub| (sub, race)))
@@ -836,7 +873,9 @@ fn build_bundle(
                         .collect(),
                     asi_desc: sub.asi_desc.clone(),
                     size_raw: race.size_raw.clone(),
-                    speed: v1::V1Speed { walk: race.speed.walk },
+                    speed: v1::V1Speed {
+                        walk: race.speed.walk,
+                    },
                     languages: String::new(),
                     vision: String::new(),
                     subraces: Vec::new(),
@@ -969,8 +1008,7 @@ fn build_bundle(
     let mut feat_groups = group_by_doc(feat_recs_all, |r| r.document.key.clone());
     let feat_base = feat_groups.remove(BASE_DOC).unwrap_or_default();
     let feat_legacy = feat_groups.remove(LEGACY_DOC).unwrap_or_default();
-    let (feat_recs, filled) =
-        dedup::gap_fill(feat_base, feat_legacy, |r| r.name.clone(), aliases);
+    let (feat_recs, filled) = dedup::gap_fill(feat_base, feat_legacy, |r| r.name.clone(), aliases);
     report.gap_filled.insert("feats", filled);
     let mut feats = feat_recs
         .iter()
@@ -988,13 +1026,11 @@ fn build_bundle(
     // ── Gear: weapons, armor, items ─────────────────────────────────────
     let weapon_recs_all: Vec<v2::WeaponRec> =
         fetcher.fetch_all(&format!("{API}/v2/weapons/?limit=200"))?;
-    let mut weapon_groups =
-        group_by_doc(weapon_recs_all, |r| r.document.key.clone());
+    let mut weapon_groups = group_by_doc(weapon_recs_all, |r| r.document.key.clone());
     let w_base = weapon_groups.remove(BASE_DOC).unwrap_or_default();
     let w_legacy = weapon_groups.remove(LEGACY_DOC).unwrap_or_default();
     ensure!(w_base.len() >= 30, "suspiciously few SRD 5.2 weapons");
-    let (weapon_recs, filled) =
-        dedup::gap_fill(w_base, w_legacy, |r| r.name.clone(), aliases);
+    let (weapon_recs, filled) = dedup::gap_fill(w_base, w_legacy, |r| r.name.clone(), aliases);
     report.gap_filled.insert("weapons", filled);
     let mut weapons = weapon_recs
         .iter()
@@ -1063,8 +1099,7 @@ fn build_bundle(
     }
     ensure!(i_base.len() >= 200, "suspiciously few SRD 5.2 items");
     ensure!(i_legacy.len() >= 200, "suspiciously few SRD 5.1 items");
-    let (item_recs, filled) =
-        dedup::gap_fill(i_base, i_legacy, |(r, _)| r.name.clone(), aliases);
+    let (item_recs, filled) = dedup::gap_fill(i_base, i_legacy, |(r, _)| r.name.clone(), aliases);
     report.gap_filled.insert("items", filled);
 
     // Extra-doc items sort by key for deterministic output.
@@ -1150,15 +1185,70 @@ fn build_meta(bundle: &ContentBundle) -> Result<String> {
             *counts.entry(uuid).or_default().entry(family).or_default() += 1;
         }
     };
-    tally("spells", bundle.spells.iter().map(|r| r.content_module_uuid).collect());
-    tally("creatures", bundle.creatures.iter().map(|r| r.content_module_uuid).collect());
-    tally("classes", bundle.classes.iter().map(|r| r.content_module_uuid).collect());
-    tally("species", bundle.species.iter().map(|r| r.content_module_uuid).collect());
-    tally("feats", bundle.feats.iter().map(|r| r.content_module_uuid).collect());
-    tally("backgrounds", bundle.backgrounds.iter().map(|r| r.content_module_uuid).collect());
-    tally("weapons", bundle.weapons.iter().map(|r| r.content_module_uuid).collect());
-    tally("armors", bundle.armors.iter().map(|r| r.content_module_uuid).collect());
-    tally("items", bundle.items.iter().map(|r| r.content_module_uuid).collect());
+    tally(
+        "spells",
+        bundle
+            .spells
+            .iter()
+            .map(|r| r.content_module_uuid)
+            .collect(),
+    );
+    tally(
+        "creatures",
+        bundle
+            .creatures
+            .iter()
+            .map(|r| r.content_module_uuid)
+            .collect(),
+    );
+    tally(
+        "classes",
+        bundle
+            .classes
+            .iter()
+            .map(|r| r.content_module_uuid)
+            .collect(),
+    );
+    tally(
+        "species",
+        bundle
+            .species
+            .iter()
+            .map(|r| r.content_module_uuid)
+            .collect(),
+    );
+    tally(
+        "feats",
+        bundle.feats.iter().map(|r| r.content_module_uuid).collect(),
+    );
+    tally(
+        "backgrounds",
+        bundle
+            .backgrounds
+            .iter()
+            .map(|r| r.content_module_uuid)
+            .collect(),
+    );
+    tally(
+        "weapons",
+        bundle
+            .weapons
+            .iter()
+            .map(|r| r.content_module_uuid)
+            .collect(),
+    );
+    tally(
+        "armors",
+        bundle
+            .armors
+            .iter()
+            .map(|r| r.content_module_uuid)
+            .collect(),
+    );
+    tally(
+        "items",
+        bundle.items.iter().map(|r| r.content_module_uuid).collect(),
+    );
 
     let modules: Vec<Value> = bundle
         .modules
@@ -1276,6 +1366,9 @@ fn validate_unique_keys(bundle: &ContentBundle) -> Result<()> {
     check("weapon", bundle.weapons.iter().map(|r| r.key.clone()))?;
     check("armor", bundle.armors.iter().map(|r| r.key.clone()))?;
     check("feat", bundle.feats.iter().map(|r| r.key.clone()))?;
-    check("background", bundle.backgrounds.iter().map(|r| r.key.clone()))?;
+    check(
+        "background",
+        bundle.backgrounds.iter().map(|r| r.key.clone()),
+    )?;
     Ok(())
 }

@@ -276,3 +276,86 @@ pub struct PublishModuleResponse {
     pub module: ContentModule,
     pub note_count: u32,
 }
+
+/// How a `ContentModule` landed on this server. Server-side metadata —
+/// deliberately not part of `ContentModule` so it never leaks into
+/// exported/imported `ContentBundle`s.
+///
+/// `Bundled` modules can only be disabled (the boot seeder would
+/// re-add a deleted bundled module); the rest are fully uninstallable.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ModuleOrigin {
+    Bundled,
+    Uploaded,
+    Published,
+}
+
+/// Record count for one content category (e.g. `spells: 319`).
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CategoryCount {
+    pub category: String,
+    pub count: u32,
+}
+
+/// `GET /api/admin/modules` row — every module on the server (active
+/// or not) with its provenance and per-category record counts for the
+/// management UI.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AdminModuleSummary {
+    pub module: ContentModule,
+    pub origin: ModuleOrigin,
+    pub record_counts: Vec<CategoryCount>,
+    pub lore_note_count: u32,
+}
+
+/// `PATCH /api/admin/modules/:uuid` payload — disable (`false`) or
+/// reinstall/activate (`true`) a module. Disabled module content stays
+/// in the database but is excluded from every content read.
+#[typeshare]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct UpdateModuleStatusRequest {
+    pub is_active: bool,
+}
+
+/// `POST /api/admin/modules/install` response. The request body is a
+/// complete `ContentBundle` package file.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct InstallModuleResponse {
+    pub installed: Vec<ContentModule>,
+    pub record_count: u32,
+}
+
+/// `GET /api/content/counts` response — entry counts per compendium
+/// category across active modules, for the landing-grid tiles.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ContentCountsResponse {
+    pub counts: Vec<CategoryCount>,
+}
+
+/// One row of the home page's recently-added list: enough to render a
+/// link to `/compendium/{category}/{uuid}` with attribution.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RecentContentItem {
+    pub category: String,
+    pub uuid: EntityId,
+    pub name: String,
+    pub module_name: String,
+    /// Record's own `created_at` (RFC 3339), the feed's recency basis;
+    /// `None` for records whose stored blob omits it.
+    pub created_at: Option<String>,
+}
+
+/// `GET /api/content/recent` response — newest content entries across
+/// active modules, newest first.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RecentContentResponse {
+    pub items: Vec<RecentContentItem>,
+}

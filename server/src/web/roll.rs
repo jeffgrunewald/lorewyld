@@ -1,5 +1,7 @@
 use leptos::prelude::*;
 
+use crate::web::breadcrumbs::{Breadcrumbs, Crumb};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DiceType {
     D4,
@@ -76,6 +78,7 @@ pub fn Roll() -> impl IntoView {
 
     view! {
         <section class="lw-roll">
+            <Breadcrumbs trail=vec![Crumb::link("Home", "/"), Crumb::here("Dice roller")]/>
             <div class="lw-roll-dice-col">
                 {rows}
             </div>

@@ -1,13 +1,20 @@
 use leptos::prelude::*;
 
+use crate::web::breadcrumbs::{Breadcrumbs, Crumb};
+
 /// Admin server-settings page: editable server name, read-only join
-/// code with a regenerate action, and the read-only software version.
-/// Gated like the users page — the admin API endpoints are the real
-/// access control.
+/// code with copy/regenerate actions, and the read-only software
+/// version. Gated like the users page — the admin API endpoints are
+/// the real access control.
 #[component]
 pub fn SettingsServerPage() -> impl IntoView {
     view! {
         <section class="lw-settings">
+            <Breadcrumbs trail=vec![
+                Crumb::link("Home", "/"),
+                Crumb::here("Admin"),
+                Crumb::here("Server"),
+            ]/>
             <p id="lw-settings-forbidden" class="lw-settings-forbidden" hidden=true>
                 "You must be logged in as an administrator to view this page."
             </p>
@@ -26,8 +33,15 @@ pub fn SettingsServerPage() -> impl IntoView {
                             <code id="lw-server-join-code" class="lw-settings-joincode"></code>
                             <button
                                 type="button"
+                                id="lw-server-copy-code"
+                                class="lw-btn lw-btn-tonal"
+                            >
+                                "Copy"
+                            </button>
+                            <button
+                                type="button"
                                 id="lw-server-regen-code"
-                                class="lw-btn lw-btn-text"
+                                class="lw-btn lw-btn-tonal"
                             >
                                 "Regenerate"
                             </button>
@@ -105,6 +119,43 @@ const SETTINGS_SERVER_SCRIPT: &str = r#"
                 ((err && err.message) ? err.message : String(err));
         });
     });
+
+    // Clipboard API needs a secure context; self-hosted instances often
+    // run plain HTTP on a LAN, so fall back to the textarea trick.
+    const copyBtn = el('lw-server-copy-code');
+    copyBtn.addEventListener('click', () => {
+        const text = joinCodeEl.textContent;
+        if (!text) return;
+        const done = () => {
+            copyBtn.textContent = 'Copied';
+            copyBtn.disabled = true;
+            setTimeout(() => {
+                copyBtn.textContent = 'Copy';
+                copyBtn.disabled = false;
+            }, 1500);
+        };
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(done, () => fallbackCopy(text, done));
+        } else {
+            fallbackCopy(text, done);
+        }
+    });
+
+    function fallbackCopy(text, done) {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try {
+            document.execCommand('copy');
+            done();
+        } catch (e) {
+            status.textContent = 'Copy failed — select the code manually.';
+        }
+        document.body.removeChild(ta);
+    }
 
     el('lw-server-regen-code').addEventListener('click', () => {
         const ok = confirm(

@@ -1,5 +1,8 @@
 pub mod admin;
+pub mod admin_modules;
 pub mod auth;
+pub mod characters;
+pub mod compendium;
 pub mod error;
 pub mod lore_notes;
 pub mod modules;
@@ -87,6 +90,33 @@ impl ApiServer {
                 "/api/admin/server/join-code",
                 post(admin::regenerate_join_code),
             )
+            .route("/api/admin/modules", get(admin_modules::list_modules))
+            .route(
+                "/api/admin/modules/install",
+                post(admin_modules::install_module)
+                    // The body is a whole ContentBundle package; the
+                    // embedded SRD bundle alone is ~24MB.
+                    .layer(axum::extract::DefaultBodyLimit::max(64 * 1024 * 1024)),
+            )
+            .route(
+                "/api/admin/modules/{uuid}",
+                axum::routing::patch(admin_modules::update_module_status)
+                    .delete(admin_modules::uninstall_module),
+            )
+            .route("/api/content/counts", get(compendium::content_counts))
+            .route("/api/content/recent", get(compendium::recent_content))
+            .route("/api/content/{category}", get(compendium::list_category))
+            .route("/api/content/{category}/{uuid}", get(compendium::get_entry))
+            .route(
+                "/api/characters",
+                get(characters::list_characters).post(characters::create_character),
+            )
+            .route(
+                "/api/characters/{uuid}",
+                get(characters::get_character)
+                    .put(characters::replace_character)
+                    .delete(characters::delete_character),
+            )
             .route(
                 "/api/lore-notes",
                 get(lore_notes::list_lore_notes).post(lore_notes::create_lore_note),
@@ -125,6 +155,7 @@ impl ApiServer {
             .with_state(api_state);
 
         let style_version = crate::web::StyleVersion::from_asset_mtime("assets/style.css");
+        let script_version = crate::web::StyleVersion::from_asset_mtime("assets/lw-content.js");
         let leptos_router: Router<()> = Router::new()
             .nest_service("/assets", ServeDir::new("assets"))
             .leptos_routes(&leptos, routes, {
@@ -135,6 +166,7 @@ impl ApiServer {
                         leptos.clone(),
                         instance_name.clone(),
                         style_version.clone(),
+                        script_version.clone(),
                     )
                 }
             })

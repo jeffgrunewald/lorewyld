@@ -15,7 +15,7 @@ pub struct Language {
     pub key: String,
     #[serde(default)]
     pub desc: String,
-    /// Exotic languages need explicit DM permission in some campaigns.
+    /// Exotic languages need explicit GM permission in some campaigns.
     #[serde(default)]
     pub is_exotic: bool,
     /// Secret languages (Druidic, Thieves' Cant) aren't generally

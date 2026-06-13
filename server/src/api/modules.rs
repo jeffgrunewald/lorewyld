@@ -197,8 +197,8 @@ pub async fn publish_module(
         "INSERT INTO content_module (
             uuid, name, slug, license, license_url, schema_version,
             authors, description, version_string, previous_version_uuid,
-            published_at, is_active, ordering
-         ) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, datetime('now'), 1, 0)",
+            published_at, is_active, ordering, origin
+         ) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, datetime('now'), 1, 0, 'published')",
     )
     .bind(&module_uuid)
     .bind(req.name.trim())

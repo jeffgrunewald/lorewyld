@@ -5,7 +5,9 @@ use crate::api::{
     ApiState,
     auth::CurrentUser,
     error::ApiError,
-    rows::{LORE_NOTE_SELECT_N, LoreNoteRow, VISIBILITY_PREDICATE, scope_kind_to_str},
+    rows::{
+        LORE_NOTE_SELECT_N, LoreNoteRow, VISIBILITY_PREDICATE, scope_kind_to_str, visibility_binds,
+    },
     tags::load_tags_for_notes,
 };
 
@@ -16,8 +18,9 @@ const MAX_LIMIT: u32 = 200;
 ///   - FTS5 free-text over `title + body_markdown` (if `q` set)
 ///   - scope kind + scope target filters (if set)
 ///   - tag-slug filter with AND semantics (note must carry every listed slug)
-///   - visibility filter (Visible always; AuthorOnly/GamemasterOnly only
-///     for the caller's own notes)
+///   - visibility filter (Visible always; AuthorOnly only for the
+///     caller's own notes; GamemasterOnly for their creator or any
+///     admin — the server-wide GM role)
 pub async fn search(
     State(state): State<ApiState>,
     user: CurrentUser,
@@ -72,7 +75,7 @@ pub async fn search(
 
     // Visibility filter applies last (always present).
     conds.push(VISIBILITY_PREDICATE.into());
-    binds.push(user.uuid.to_string());
+    binds.extend(visibility_binds(&user));
 
     if !conds.is_empty() {
         sql.push_str(" WHERE ");

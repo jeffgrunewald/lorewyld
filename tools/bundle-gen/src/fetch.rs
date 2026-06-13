@@ -61,8 +61,8 @@ impl Fetcher {
         let mut out = Vec::new();
         loop {
             let body = self.get_raw(&url)?;
-            let page: Page<T> = serde_json::from_str(&body)
-                .with_context(|| format!("decoding page from {url}"))?;
+            let page: Page<T> =
+                serde_json::from_str(&body).with_context(|| format!("decoding page from {url}"))?;
             out.extend(page.results);
             match page.next {
                 Some(next) => url = next,
