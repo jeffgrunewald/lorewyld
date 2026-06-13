@@ -131,13 +131,31 @@ pub async fn install_module(
 
 /// `PATCH /api/admin/modules/:uuid` — disable (`is_active: false`) or
 /// reinstall/activate (`true`). Disabled content stays in the database
-/// but is excluded from every content read.
+/// but is excluded from every content read. The pinned SRD module can
+/// never be disabled — every other module references its shared rules
+/// vocabulary.
 pub async fn update_module_status(
     State(state): State<ApiState>,
     _admin: AdminUser,
     Path(uuid): Path<Uuid>,
     Json(req): Json<UpdateModuleStatusRequest>,
 ) -> Result<Json<lorewyld_types::ContentModule>, ApiError> {
+    if !req.is_active {
+        let slug: Option<(String,)> =
+            sqlx::query_as("SELECT slug FROM content_module WHERE uuid = ?")
+                .bind(uuid.to_string())
+                .fetch_optional(&state.db)
+                .await?;
+        let (slug,) = slug.ok_or(ApiError::NotFound)?;
+        if slug == crate::content::PINNED_MODULE_SLUG {
+            return Err(ApiError::BadRequest(
+                "the SRD module provides the shared rules vocabulary every other module \
+                 references and cannot be disabled"
+                    .to_string(),
+            ));
+        }
+    }
+
     let updated = sqlx::query(
         "UPDATE content_module \
             SET is_active = ?, updated_at = datetime('now') \

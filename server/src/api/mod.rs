@@ -104,6 +104,7 @@ impl ApiServer {
                     .delete(admin_modules::uninstall_module),
             )
             .route("/api/content/counts", get(compendium::content_counts))
+            .route("/api/content/recent", get(compendium::recent_content))
             .route("/api/content/{category}", get(compendium::list_category))
             .route("/api/content/{category}/{uuid}", get(compendium::get_entry))
             .route(

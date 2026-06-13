@@ -17,7 +17,9 @@ use axum::{
     http::{StatusCode, header},
     response::{IntoResponse, Response},
 };
-use lorewyld_types::api_v1::{CategoryCount, ContentCountsResponse};
+use lorewyld_types::api_v1::{
+    CategoryCount, ContentCountsResponse, RecentContentItem, RecentContentResponse,
+};
 use serde::Deserialize;
 use serde_json::Value;
 use uuid::Uuid;
@@ -50,6 +52,57 @@ pub async fn content_counts(
             .map(|(category, count)| CategoryCount { category, count })
             .collect(),
     }))
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RecentContentQuery {
+    #[serde(default)]
+    pub limit: Option<u32>,
+}
+
+/// `GET /api/content/recent?limit` — the newest entries across every
+/// compendium category in active modules, newest first (default 10).
+/// Content tables carry no insert timestamp, so recency comes from the
+/// record's own `created_at` (RFC 3339 strings compare lexically) —
+/// bundle generation/publish time, which is what "added" means here.
+pub async fn recent_content(
+    State(state): State<ApiState>,
+    _user: CurrentUser,
+    Query(query): Query<RecentContentQuery>,
+) -> Result<Json<RecentContentResponse>, ApiError> {
+    let per_category = DISPLAY_CATEGORIES
+        .iter()
+        .map(|table| {
+            format!(
+                "SELECT '{table}' AS category, t.uuid AS uuid, t.name AS name, \
+                        m.name AS module_name, \
+                        json_extract(t.data, '$.created_at') AS created_at \
+                 FROM {table} t {ACTIVE_JOIN}"
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(" UNION ALL ");
+    let sql = format!(
+        "SELECT category, uuid, name, module_name, created_at FROM ({per_category}) \
+         ORDER BY created_at DESC, name LIMIT ?"
+    );
+
+    let rows: Vec<(String, String, String, String, Option<String>)> = sqlx::query_as(&sql)
+        .bind(query.limit.unwrap_or(10).clamp(1, 50))
+        .fetch_all(&state.db)
+        .await?;
+    rows.into_iter()
+        .map(|(category, uuid, name, module_name, created_at)| {
+            Ok(RecentContentItem {
+                category,
+                uuid: Uuid::parse_str(&uuid).map_err(|e| ApiError::Internal(e.into()))?,
+                name,
+                module_name,
+                created_at,
+            })
+        })
+        .collect::<Result<Vec<_>, ApiError>>()
+        .map(|items| Json(RecentContentResponse { items }))
 }
 
 #[derive(Debug, Deserialize)]

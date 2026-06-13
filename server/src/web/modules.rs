@@ -362,14 +362,22 @@ const MODULE_DETAIL_SCRIPT: &str = r#"
             (m.is_active ? 'Active' : 'Disabled') +
             ' · ' + (summary.origin === 'bundled' ? 'bundled with the server' : summary.origin);
 
+        // The SRD module is pinned — every other module references its
+        // shared rules vocabulary — so it can never be disabled. The
+        // server enforces this; the disabled button mirrors it.
+        const pinned = m.slug === 'srd';
         disableBtn.hidden = !m.is_active;
+        disableBtn.disabled = pinned;
         reinstallBtn.hidden = m.is_active;
         uninstallBtn.hidden = summary.origin === 'bundled';
-        actionNote.textContent = summary.origin === 'bundled'
-            ? 'Bundled modules can only be disabled, not uninstalled.'
-            : '';
+        actionNote.textContent = pinned
+            ? 'Required module — it provides the shared rules vocabulary every other ' +
+              'module references, and cannot be disabled.'
+            : summary.origin === 'bundled'
+                ? 'Bundled modules can only be disabled, not uninstalled.'
+                : '';
 
-        disableBtn.onclick = function () { confirmDisable(summary, totalRecords); };
+        disableBtn.onclick = pinned ? null : function () { confirmDisable(summary, totalRecords); };
         reinstallBtn.onclick = function () { setActive(true); };
         uninstallBtn.onclick = function () { confirmUninstall(summary, totalRecords); };
     }

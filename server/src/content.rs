@@ -17,6 +17,12 @@ use sqlx::{Sqlite, SqlitePool, Transaction};
 
 const SRD_BUNDLE_JSON: &str = include_str!("../../content/srd-bundle.json");
 
+/// The SRD module hosts the shared rules vocabulary (licenses,
+/// publishers, schools, sizes, conditions, …) every other module
+/// references — it can never be disabled or removed. Mirrors the
+/// mobile app's `ContentStore.pinnedModuleSlug`.
+pub const PINNED_MODULE_SLUG: &str = "srd";
+
 /// One content table's shape, as far as the importer and the
 /// compendium API need to know it.
 pub struct CategorySpec {

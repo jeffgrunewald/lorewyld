@@ -337,3 +337,25 @@ pub struct InstallModuleResponse {
 pub struct ContentCountsResponse {
     pub counts: Vec<CategoryCount>,
 }
+
+/// One row of the home page's recently-added list: enough to render a
+/// link to `/compendium/{category}/{uuid}` with attribution.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RecentContentItem {
+    pub category: String,
+    pub uuid: EntityId,
+    pub name: String,
+    pub module_name: String,
+    /// Record's own `created_at` (RFC 3339), the feed's recency basis;
+    /// `None` for records whose stored blob omits it.
+    pub created_at: Option<String>,
+}
+
+/// `GET /api/content/recent` response — newest content entries across
+/// active modules, newest first.
+#[typeshare]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RecentContentResponse {
+    pub items: Vec<RecentContentItem>,
+}
