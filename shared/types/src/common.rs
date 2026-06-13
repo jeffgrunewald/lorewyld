@@ -339,7 +339,10 @@ mod tests {
         let a = content_uuid("spell", "srd-2024_fireball");
         assert_eq!(a, content_uuid("spell", "srd-2024_fireball"));
         // Pinned value: changing it would re-identify every seeded record.
-        assert_eq!(a.to_string(), content_uuid("spell", "srd-2024_fireball").to_string());
+        assert_eq!(
+            a.to_string(),
+            content_uuid("spell", "srd-2024_fireball").to_string()
+        );
         assert_ne!(a, content_uuid("creature", "srd-2024_fireball"));
         assert_ne!(a, content_uuid("spell", "srd_fireball"));
     }

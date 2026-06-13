@@ -41,7 +41,7 @@ pub struct NoteScope {
 /// Visibility flag used purely for **rendering at the current viewer**.
 ///
 /// This is the only access-restriction primitive in the platform.
-/// `GamemasterOnly` exists so a DM can hide upcoming-content notes from
+/// `GamemasterOnly` exists so a GM can hide upcoming-content notes from
 /// players to prevent spoilers; it does NOT prevent the note from being
 /// copied or exported. Visibility metadata travels with the note; what
 /// a recipient sees depends on the recipient's role at render time.

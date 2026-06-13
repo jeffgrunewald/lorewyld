@@ -28,8 +28,10 @@ pub fn gap_fill<T>(
     name_of: impl Fn(&T) -> String,
     aliases: &BTreeMap<String, String>,
 ) -> (Vec<T>, Vec<String>) {
-    let mut seen: BTreeSet<String> =
-        base.iter().map(|r| normalize(&name_of(r), aliases)).collect();
+    let mut seen: BTreeSet<String> = base
+        .iter()
+        .map(|r| normalize(&name_of(r), aliases))
+        .collect();
     let mut out = base;
     let mut filled = Vec::new();
     for rec in legacy {

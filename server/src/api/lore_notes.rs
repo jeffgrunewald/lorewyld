@@ -18,7 +18,7 @@ use crate::api::{
     error::ApiError,
     rows::{
         LORE_NOTE_SELECT, LORE_NOTE_SELECT_N, LoreNoteRow, VISIBILITY_PREDICATE,
-        scope_kind_from_str, scope_kind_to_str, visibility_to_str,
+        scope_kind_from_str, scope_kind_to_str, visibility_binds, visibility_to_str,
     },
     tags::{load_tags_for_note, load_tags_for_notes, resolve_or_create_tags},
 };
@@ -66,7 +66,7 @@ pub async fn list_lore_notes(
     }
 
     conds.push(VISIBILITY_PREDICATE.into());
-    binds.push(user.uuid.to_string());
+    binds.extend(visibility_binds(&user));
 
     if !joins.is_empty() {
         sql.push_str(&joins);
@@ -285,21 +285,23 @@ fn validate_scope_kind(s: &str) -> Result<(), ApiError> {
 /// Can the given user view the given note? V1 rules:
 /// - `Visible` → anyone authenticated.
 /// - `AuthorOnly` → only the creator.
-/// - `GamemasterOnly` → only the creator (extended to campaign DMs in v1.5 when Campaign lands).
+/// - `GamemasterOnly` → the creator or any admin (the server-wide GM role).
 fn can_view(note: &LoreNote, user: &CurrentUser) -> bool {
     match note.visibility {
         NoteVisibility::Visible => true,
-        NoteVisibility::AuthorOnly | NoteVisibility::GamemasterOnly => {
-            note.created_by_user_uuid == Some(user.uuid)
+        NoteVisibility::AuthorOnly => note.created_by_user_uuid == Some(user.uuid),
+        NoteVisibility::GamemasterOnly => {
+            note.created_by_user_uuid == Some(user.uuid) || user.admin
         }
     }
 }
 
 /// Verify the caller is allowed to author a note in the requested scope.
-/// V1 only validates `Setting` scope ownership (the only authoring-target
-/// entity that exists yet). `Module` scope is locked down to the
+/// `Setting` scope requires ownership or collaborator status; `Character`
+/// scope requires owning the character or the admin flag (matching the
+/// sheet write rule). `Module` scope is locked down to the
 /// Promote-to-Module wizard's commit endpoint and shouldn't appear here.
-/// `Campaign` and `Character` scope land in v1.5.
+/// `Campaign` scope lands in v1.5.
 async fn validate_scope_authorization(
     db: &SqlitePool,
     scope: &NoteScope,
@@ -335,8 +337,24 @@ async fn validate_scope_authorization(
         NoteScopeKind::Module => Err(ApiError::BadRequest(
             "module-scope notes are created only via the Promote-to-Module endpoint".into(),
         )),
-        NoteScopeKind::Campaign | NoteScopeKind::Character => Err(ApiError::BadRequest(
-            "campaign- and character-scope notes are not yet supported".into(),
+        NoteScopeKind::Character => {
+            let row: Option<(String,)> =
+                sqlx::query_as("SELECT owner_user_uuid FROM character WHERE uuid = ?")
+                    .bind(scope.target_uuid.to_string())
+                    .fetch_optional(db)
+                    .await?;
+            let (owner,) = row.ok_or_else(|| {
+                ApiError::BadRequest(format!(
+                    "no character with uuid {} exists",
+                    scope.target_uuid
+                ))
+            })?;
+            (owner == user.uuid.to_string() || user.admin)
+                .then_some(())
+                .ok_or(ApiError::Unauthorized)
+        }
+        NoteScopeKind::Campaign => Err(ApiError::BadRequest(
+            "campaign-scope notes are not yet supported".into(),
         )),
     }
 }

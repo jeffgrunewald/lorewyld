@@ -12,6 +12,7 @@
 pub mod api_v1;
 pub mod background;
 pub mod bundle;
+pub mod character;
 pub mod class;
 pub mod common;
 pub mod condition;
@@ -32,6 +33,7 @@ pub mod version;
 pub use api_v1::*;
 pub use background::*;
 pub use bundle::*;
+pub use character::*;
 pub use class::*;
 pub use common::*;
 pub use condition::*;

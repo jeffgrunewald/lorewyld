@@ -137,7 +137,11 @@ fn none_if_none_str(raw: &str) -> Option<String> {
 
 /// Standard proficiency bonus by CR when upstream omits it.
 fn proficiency_bonus_for_cr(cr: f64) -> i32 {
-    if cr < 5.0 { 2 } else { 2 + ((cr as i32 - 1) / 4) }
+    if cr < 5.0 {
+        2
+    } else {
+        2 + ((cr as i32 - 1) / 4)
+    }
 }
 
 /// Picks the edition-appropriate description: prefer SRD 5.2, then
@@ -193,15 +197,21 @@ impl Ctx {
 // ─── Record mappers ──────────────────────────────────────────────────────
 
 pub fn map_spell(ctx: &Ctx, rec: &v2::SpellRec) -> Result<Spell> {
-    let school_uuid = ctx
-        .schools
-        .get(&rec.school.key)
-        .copied()
-        .ok_or_else(|| anyhow!("spell {} references unknown school {}", rec.key, rec.school.key))?;
+    let school_uuid = ctx.schools.get(&rec.school.key).copied().ok_or_else(|| {
+        anyhow!(
+            "spell {} references unknown school {}",
+            rec.key,
+            rec.school.key
+        )
+    })?;
     let classes = rec
         .classes
         .iter()
-        .filter_map(|stub| ctx.class_key_by_name.get(&stub.name.to_lowercase()).cloned())
+        .filter_map(|stub| {
+            ctx.class_key_by_name
+                .get(&stub.name.to_lowercase())
+                .cloned()
+        })
         .collect();
     Ok(Spell {
         uuid: content_uuid("spell", &rec.key),
@@ -334,7 +344,11 @@ pub fn map_creature(ctx: &Ctx, rec: &v2::CreatureRec) -> Result<Creature> {
                 "BONUS_ACTION" => CreatureActionKind::BonusAction,
                 "REACTION" => CreatureActionKind::Reaction,
                 "LEGENDARY_ACTION" => CreatureActionKind::LegendaryAction,
-                other => bail!("creature {} action {:?} has kind {other:?}", rec.key, a.name),
+                other => bail!(
+                    "creature {} action {:?} has kind {other:?}",
+                    rec.key,
+                    a.name
+                ),
             };
             Ok(CreatureAction {
                 name: a.name.clone(),
@@ -655,10 +669,7 @@ pub fn sheet_math_from_v1(ctx: &Ctx, race: &v1::V1Race) -> SpeciesSheetMath {
 /// Parses speed/size out of a 2024 species' typed prose traits. ASI is
 /// intentionally zero: the 2024 rules grant ability increases via
 /// backgrounds (`overrides.srd24_species_asi_desc` explains this).
-pub fn sheet_math_from_v2_traits(
-    traits: &[v2::TraitRec],
-    asi_desc: &str,
-) -> SpeciesSheetMath {
+pub fn sheet_math_from_v2_traits(traits: &[v2::TraitRec], asi_desc: &str) -> SpeciesSheetMath {
     let trait_desc = |kind: &str| -> Option<&str> {
         traits
             .iter()

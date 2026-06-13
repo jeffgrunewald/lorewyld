@@ -2,8 +2,8 @@ use serde::{Deserialize, Serialize};
 use typeshare::typeshare;
 
 use crate::{
-    AbilityScoreEntry, Alignment, Armor, Background, Class, Condition, ContentModule, CreatureType,
-    Creature, DamageType, Document, Environment, Feat, Item, ItemCategory, Language, License,
+    AbilityScoreEntry, Alignment, Armor, Background, Class, Condition, ContentModule, Creature,
+    CreatureType, DamageType, Document, Environment, Feat, Item, ItemCategory, Language, License,
     Publisher, SchemaVersion, Size, Skill, Species, Spell, SpellSchool, Weapon, WeaponPropertyDef,
 };
 

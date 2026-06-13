@@ -1,9 +1,14 @@
 pub mod app;
 pub mod auth_ui;
+pub mod breadcrumbs;
+pub mod characters;
+pub mod compendium;
 pub mod home;
+pub mod lore;
 pub mod modules;
 pub mod nav;
 pub mod roll;
+pub mod search;
 pub mod settings_server;
 pub mod settings_users;
 
