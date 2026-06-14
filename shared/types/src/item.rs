@@ -3,12 +3,10 @@
 //! dedicated records the item references.
 
 use serde::{Deserialize, Serialize};
-use typeshare::typeshare;
 
 use crate::common::{DamageTypeName, EntityId, Rarity, Timestamp};
 
 /// A grouping for items (Adventuring Gear, Weapon, Potion, …).
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ItemCategory {
     pub uuid: EntityId,
@@ -25,7 +23,6 @@ pub struct ItemCategory {
 /// A weapon-property definition (Finesse, Heavy, …, plus 2024 Mastery
 /// properties). A lookup row rather than a closed enum so content packs
 /// can add properties.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WeaponPropertyDef {
     pub uuid: EntityId,
@@ -46,7 +43,6 @@ pub struct WeaponPropertyDef {
 
 /// A weapon's link to one of its properties, with the per-weapon detail
 /// some properties carry (e.g. Versatile's `"1d10"`).
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WeaponPropertyRef {
     /// FK -> `weapon_properties.uuid`.
@@ -57,7 +53,6 @@ pub struct WeaponPropertyRef {
 
 /// Weapon mechanics. Cost, weight, and category live on the wrapping
 /// `Item`.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Weapon {
     pub uuid: EntityId,
@@ -90,7 +85,6 @@ pub struct Weapon {
 
 /// Armor mechanics. Cost, weight, and category live on the wrapping
 /// `Item`.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Armor {
     pub uuid: EntityId,
@@ -122,7 +116,6 @@ pub struct Armor {
 /// off `weapon_uuid`/`armor_uuid`; magic items share the base weapon or
 /// armor record they enchant (e.g. Adamantine Breastplate references the
 /// plain Breastplate's armor row).
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Item {
     pub uuid: EntityId,

@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use typeshare::typeshare;
 
 use crate::common::{
     AbilityScores, ConditionName, DamageTypeName, EntityId, MovementSpeed, NamedModifier, Senses,
@@ -7,7 +6,6 @@ use crate::common::{
 };
 
 /// Closed-set of SRD creature classifications.
-#[typeshare]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum CreatureTypeName {
@@ -28,7 +26,6 @@ pub enum CreatureTypeName {
 }
 
 /// Classification of creature type (Aberration, Beast, etc.).
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CreatureType {
     pub uuid: EntityId,
@@ -46,7 +43,6 @@ pub struct CreatureType {
 
 /// A terrain/habitat tag creatures can be filtered by (Open5e v2
 /// `environments`).
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Environment {
     pub uuid: EntityId,
@@ -64,7 +60,6 @@ pub struct Environment {
 
 /// Kind discriminator for entries in a creature's `actions` array.
 /// Wire form matches Open5e v2's `action_type` values.
-#[typeshare]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum CreatureActionKind {
@@ -75,7 +70,6 @@ pub enum CreatureActionKind {
 }
 
 /// How often a limited-use action recharges (Open5e v2 `usage_limits`).
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UsageLimit {
     /// `"PER_DAY"`, `"RECHARGE_ON_ROLL"`, `"RECHARGE_AFTER_REST"`, …
@@ -87,7 +81,6 @@ pub struct UsageLimit {
 }
 
 /// A structured attack roll inside a creature action.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CreatureAttack {
     pub name: String,
@@ -124,7 +117,6 @@ pub struct CreatureAttack {
 /// One entry in a creature's stat-block action list. A single ordered
 /// array holds actions, bonus actions, reactions, and legendary actions;
 /// `kind` discriminates.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CreatureAction {
     pub name: String,
@@ -144,7 +136,6 @@ pub struct CreatureAction {
 
 /// A non-action stat-block trait (Amphibious, Magic Resistance,
 /// Spellcasting, …). Spellcasting remains prose, matching the SRD.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CreatureTrait {
     pub name: String,
@@ -152,7 +143,6 @@ pub struct CreatureTrait {
 }
 
 /// A creature stat block, structured per the Open5e v2 schema.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Creature {
     pub uuid: EntityId,

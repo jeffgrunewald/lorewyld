@@ -1,0 +1,15 @@
+[package]
+name = "lorewyld_mobile_ffi"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+description = "flutter_rust_bridge FFI boundary exposing the shared Rust core to the Flutter app"
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+lorewyld-types = { path = "../shared/types" }
+lorewyld-domain = { path = "../shared/domain" }
+serde_json.workspace = true
+flutter_rust_bridge = "=2.12.0"

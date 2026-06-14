@@ -77,12 +77,12 @@ class _SettingListScreenState extends State<SettingListScreen> {
     if (!connection.isLoggedIn) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text('Log in to a server to pull settings from it.')),
+          content: Text('Log in to a server to pull settings from it.'),
+        ),
       );
       return;
     }
-    final sync =
-        SyncService(store: widget.store, api: connection.api!);
+    final sync = SyncService(store: widget.store, api: connection.api!);
     final List<RemoteSettingCandidate> candidates;
     try {
       candidates = await sync.listRemoteSettings();
@@ -111,9 +111,11 @@ class _SettingListScreenState extends State<SettingListScreen> {
               child: ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text(c.name),
-                subtitle: Text(c.isLinked
-                    ? 'Already linked — pull overwrites the local copy'
-                    : 'New local copy'),
+                subtitle: Text(
+                  c.isLinked
+                      ? 'Already linked — pull overwrites the local copy'
+                      : 'New local copy',
+                ),
               ),
             ),
         ],
@@ -126,27 +128,29 @@ class _SettingListScreenState extends State<SettingListScreen> {
         remoteSettingName: picked.name,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.describe('Pulled'))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(result.describe('Pulled'))));
       await _refresh();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Pull failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Pull failed: $e')));
     }
   }
 
   void _openSetting(LocalSetting s) {
     Navigator.of(context)
-        .push(MaterialPageRoute(
-          builder: (_) => SettingDetailScreen(
-            connection: widget.connection,
-            store: widget.store,
-            setting: s,
+        .push(
+          MaterialPageRoute(
+            builder: (_) => SettingDetailScreen(
+              connection: widget.connection,
+              store: widget.store,
+              setting: s,
+            ),
           ),
-        ))
+        )
         .then((_) => _refresh());
   }
 

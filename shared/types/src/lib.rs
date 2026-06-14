@@ -2,12 +2,12 @@
 //!
 //! All types follow the D&D 5e SRD data model documented in
 //! `dnd5e_data_model/README.md`, aligned with the Open5e v2 API
-//! structure. Every type carries a `#[typeshare]` annotation so the same
-//! shape can be generated for the Flutter mobile client and any other
-//! consumer (TypeScript, Swift, Kotlin, etc.).
+//! structure.
 //!
-//! Run `typeshare . --lang=dart --output-folder=mobile/lib/types` from
-//! the workspace root to (re)generate Dart bindings.
+//! This crate is the single source of truth for the schema. It is pure
+//! Rust (no async/runtime deps) so it can be consumed natively by the
+//! server and Leptos web app, compiled to WASM for the web, and bridged
+//! to the Flutter mobile client over FFI via `lorewyld-mobile-ffi`.
 
 pub mod api_v1;
 pub mod background;

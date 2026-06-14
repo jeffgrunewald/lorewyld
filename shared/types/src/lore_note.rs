@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use typeshare::typeshare;
 
 use crate::common::{EntityId, Timestamp};
 
@@ -17,7 +16,6 @@ use crate::common::{EntityId, Timestamp};
 ///   out to be reusable. (`Campaign` table arrives in v1.5.)
 /// - `Character` — character backstories and journal entries attached to
 ///   a `PlayerCharacter`. (`PlayerCharacter` arrives in v1.5.)
-#[typeshare]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NoteScopeKind {
@@ -28,10 +26,9 @@ pub enum NoteScopeKind {
 }
 
 /// Storage-friendly representation of a note's scope. The discriminator
-/// + target_uuid pair maps directly onto the server's `scope_kind` +
-/// `scope_target_uuid` columns; on the wire it serializes as a small
-/// JSON object the client can deconstruct without parsing a union type.
-#[typeshare]
+/// and target_uuid pair maps directly onto the server's `scope_kind` and
+/// `scope_target_uuid` columns. On the wire it serializes as a small JSON
+/// object the client can deconstruct without parsing a union type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NoteScope {
     pub kind: NoteScopeKind,
@@ -45,7 +42,6 @@ pub struct NoteScope {
 /// players to prevent spoilers; it does NOT prevent the note from being
 /// copied or exported. Visibility metadata travels with the note; what
 /// a recipient sees depends on the recipient's role at render time.
-#[typeshare]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
 #[serde(rename_all = "snake_case")]
 pub enum NoteVisibility {
@@ -67,7 +63,6 @@ pub enum NoteVisibility {
 /// created via the Promote-to-Module wizard, pointing back to the
 /// `Setting`-scope source. It powers the republish-diff algorithm
 /// when a setting publishes an updated module version.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LoreNote {
     pub uuid: EntityId,

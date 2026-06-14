@@ -9,5 +9,4 @@ description = "Shared schema types for the Lorewyld server, web UI, and mobile c
 chrono.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-typeshare.workspace = true
 uuid.workspace = true

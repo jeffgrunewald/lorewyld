@@ -15,6 +15,7 @@ serde.workspace = true
 serde_json.workspace = true
 uuid.workspace = true
 lorewyld-types = { path = "../shared/types" }
+lorewyld-domain = { path = "../shared/domain" }
 axum = { version = "0.8", features = ["macros", "query"] }
 clap = { version = "4", features = ["derive"] }
 config = { version = "0.15", default-features = false, features = ["toml"] }

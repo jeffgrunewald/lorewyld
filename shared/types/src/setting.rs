@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use typeshare::typeshare;
 
 use crate::common::{EntityId, Timestamp};
 
@@ -17,7 +16,6 @@ use crate::common::{EntityId, Timestamp};
 /// After publication, the source Setting persists with
 /// `published_as_module_uuid` set, and continues to evolve
 /// independently of the frozen module versions it has spawned.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Setting {
     pub uuid: EntityId,
@@ -42,7 +40,6 @@ pub struct Setting {
 /// Co-author relationship — a user invited to collaborate on a setting
 /// has read/write access to its notes and (in later tiers) its draft
 /// structured records.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SettingCollaborator {
     pub setting_uuid: EntityId,

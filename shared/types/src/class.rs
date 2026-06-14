@@ -1,10 +1,8 @@
 use serde::{Deserialize, Serialize};
-use typeshare::typeshare;
 
 use crate::common::{AbilityScore, ChoiceFrom, EntityId, Json, Timestamp};
 
 /// The character level(s) at which a class feature is gained.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FeatureLevel {
     pub level: u8,
@@ -15,7 +13,6 @@ pub struct FeatureLevel {
 }
 
 /// A named class or subclass feature with its level progression.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ClassFeature {
     /// Stable external identifier (Open5e key for imported content).
@@ -36,7 +33,6 @@ pub struct ClassFeature {
 /// data* that Open5e v2 dropped to prose; the bundle generator populates
 /// them from the v1 API and curated overrides. They are `None`/empty on
 /// subclass rows, which inherit from their parent class.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Class {
     pub uuid: EntityId,

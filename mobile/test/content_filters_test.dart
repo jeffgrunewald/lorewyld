@@ -98,66 +98,85 @@ void main() {
   group('dimension declarations', () {
     test('every table filters by source; some add more dimensions', () {
       for (final table in ['species', 'class', 'background', 'feat']) {
-        expect(filterDimensionsFor(table).map((d) => d.key), ['source'],
-            reason: table);
+        expect(filterDimensionsFor(table).map((d) => d.key), [
+          'source',
+        ], reason: table);
       }
       // Conditions and languages carry no document reference — their
       // source is the installing content module.
       for (final table in ['condition', 'language']) {
         final dims = filterDimensionsFor(table);
         expect(dims.map((d) => d.key), ['source'], reason: table);
-        expect(dims.first.valuesOf({'content_module_uuid': 'mod-srd'}),
-            ['mod-srd']);
-        expect(dims.first.optionLabel('mod-srd', _lookups),
-            'System Reference Document');
+        expect(dims.first.valuesOf({'content_module_uuid': 'mod-srd'}), [
+          'mod-srd',
+        ]);
+        expect(
+          dims.first.optionLabel('mod-srd', _lookups),
+          'System Reference Document',
+        );
       }
-      expect(filterDimensionsFor('item').map((d) => d.key),
-          ['source', 'type', 'rarity']);
-      expect(filterDimensionsFor('spell').map((d) => d.key),
-          ['source', 'level', 'school', 'components']);
-      expect(filterDimensionsFor('creature').map((d) => d.key),
-          ['source', 'type']);
-      expect(filterDimensionsFor('weapon').map((d) => d.key),
-          ['source', 'category']);
-      expect(filterDimensionsFor('armor').map((d) => d.key),
-          ['source', 'category']);
+      expect(filterDimensionsFor('item').map((d) => d.key), [
+        'source',
+        'type',
+        'rarity',
+      ]);
+      expect(filterDimensionsFor('spell').map((d) => d.key), [
+        'source',
+        'level',
+        'school',
+        'components',
+      ]);
+      expect(filterDimensionsFor('creature').map((d) => d.key), [
+        'source',
+        'type',
+      ]);
+      expect(filterDimensionsFor('weapon').map((d) => d.key), [
+        'source',
+        'category',
+      ]);
+      expect(filterDimensionsFor('armor').map((d) => d.key), [
+        'source',
+        'category',
+      ]);
     });
   });
 
   group('option derivation', () {
     test('distinct values present in the records, labeled via lookups', () {
       final source = filterDimensionsFor('item')[0];
-      expect(
-        source.options(_items, _lookups).map((o) => o.label),
-        ['SRD 5.1', 'SRD 5.2'],
-      );
+      expect(source.options(_items, _lookups).map((o) => o.label), [
+        'SRD 5.1',
+        'SRD 5.2',
+      ]);
 
       final rarity = filterDimensionsFor('item')[2];
       // Rarity ladder order, mundane (null) first.
-      expect(
-        rarity.options(_items, _lookups).map((o) => o.label),
-        ['Mundane', 'Uncommon', 'Legendary'],
-      );
+      expect(rarity.options(_items, _lookups).map((o) => o.label), [
+        'Mundane',
+        'Uncommon',
+        'Legendary',
+      ]);
 
       final level = filterDimensionsFor('spell')[1];
-      expect(
-        level.options(_spells, _lookups).map((o) => o.label),
-        ['Cantrip', 'Level 3'],
-      );
+      expect(level.options(_spells, _lookups).map((o) => o.label), [
+        'Cantrip',
+        'Level 3',
+      ]);
 
       // Set-valued dimension: options flatten every record's set, in
       // V/S/M order.
       final components = filterDimensionsFor('spell')[3];
-      expect(
-        components.options(_spells, _lookups).map((o) => o.label),
-        ['V (verbal)', 'S (somatic)', 'M (material)'],
-      );
+      expect(components.options(_spells, _lookups).map((o) => o.label), [
+        'V (verbal)',
+        'S (somatic)',
+        'M (material)',
+      ]);
 
       final creatureType = filterDimensionsFor('creature')[1];
-      expect(
-        creatureType.options(_creatures, _lookups).map((o) => o.label),
-        ['Beast', 'Dragon'],
-      );
+      expect(creatureType.options(_creatures, _lookups).map((o) => o.label), [
+        'Beast',
+        'Dragon',
+      ]);
 
       final weaponCategory = filterDimensionsFor('weapon')[1];
       expect(
@@ -199,18 +218,22 @@ void main() {
       final dims = filterDimensionsFor('spell');
       expect(
         _spells
-            .where((r) => matchesFilters(r, dims, {
-                  'components': {'material'},
-                }))
+            .where(
+              (r) => matchesFilters(r, dims, {
+                'components': {'material'},
+              }),
+            )
             .map((r) => r['name']),
         ['Fireball', 'Animate Dead'],
       );
       expect(
         _spells
-            .where((r) => matchesFilters(r, dims, {
-                  'components': {'somatic'},
-                  'source': {'doc-51'},
-                }))
+            .where(
+              (r) => matchesFilters(r, dims, {
+                'components': {'somatic'},
+                'source': {'doc-51'},
+              }),
+            )
             .map((r) => r['name']),
         isEmpty,
       );
@@ -222,8 +245,13 @@ void main() {
       };
       expect(
         _creatures
-            .where((r) =>
-                matchesFilters(r, filterDimensionsFor('creature'), selections))
+            .where(
+              (r) => matchesFilters(
+                r,
+                filterDimensionsFor('creature'),
+                selections,
+              ),
+            )
             .map((r) => r['name']),
         ['Wolf', 'Rat'],
       );
@@ -232,36 +260,49 @@ void main() {
 
   group('sorts', () {
     test('spells sort by level then name', () {
-      final byLevel =
-          sortOptionsFor('spell').firstWhere((s) => s.key == 'level');
+      final byLevel = sortOptionsFor(
+        'spell',
+      ).firstWhere((s) => s.key == 'level');
       final sorted = [..._spells]
         ..sort((a, b) => byLevel.compare(a, b, _lookups));
-      expect(sorted.map((s) => s['name']),
-          ['Fire Bolt', 'Animate Dead', 'Fireball']);
+      expect(sorted.map((s) => s['name']), [
+        'Fire Bolt',
+        'Animate Dead',
+        'Fireball',
+      ]);
     });
 
     test('items sort by cost with unpriced last', () {
-      final byCost =
-          sortOptionsFor('item').firstWhere((s) => s.key == 'cost');
+      final byCost = sortOptionsFor('item').firstWhere((s) => s.key == 'cost');
       final sorted = [..._items]
         ..sort((a, b) => byCost.compare(a, b, _lookups));
-      expect(sorted.map((s) => s['name']),
-          ['Rope', 'Bag of Holding', 'Vorpal Sword']);
+      expect(sorted.map((s) => s['name']), [
+        'Rope',
+        'Bag of Holding',
+        'Vorpal Sword',
+      ]);
     });
 
     test('creatures sort by challenge rating and by size rank', () {
       final byCr = sortOptionsFor('creature').firstWhere((s) => s.key == 'cr');
       final crSorted = [..._creatures]
         ..sort((a, b) => byCr.compare(a, b, _lookups));
-      expect(crSorted.map((c) => c['name']),
-          ['Rat', 'Wolf', 'Adult Red Dragon']);
+      expect(crSorted.map((c) => c['name']), [
+        'Rat',
+        'Wolf',
+        'Adult Red Dragon',
+      ]);
 
-      final bySize =
-          sortOptionsFor('creature').firstWhere((s) => s.key == 'size');
+      final bySize = sortOptionsFor(
+        'creature',
+      ).firstWhere((s) => s.key == 'size');
       final sizeSorted = [..._creatures]
         ..sort((a, b) => bySize.compare(a, b, _lookups));
-      expect(sizeSorted.map((c) => c['name']),
-          ['Rat', 'Wolf', 'Adult Red Dragon']);
+      expect(sizeSorted.map((c) => c['name']), [
+        'Rat',
+        'Wolf',
+        'Adult Red Dragon',
+      ]);
     });
   });
 }

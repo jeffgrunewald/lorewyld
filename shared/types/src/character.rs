@@ -7,12 +7,10 @@
 //! than content references, so a sheet survives module changes intact.
 
 use serde::{Deserialize, Serialize};
-use typeshare::typeshare;
 
 use crate::common::{AbilityScores, EntityId, Timestamp};
 
 /// One carried item line on the sheet.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CharacterEquipmentItem {
     pub name: String,
@@ -23,7 +21,6 @@ pub struct CharacterEquipmentItem {
 }
 
 /// One known/prepared spell line on the sheet. `level` 0 = cantrip.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CharacterSpellEntry {
     pub name: String,
@@ -36,7 +33,6 @@ pub struct CharacterSpellEntry {
 /// A complete character sheet. Proficiencies are permissive name-string
 /// lists (lowercase ability/skill names) rather than closed enums —
 /// content is data we read, not data we control.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CharacterSheet {
     /// Server-assigned; clients may omit on create (defaults to nil).

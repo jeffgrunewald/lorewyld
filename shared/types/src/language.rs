@@ -1,10 +1,8 @@
 use serde::{Deserialize, Serialize};
-use typeshare::typeshare;
 
 use crate::common::{EntityId, Timestamp};
 
 /// A language, structured per the Open5e v2 schema.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Language {
     pub uuid: EntityId,

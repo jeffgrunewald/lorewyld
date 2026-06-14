@@ -1,12 +1,10 @@
 use serde::{Deserialize, Serialize};
-use typeshare::typeshare;
 
 use crate::common::{AbilityScore, DamageTypeName, EntityId, SpellSchoolName, Timestamp};
 
 /// One row of a spell's upcast/scaling table (Open5e v2
 /// `casting_options`). Every field other than `kind` is an override of
 /// the spell's default value; `None` means "unchanged".
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SpellCastingOption {
     /// `"default"`, `"slot_level_N"` (slot upcast), or
@@ -30,7 +28,6 @@ pub struct SpellCastingOption {
 }
 
 /// A magical spell, structured per the Open5e v2 schema.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Spell {
     pub uuid: EntityId,
@@ -107,7 +104,6 @@ pub struct Spell {
 
 /// One of the eight schools of magic. Lookup-table row backing the
 /// closed-set `SpellSchoolName` enum.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpellSchool {
     pub uuid: EntityId,

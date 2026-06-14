@@ -125,7 +125,9 @@ class ContentStore {
   /// so the UI thread stays responsive; inserts run in chunked batches
   /// inside one transaction, reporting progress in [0, 1] after each
   /// chunk.
-  Future<void> importBundle({void Function(double progress)? onProgress}) async {
+  Future<void> importBundle({
+    void Function(double progress)? onProgress,
+  }) async {
     final missing = await _missingModuleSlugs();
     if (missing.isEmpty) return;
 
@@ -141,8 +143,8 @@ class ContentStore {
     // only when its owning module is being seeded.
     bool allowed(_TableSpec spec, Map<String, dynamic> r) =>
         spec.table == 'content_module'
-            ? missing.contains(r['slug'])
-            : allowedModuleUuids.contains(r['content_module_uuid']);
+        ? missing.contains(r['slug'])
+        : allowedModuleUuids.contains(r['content_module_uuid']);
 
     final tables = <(_TableSpec, List<Map<String, dynamic>>)>[
       for (final spec in _specs)
@@ -201,26 +203,32 @@ class ContentStore {
       throw ArgumentError('the $pinnedModuleSlug module cannot be removed');
     }
     await _db.transaction((txn) async {
-      final rows = await txn.query('content_module',
-          columns: ['uuid'], where: 'slug = ?', whereArgs: [slug]);
+      final rows = await txn.query(
+        'content_module',
+        columns: ['uuid'],
+        where: 'slug = ?',
+        whereArgs: [slug],
+      );
       if (rows.isNotEmpty) {
         final moduleUuid = rows.first['uuid'] as String;
         for (final table in LocalStore.contentTables) {
           if (table == 'content_module') continue;
-          await txn.delete('"$table"',
-              where: 'content_module_uuid = ?', whereArgs: [moduleUuid]);
+          await txn.delete(
+            '"$table"',
+            where: 'content_module_uuid = ?',
+            whereArgs: [moduleUuid],
+          );
         }
-        await txn.delete('content_module',
-            where: 'slug = ?', whereArgs: [slug]);
+        await txn.delete(
+          'content_module',
+          where: 'slug = ?',
+          whereArgs: [slug],
+        );
       }
-      await txn.insert(
-        'removed_content_module',
-        {
-          'slug': slug,
-          'removed_at': DateTime.now().toUtc().toIso8601String(),
-        },
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
+      await txn.insert('removed_content_module', {
+        'slug': slug,
+        'removed_at': DateTime.now().toUtc().toIso8601String(),
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
     });
   }
 
@@ -229,12 +237,18 @@ class ContentStore {
     String slug, {
     void Function(double progress)? onProgress,
   }) async {
-    await _db.delete('removed_content_module',
-        where: 'slug = ?', whereArgs: [slug]);
+    await _db.delete(
+      'removed_content_module',
+      where: 'slug = ?',
+      whereArgs: [slug],
+    );
     await importBundle(onProgress: onProgress);
   }
 
-  static List<dynamic> _parentsFirst(List<dynamic> records, String parentField) {
+  static List<dynamic> _parentsFirst(
+    List<dynamic> records,
+    String parentField,
+  ) {
     final parents = <dynamic>[];
     final children = <dynamic>[];
     for (final r in records) {
@@ -245,23 +259,25 @@ class ContentStore {
   }
 
   static Object? _bindable(Object? value) => switch (value) {
-        bool b => b ? 1 : 0,
-        _ => value,
-      };
+    bool b => b ? 1 : 0,
+    _ => value,
+  };
 
   // ── reads ───────────────────────────────────────────────────────────
 
-  Future<List<Map<String, dynamic>>> listSpells({int? level}) =>
-      _list('spell',
-          where: level != null ? 'level = ?' : null,
-          whereArgs: level != null ? [level] : null);
+  Future<List<Map<String, dynamic>>> listSpells({int? level}) => _list(
+    'spell',
+    where: level != null ? 'level = ?' : null,
+    whereArgs: level != null ? [level] : null,
+  );
 
-  Future<List<Map<String, dynamic>>> listCreatures(
-          {double? maxChallengeRating}) =>
-      _list('creature',
-          where: maxChallengeRating != null ? 'challenge_rating <= ?' : null,
-          whereArgs:
-              maxChallengeRating != null ? [maxChallengeRating] : null);
+  Future<List<Map<String, dynamic>>> listCreatures({
+    double? maxChallengeRating,
+  }) => _list(
+    'creature',
+    where: maxChallengeRating != null ? 'challenge_rating <= ?' : null,
+    whereArgs: maxChallengeRating != null ? [maxChallengeRating] : null,
+  );
 
   Future<List<Map<String, dynamic>>> listClasses({bool basesOnly = false}) =>
       _list('class', where: basesOnly ? 'subclass_of IS NULL' : null);
@@ -273,8 +289,12 @@ class ContentStore {
   Future<List<Map<String, dynamic>>> listAlignments() => _list('alignment');
 
   Future<Map<String, dynamic>?> getByKey(String table, String key) async {
-    final rows = await _db.query('"$table"',
-        columns: ['data'], where: 'key = ?', whereArgs: [key]);
+    final rows = await _db.query(
+      '"$table"',
+      columns: ['data'],
+      where: 'key = ?',
+      whereArgs: [key],
+    );
     if (rows.isEmpty) return null;
     return jsonDecode(rows.first['data'] as String) as Map<String, dynamic>;
   }
@@ -296,10 +316,7 @@ class ContentStore {
     return _list(
       table,
       where: clauses.isEmpty ? null : clauses.join(' AND '),
-      whereArgs: [
-        ...?whereArgs,
-        if (hasQuery) '%${query.trim()}%',
-      ],
+      whereArgs: [...?whereArgs, if (hasQuery) '%${query.trim()}%'],
       limit: limit,
     );
   }
@@ -329,12 +346,14 @@ class ContentStore {
     List<Object?>? whereArgs,
     int? limit,
   }) async {
-    final rows = await _db.query('"$table"',
-        columns: ['data'],
-        where: where,
-        whereArgs: whereArgs,
-        orderBy: 'name COLLATE NOCASE',
-        limit: limit);
+    final rows = await _db.query(
+      '"$table"',
+      columns: ['data'],
+      where: where,
+      whereArgs: whereArgs,
+      orderBy: 'name COLLATE NOCASE',
+      limit: limit,
+    );
     return rows
         .map((r) => jsonDecode(r['data'] as String) as Map<String, dynamic>)
         .toList();

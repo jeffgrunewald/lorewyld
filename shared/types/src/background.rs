@@ -1,10 +1,8 @@
 use serde::{Deserialize, Serialize};
-use typeshare::typeshare;
 
 use crate::common::{EntityId, Timestamp};
 
 /// One typed benefit a background grants (Open5e v2 `benefits`).
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BackgroundBenefit {
     pub name: String,
@@ -17,7 +15,6 @@ pub struct BackgroundBenefit {
 }
 
 /// A character background. Mechanics live in the typed `benefits` array.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Background {
     pub uuid: EntityId,

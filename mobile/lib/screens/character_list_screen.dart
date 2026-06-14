@@ -48,10 +48,12 @@ class _CharacterListScreenState extends State<CharacterListScreen> {
 
   void _openSheet(CharacterSheet sheet) {
     Navigator.of(context)
-        .push(MaterialPageRoute(
-          builder: (_) =>
-              CharacterSheetScreen(store: widget.store, sheet: sheet),
-        ))
+        .push(
+          MaterialPageRoute(
+            builder: (_) =>
+                CharacterSheetScreen(store: widget.store, sheet: sheet),
+          ),
+        )
         .then((_) => _refresh());
   }
 

@@ -18,11 +18,11 @@ class Tag {
   });
 
   factory Tag.fromJson(Map<String, dynamic> json) => Tag(
-        uuid: json['uuid'] as String,
-        slug: json['slug'] as String,
-        displayName: json['display_name'] as String,
-        isSystem: json['is_system'] as bool? ?? false,
-        introducedByModuleUuid: json['introduced_by_module_uuid'] as String?,
-        createdAt: DateTime.parse(json['created_at'] as String),
-      );
+    uuid: json['uuid'] as String,
+    slug: json['slug'] as String,
+    displayName: json['display_name'] as String,
+    isSystem: json['is_system'] as bool? ?? false,
+    introducedByModuleUuid: json['introduced_by_module_uuid'] as String?,
+    createdAt: DateTime.parse(json['created_at'] as String),
+  );
 }

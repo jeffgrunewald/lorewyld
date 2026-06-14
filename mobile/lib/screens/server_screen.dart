@@ -64,12 +64,16 @@ class _ServerScreenState extends State<ServerScreen> {
     final username = _usernameCtl.text.trim();
     final password = _passwordCtl.text;
     if (url.isEmpty || username.isEmpty || password.isEmpty) {
-      setState(() => _error = 'Server URL, username, and password are required.');
+      setState(
+        () => _error = 'Server URL, username, and password are required.',
+      );
       return;
     }
     if (_mode == _Mode.register) {
       if (_emailCtl.text.trim().isEmpty || _joinCodeCtl.text.trim().isEmpty) {
-        setState(() => _error = 'Email and join code are required to register.');
+        setState(
+          () => _error = 'Email and join code are required to register.',
+        );
         return;
       }
       if (password != _confirmCtl.text) {
@@ -149,8 +153,11 @@ class _ServerScreenState extends State<ServerScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Icon(Icons.cloud_done_outlined,
-            size: 48, color: Theme.of(context).colorScheme.primary),
+        Icon(
+          Icons.cloud_done_outlined,
+          size: 48,
+          color: Theme.of(context).colorScheme.primary,
+        ),
         const SizedBox(height: 16),
         Text(
           user != null ? 'Logged in as ${user.username}' : 'Logged in',
@@ -261,9 +268,11 @@ class _ServerScreenState extends State<ServerScreen> {
             labelText: 'Password',
             border: const OutlineInputBorder(),
             suffixIcon: IconButton(
-              icon: Icon(_passwordVisible
-                  ? Icons.visibility_off_outlined
-                  : Icons.visibility_outlined),
+              icon: Icon(
+                _passwordVisible
+                    ? Icons.visibility_off_outlined
+                    : Icons.visibility_outlined,
+              ),
               tooltip: _passwordVisible ? 'Hide password' : 'Show password',
               onPressed: () =>
                   setState(() => _passwordVisible = !_passwordVisible),
@@ -280,9 +289,11 @@ class _ServerScreenState extends State<ServerScreen> {
               labelText: 'Confirm password',
               border: const OutlineInputBorder(),
               suffixIcon: IconButton(
-                icon: Icon(_confirmVisible
-                    ? Icons.visibility_off_outlined
-                    : Icons.visibility_outlined),
+                icon: Icon(
+                  _confirmVisible
+                      ? Icons.visibility_off_outlined
+                      : Icons.visibility_outlined,
+                ),
                 tooltip: _confirmVisible ? 'Hide password' : 'Show password',
                 onPressed: () =>
                     setState(() => _confirmVisible = !_confirmVisible),

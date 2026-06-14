@@ -15,11 +15,7 @@ import 'services/server_connection.dart';
 /// Navigation hub. Everything here works fully offline — the Compendium
 /// browses the locally installed content modules.
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({
-    super.key,
-    required this.connection,
-    required this.store,
-  });
+  const HomeScreen({super.key, required this.connection, required this.store});
 
   final ServerConnection connection;
   final LocalStore store;
@@ -85,30 +81,33 @@ class _HomeScreenState extends State<HomeScreen> {
               alignment: WrapAlignment.center,
               children: [
                 FilledButton.icon(
-                  onPressed: () => _push(
-                      CharacterListScreen(store: widget.store)),
+                  onPressed: () =>
+                      _push(CharacterListScreen(store: widget.store)),
                   icon: const Icon(Icons.person_outline),
                   label: const Text('Characters'),
                 ),
                 FilledButton.icon(
-                  onPressed: () => _push(SettingListScreen(
-                    connection: connection,
-                    store: widget.store,
-                  )),
+                  onPressed: () => _push(
+                    SettingListScreen(
+                      connection: connection,
+                      store: widget.store,
+                    ),
+                  ),
                   icon: const Icon(Icons.library_books_outlined),
                   label: const Text('Settings & lore'),
                 ),
                 FilledButton.tonalIcon(
-                  onPressed: () =>
-                      _push(SearchScreen(store: widget.store)),
+                  onPressed: () => _push(SearchScreen(store: widget.store)),
                   icon: const Icon(Icons.search),
                   label: const Text('Search'),
                 ),
                 FilledButton.tonalIcon(
-                  onPressed: () => _push(CompendiumScreen(
-                    content: ContentStore(widget.store),
-                    connection: connection,
-                  )),
+                  onPressed: () => _push(
+                    CompendiumScreen(
+                      content: ContentStore(widget.store),
+                      connection: connection,
+                    ),
+                  ),
                   icon: const Icon(Icons.collections_bookmark_outlined),
                   label: const Text('Compendium'),
                 ),
@@ -124,8 +123,7 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       floatingActionButton: _D20FloatingButton(
-        onPressed: () =>
-            _push(const DiceRollerScreen()),
+        onPressed: () => _push(const DiceRollerScreen()),
       ),
     );
   }

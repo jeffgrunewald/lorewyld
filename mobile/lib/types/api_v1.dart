@@ -12,9 +12,9 @@ class AuthResponse {
   const AuthResponse({required this.user, required this.sessionToken});
 
   factory AuthResponse.fromJson(Map<String, dynamic> json) => AuthResponse(
-        user: User.fromJson(json['user'] as Map<String, dynamic>),
-        sessionToken: json['session_token'] as String,
-      );
+    user: User.fromJson(json['user'] as Map<String, dynamic>),
+    sessionToken: json['session_token'] as String,
+  );
 }
 
 class GameServerSummary {
@@ -43,12 +43,11 @@ class ServerInfo {
   const ServerInfo({required this.server, required this.modules});
 
   factory ServerInfo.fromJson(Map<String, dynamic> json) => ServerInfo(
-        server: GameServerSummary.fromJson(
-            json['server'] as Map<String, dynamic>),
-        modules: (json['modules'] as List<dynamic>? ?? const [])
-            .map((e) => ContentModule.fromJson(e as Map<String, dynamic>))
-            .toList(),
-      );
+    server: GameServerSummary.fromJson(json['server'] as Map<String, dynamic>),
+    modules: (json['modules'] as List<dynamic>? ?? const [])
+        .map((e) => ContentModule.fromJson(e as Map<String, dynamic>))
+        .toList(),
+  );
 }
 
 class SearchResponse {
@@ -57,8 +56,8 @@ class SearchResponse {
   const SearchResponse({required this.notes});
 
   factory SearchResponse.fromJson(Map<String, dynamic> json) => SearchResponse(
-        notes: (json['notes'] as List<dynamic>? ?? const [])
-            .map((e) => LoreNoteWithTags.fromJson(e as Map<String, dynamic>))
-            .toList(),
-      );
+    notes: (json['notes'] as List<dynamic>? ?? const [])
+        .map((e) => LoreNoteWithTags.fromJson(e as Map<String, dynamic>))
+        .toList(),
+  );
 }

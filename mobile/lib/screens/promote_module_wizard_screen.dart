@@ -118,9 +118,9 @@ class _PromoteModuleWizardScreenState extends State<PromoteModuleWizardScreen> {
         selectedNoteUuids: selectedRemoteUuids,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Published $name.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Published $name.')));
       Navigator.of(context).pop();
     } on ApiException catch (e) {
       setState(() => _publishError = '${e.code}: ${e.message}');
@@ -288,10 +288,9 @@ class _PromoteModuleWizardScreenState extends State<PromoteModuleWizardScreen> {
             child: Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Theme.of(context)
-                    .colorScheme
-                    .secondaryContainer
-                    .withValues(alpha: 0.4),
+                color: Theme.of(
+                  context,
+                ).colorScheme.secondaryContainer.withValues(alpha: 0.4),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Text(
@@ -357,8 +356,8 @@ class _PromoteModuleWizardScreenState extends State<PromoteModuleWizardScreen> {
   }
 
   String _visibilityLabel(NoteVisibility v) => switch (v) {
-        NoteVisibility.visible => 'Visible',
-        NoteVisibility.authorOnly => 'Only me',
-        NoteVisibility.gamemasterOnly => 'GMs only',
-      };
+    NoteVisibility.visible => 'Visible',
+    NoteVisibility.authorOnly => 'Only me',
+    NoteVisibility.gamemasterOnly => 'GMs only',
+  };
 }

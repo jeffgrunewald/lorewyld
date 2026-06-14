@@ -39,8 +39,10 @@ class FilterDimension {
     this.multiValueOf,
     required this.optionLabel,
     this.valueSort,
-  }) : assert(valueOf != null || multiValueOf != null,
-            'a dimension needs an accessor');
+  }) : assert(
+         valueOf != null || multiValueOf != null,
+         'a dimension needs an accessor',
+       );
 
   Iterable<Object?> valuesOf(Map<String, dynamic> record) =>
       multiValueOf?.call(record) ?? [valueOf!(record)];
@@ -72,7 +74,8 @@ class PickerSort {
     Map<String, dynamic> a,
     Map<String, dynamic> b,
     ContentLookups lookups,
-  ) compare;
+  )
+  compare;
 
   const PickerSort({
     required this.key,
@@ -114,9 +117,8 @@ final _moduleSource = FilterDimension(
   key: 'source',
   label: 'Source',
   valueOf: (r) => r['content_module_uuid'],
-  optionLabel: (v, l) => v is String
-      ? l.contentModules[v] ?? 'Unknown source'
-      : 'Unknown source',
+  optionLabel: (v, l) =>
+      v is String ? l.contentModules[v] ?? 'Unknown source' : 'Unknown source',
 );
 
 const List<Object?> _rarityOrder = [
@@ -212,69 +214,69 @@ final _armorCategory = FilterDimension(
 );
 
 List<FilterDimension> filterDimensionsFor(String table) => switch (table) {
-      'spell' => [_source, _spellLevel, _spellSchool, _spellComponents],
-      'item' => [_source, _itemType, _rarity],
-      'creature' => [_source, _creatureType],
-      'weapon' => [_source, _weaponCategory],
-      'armor' => [_source, _armorCategory],
-      'species' || 'class' || 'background' || 'feat' => [_source],
-      'condition' || 'language' => [_moduleSource],
-      _ => const [],
-    };
+  'spell' => [_source, _spellLevel, _spellSchool, _spellComponents],
+  'item' => [_source, _itemType, _rarity],
+  'creature' => [_source, _creatureType],
+  'weapon' => [_source, _weaponCategory],
+  'armor' => [_source, _armorCategory],
+  'species' || 'class' || 'background' || 'feat' => [_source],
+  'condition' || 'language' => [_moduleSource],
+  _ => const [],
+};
 
 List<PickerSort> sortOptionsFor(String table) => [
-      const PickerSort(key: 'name', label: 'Name', compare: _byName),
-      if (table == 'spell')
-        PickerSort(
-          key: 'level',
-          label: 'Level',
-          compare: (a, b, l) {
-            final byLevel =
-                (a['level'] as int? ?? 0).compareTo(b['level'] as int? ?? 0);
-            return byLevel != 0 ? byLevel : _byName(a, b, l);
-          },
-        ),
-      if (table == 'item')
-        PickerSort(
-          key: 'cost',
-          label: 'Cost',
-          compare: (a, b, l) {
-            // Costs are decimal strings ("25.00"); priceless/unpriced
-            // items sort last.
-            double parse(Object? v) => v is String
-                ? double.tryParse(v) ?? double.infinity
-                : double.infinity;
-            final byCost = parse(a['cost']).compareTo(parse(b['cost']));
-            return byCost != 0 ? byCost : _byName(a, b, l);
-          },
-        ),
-      if (table == 'creature') ...[
-        PickerSort(
-          key: 'cr',
-          label: 'Challenge rating',
-          compare: (a, b, l) {
-            num cr(Map<String, dynamic> r) =>
-                r['challenge_rating'] as num? ?? -1;
-            final byCr = cr(a).compareTo(cr(b));
-            return byCr != 0 ? byCr : _byName(a, b, l);
-          },
-        ),
-        PickerSort(
-          key: 'size',
-          label: 'Size',
-          compare: (a, b, l) {
-            // Rank comes from the size table (Tiny 1 … Gargantuan 6);
-            // unknown sizes sort last.
-            int rank(Map<String, dynamic> r) => switch (r['size']) {
-                  final String uuid => l.sizeRanks[uuid] ?? 99,
-                  _ => 99,
-                };
-            final bySize = rank(a).compareTo(rank(b));
-            return bySize != 0 ? bySize : _byName(a, b, l);
-          },
-        ),
-      ],
-    ];
+  const PickerSort(key: 'name', label: 'Name', compare: _byName),
+  if (table == 'spell')
+    PickerSort(
+      key: 'level',
+      label: 'Level',
+      compare: (a, b, l) {
+        final byLevel = (a['level'] as int? ?? 0).compareTo(
+          b['level'] as int? ?? 0,
+        );
+        return byLevel != 0 ? byLevel : _byName(a, b, l);
+      },
+    ),
+  if (table == 'item')
+    PickerSort(
+      key: 'cost',
+      label: 'Cost',
+      compare: (a, b, l) {
+        // Costs are decimal strings ("25.00"); priceless/unpriced
+        // items sort last.
+        double parse(Object? v) => v is String
+            ? double.tryParse(v) ?? double.infinity
+            : double.infinity;
+        final byCost = parse(a['cost']).compareTo(parse(b['cost']));
+        return byCost != 0 ? byCost : _byName(a, b, l);
+      },
+    ),
+  if (table == 'creature') ...[
+    PickerSort(
+      key: 'cr',
+      label: 'Challenge rating',
+      compare: (a, b, l) {
+        num cr(Map<String, dynamic> r) => r['challenge_rating'] as num? ?? -1;
+        final byCr = cr(a).compareTo(cr(b));
+        return byCr != 0 ? byCr : _byName(a, b, l);
+      },
+    ),
+    PickerSort(
+      key: 'size',
+      label: 'Size',
+      compare: (a, b, l) {
+        // Rank comes from the size table (Tiny 1 … Gargantuan 6);
+        // unknown sizes sort last.
+        int rank(Map<String, dynamic> r) => switch (r['size']) {
+          final String uuid => l.sizeRanks[uuid] ?? 99,
+          _ => 99,
+        };
+        final bySize = rank(a).compareTo(rank(b));
+        return bySize != 0 ? bySize : _byName(a, b, l);
+      },
+    ),
+  ],
+];
 
 /// True when [record] passes every dimension that has an active
 /// selection; empty selections mean "no restriction".

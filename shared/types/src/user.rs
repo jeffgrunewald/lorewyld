@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use typeshare::typeshare;
 
 use crate::common::{EntityId, Timestamp};
 
@@ -7,7 +6,6 @@ use crate::common::{EntityId, Timestamp};
 /// access rolled into one identity. Registration is gated by the
 /// server's `join_code`; passwords are stored as argon2 PHC hashes.
 /// `admin` unlocks server settings and user management.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct User {
     pub uuid: EntityId,
@@ -22,7 +20,6 @@ pub struct User {
 /// Clients send the token via `Authorization: Bearer <token>` on every
 /// authenticated request; the server resolves it to a `user_uuid` and
 /// uses that for `created_by_user_uuid` attribution + ownership checks.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UserSession {
     pub token: String,

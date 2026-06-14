@@ -109,8 +109,9 @@ class LocalStore {
       final extras = _contentExtraColumns[table] ?? '';
       // content_module_uuid lets whole modules be uninstalled with one
       // indexed-by-nothing-but-small-table DELETE per content table.
-      final moduleRef =
-          table == 'content_module' ? '' : 'content_module_uuid TEXT,';
+      final moduleRef = table == 'content_module'
+          ? ''
+          : 'content_module_uuid TEXT,';
       await db.execute('''
         CREATE TABLE IF NOT EXISTS "$table" (
           uuid TEXT PRIMARY KEY NOT NULL,
@@ -124,11 +125,14 @@ class LocalStore {
       ''');
     }
     await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_spell_level ON spell(level)');
+      'CREATE INDEX IF NOT EXISTS idx_spell_level ON spell(level)',
+    );
     await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_creature_cr ON creature(challenge_rating)');
+      'CREATE INDEX IF NOT EXISTS idx_creature_cr ON creature(challenge_rating)',
+    );
     await db.execute(
-        'CREATE INDEX IF NOT EXISTS idx_item_magic ON item(is_magic)');
+      'CREATE INDEX IF NOT EXISTS idx_item_magic ON item(is_magic)',
+    );
     await _createTombstoneTable(db);
   }
 
@@ -151,7 +155,8 @@ class LocalStore {
     for (final table in contentTables) {
       if (table == 'content_module') continue;
       await db.execute(
-          'ALTER TABLE "$table" ADD COLUMN content_module_uuid TEXT');
+        'ALTER TABLE "$table" ADD COLUMN content_module_uuid TEXT',
+      );
       final rows = await db.query('"$table"', columns: ['uuid', 'data']);
       final batch = db.batch();
       for (final row in rows) {
@@ -206,7 +211,8 @@ class LocalStore {
           )
         ''');
         await db.execute(
-            'CREATE INDEX idx_lore_note_scope ON lore_note(scope_kind, scope_target_uuid)');
+          'CREATE INDEX idx_lore_note_scope ON lore_note(scope_kind, scope_target_uuid)',
+        );
         await _createContentTables(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -234,8 +240,11 @@ class LocalStore {
   Future<List<CharacterSheet>> listCharacters() async {
     final rows = await _db.query('character', orderBy: 'name COLLATE NOCASE');
     return rows
-        .map((r) => CharacterSheet.fromJson(
-            jsonDecode(r['data'] as String) as Map<String, dynamic>))
+        .map(
+          (r) => CharacterSheet.fromJson(
+            jsonDecode(r['data'] as String) as Map<String, dynamic>,
+          ),
+        )
         .toList();
   }
 
@@ -285,25 +294,29 @@ class LocalStore {
   // ── settings ────────────────────────────────────────────────────────
 
   Future<List<LocalSetting>> listSettings() async {
-    final rows =
-        await _db.query('setting', orderBy: 'updated_at DESC');
+    final rows = await _db.query('setting', orderBy: 'updated_at DESC');
     return rows.map(_settingFromRow).toList();
   }
 
   Future<LocalSetting?> getSetting(String uuid) async {
-    final rows =
-        await _db.query('setting', where: 'uuid = ?', whereArgs: [uuid]);
+    final rows = await _db.query(
+      'setting',
+      where: 'uuid = ?',
+      whereArgs: [uuid],
+    );
     return rows.isEmpty ? null : _settingFromRow(rows.first);
   }
 
   Future<LocalSetting?> getSettingByRemoteUuid(String remoteUuid) async {
-    final rows = await _db.query('setting',
-        where: 'remote_uuid = ?', whereArgs: [remoteUuid]);
+    final rows = await _db.query(
+      'setting',
+      where: 'remote_uuid = ?',
+      whereArgs: [remoteUuid],
+    );
     return rows.isEmpty ? null : _settingFromRow(rows.first);
   }
 
-  Future<LocalSetting> createSetting(String name,
-      {String? remoteUuid}) async {
+  Future<LocalSetting> createSetting(String name, {String? remoteUuid}) async {
     final now = _now();
     final uuid = generateUuidV4();
     await _db.insert('setting', {
@@ -344,12 +357,12 @@ class LocalStore {
   }
 
   LocalSetting _settingFromRow(Map<String, Object?> r) => LocalSetting(
-        uuid: r['uuid'] as String,
-        name: r['name'] as String,
-        remoteUuid: r['remote_uuid'] as String?,
-        createdAt: DateTime.parse(r['created_at'] as String),
-        updatedAt: DateTime.parse(r['updated_at'] as String),
-      );
+    uuid: r['uuid'] as String,
+    name: r['name'] as String,
+    remoteUuid: r['remote_uuid'] as String?,
+    createdAt: DateTime.parse(r['created_at'] as String),
+    updatedAt: DateTime.parse(r['updated_at'] as String),
+  );
 
   // ── lore notes ──────────────────────────────────────────────────────
 
@@ -377,8 +390,11 @@ class LocalStore {
   }
 
   Future<LocalNote?> getNote(String uuid) async {
-    final rows =
-        await _db.query('lore_note', where: 'uuid = ?', whereArgs: [uuid]);
+    final rows = await _db.query(
+      'lore_note',
+      where: 'uuid = ?',
+      whereArgs: [uuid],
+    );
     return rows.isEmpty ? null : _noteFromRow(rows.first);
   }
 
@@ -421,8 +437,7 @@ class LocalStore {
     if (visibility != null) values['visibility'] = visibility.wire;
     if (tagSlugs != null) values['tag_slugs'] = jsonEncode(tagSlugs);
     if (remoteUuid != null) values['remote_uuid'] = remoteUuid;
-    await _db.update('lore_note', values,
-        where: 'uuid = ?', whereArgs: [uuid]);
+    await _db.update('lore_note', values, where: 'uuid = ?', whereArgs: [uuid]);
     return (await getNote(uuid))!;
   }
 
@@ -476,27 +491,32 @@ class LocalStore {
       final decoded = jsonDecode(row['tag_slugs'] as String) as List<dynamic>;
       all.addAll(decoded.cast<String>());
     }
-    final filtered = all
-        .where((s) =>
-            prefix == null || prefix.isEmpty || s.contains(prefix.toLowerCase()))
-        .toList()
-      ..sort();
+    final filtered =
+        all
+            .where(
+              (s) =>
+                  prefix == null ||
+                  prefix.isEmpty ||
+                  s.contains(prefix.toLowerCase()),
+            )
+            .toList()
+          ..sort();
     return filtered.take(limit).toList();
   }
 
   LocalNote _noteFromRow(Map<String, Object?> r) => LocalNote(
-        uuid: r['uuid'] as String,
-        title: r['title'] as String,
-        bodyMarkdown: r['body_markdown'] as String,
-        scope: NoteScope(
-          kind: NoteScopeKind.fromWire(r['scope_kind'] as String),
-          targetUuid: r['scope_target_uuid'] as String,
-        ),
-        visibility: NoteVisibility.fromWire(r['visibility'] as String),
-        tagSlugs: (jsonDecode(r['tag_slugs'] as String) as List<dynamic>)
-            .cast<String>(),
-        remoteUuid: r['remote_uuid'] as String?,
-        createdAt: DateTime.parse(r['created_at'] as String),
-        updatedAt: DateTime.parse(r['updated_at'] as String),
-      );
+    uuid: r['uuid'] as String,
+    title: r['title'] as String,
+    bodyMarkdown: r['body_markdown'] as String,
+    scope: NoteScope(
+      kind: NoteScopeKind.fromWire(r['scope_kind'] as String),
+      targetUuid: r['scope_target_uuid'] as String,
+    ),
+    visibility: NoteVisibility.fromWire(r['visibility'] as String),
+    tagSlugs: (jsonDecode(r['tag_slugs'] as String) as List<dynamic>)
+        .cast<String>(),
+    remoteUuid: r['remote_uuid'] as String?,
+    createdAt: DateTime.parse(r['created_at'] as String),
+    updatedAt: DateTime.parse(r['updated_at'] as String),
+  );
 }

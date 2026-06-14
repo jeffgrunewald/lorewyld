@@ -80,8 +80,10 @@ void main() {
 
     final alignments = await content.listAlignments();
     expect(alignments.map((a) => a['name']), contains('lawful_good'));
-    expect((await content.listBackgrounds()).map((b) => b['name']),
-        contains('Acolyte'));
+    expect(
+      (await content.listBackgrounds()).map((b) => b['name']),
+      contains('Acolyte'),
+    );
   });
 
   test('uninstalled modules stay uninstalled until reinstalled', () async {
@@ -95,8 +97,7 @@ void main() {
     expect((await content.installedModuleSlugs()).contains('tob'), isFalse);
     expect((await content.removedModules()).keys, contains('tob'));
     // Other modules' records are untouched.
-    expect((await content.listNamed('creature', query: 'Aboleth')),
-        isNotEmpty);
+    expect((await content.listNamed('creature', query: 'Aboleth')), isNotEmpty);
 
     // The seeder respects the tombstone: reimport is a no-op.
     expect(await content.isSeeded, isTrue);

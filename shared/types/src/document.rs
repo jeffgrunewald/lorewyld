@@ -1,12 +1,10 @@
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
-use typeshare::typeshare;
 
 use crate::common::{EntityId, Timestamp};
 
 /// A content license (CC-BY-4.0, CC0, OGL-1.0a). Carries the full
 /// license text so attribution can render offline.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct License {
     pub uuid: EntityId,
@@ -26,7 +24,6 @@ pub struct License {
 }
 
 /// The organization that published a source document.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Publisher {
     pub uuid: EntityId,
@@ -46,7 +43,6 @@ pub struct Publisher {
 /// Every major content record carries a `document_uuid` so per-record
 /// provenance survives modules that mix sources (e.g. an SRD 5.2 base
 /// gap-filled from SRD 5.1).
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Document {
     pub uuid: EntityId,

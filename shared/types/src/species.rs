@@ -1,10 +1,8 @@
 use serde::{Deserialize, Serialize};
-use typeshare::typeshare;
 
 use crate::common::{AbilityScores, ChoiceFrom, EntityId, Senses, Timestamp};
 
 /// One named species trait (Darkvision, Fey Ancestry, …).
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpeciesTrait {
     pub name: String,
@@ -23,7 +21,6 @@ pub struct SpeciesTrait {
 /// The ASI/speed/size/language/vision fields are *retained sheet-math
 /// data* that Open5e v2 dropped to prose traits; the bundle generator
 /// populates them from the v1 API and curated overrides.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Species {
     pub uuid: EntityId,

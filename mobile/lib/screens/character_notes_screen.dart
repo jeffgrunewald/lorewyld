@@ -27,9 +27,9 @@ class _CharacterNotesScreenState extends State<CharacterNotesScreen> {
   late Future<List<LocalNote>> _future;
 
   NoteScope get _scope => NoteScope(
-        kind: NoteScopeKind.character,
-        targetUuid: widget.character.uuid,
-      );
+    kind: NoteScopeKind.character,
+    targetUuid: widget.character.uuid,
+  );
 
   @override
   void initState() {
@@ -38,9 +38,9 @@ class _CharacterNotesScreenState extends State<CharacterNotesScreen> {
   }
 
   Future<List<LocalNote>> _load() => widget.store.listNotes(
-        scopeKind: NoteScopeKind.character,
-        scopeTarget: widget.character.uuid,
-      );
+    scopeKind: NoteScopeKind.character,
+    scopeTarget: widget.character.uuid,
+  );
 
   Future<void> _refresh() async {
     setState(() {
@@ -50,13 +50,15 @@ class _CharacterNotesScreenState extends State<CharacterNotesScreen> {
 
   void _openNote(LocalNote? existing) {
     Navigator.of(context)
-        .push(MaterialPageRoute(
-          builder: (_) => LoreNoteEditScreen(
-            store: widget.store,
-            scope: _scope,
-            existing: existing,
+        .push(
+          MaterialPageRoute(
+            builder: (_) => LoreNoteEditScreen(
+              store: widget.store,
+              scope: _scope,
+              existing: existing,
+            ),
           ),
-        ))
+        )
         .then((_) => _refresh());
   }
 

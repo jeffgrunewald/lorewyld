@@ -16,10 +16,10 @@ class SourceBadge extends StatelessWidget {
     return Text(
       slug.toUpperCase(),
       style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: Theme.of(context).colorScheme.outline,
-            fontSize: 10,
-            letterSpacing: 0.5,
-          ),
+        color: Theme.of(context).colorScheme.outline,
+        fontSize: 10,
+        letterSpacing: 0.5,
+      ),
     );
   }
 }

@@ -1,10 +1,8 @@
 use serde::{Deserialize, Serialize};
-use typeshare::typeshare;
 
 use crate::common::{EntityId, Timestamp};
 
 /// One discrete benefit a feat grants (Open5e v2 `benefits`).
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FeatBenefit {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -13,7 +11,6 @@ pub struct FeatBenefit {
 }
 
 /// A character feat.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Feat {
     pub uuid: EntityId,

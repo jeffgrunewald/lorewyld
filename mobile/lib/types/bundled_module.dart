@@ -35,28 +35,28 @@ class BundledModule {
   });
 
   factory BundledModule.fromJson(Map<String, dynamic> json) => BundledModule(
-        slug: json['slug'] as String,
-        name: json['name'] as String,
-        license: json['license'] as String,
-        licenseUrl: json['license_url'] as String?,
-        publisher: json['publisher'] as String?,
-        authors: [
-          for (final a in json['authors'] as List<dynamic>? ?? const [])
-            a as String,
-        ],
-        description: json['description'] as String?,
-        websiteUrl: json['website_url'] as String?,
-        documents: [
-          for (final d in json['documents'] as List<dynamic>? ?? const [])
-            d as String,
-        ],
-        recordCounts: {
-          for (final e
-              in (json['record_counts'] as Map<String, dynamic>? ?? const {})
-                  .entries)
-            e.key: (e.value as num).toInt(),
-        },
-      );
+    slug: json['slug'] as String,
+    name: json['name'] as String,
+    license: json['license'] as String,
+    licenseUrl: json['license_url'] as String?,
+    publisher: json['publisher'] as String?,
+    authors: [
+      for (final a in json['authors'] as List<dynamic>? ?? const [])
+        a as String,
+    ],
+    description: json['description'] as String?,
+    websiteUrl: json['website_url'] as String?,
+    documents: [
+      for (final d in json['documents'] as List<dynamic>? ?? const [])
+        d as String,
+    ],
+    recordCounts: {
+      for (final e
+          in (json['record_counts'] as Map<String, dynamic>? ?? const {})
+              .entries)
+        e.key: (e.value as num).toInt(),
+    },
+  );
 
   int get totalRecords =>
       recordCounts.values.fold(0, (sum, count) => sum + count);

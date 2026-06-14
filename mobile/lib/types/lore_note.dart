@@ -11,9 +11,10 @@ enum NoteScopeKind {
   final String wire;
   const NoteScopeKind(this.wire);
 
-  static NoteScopeKind fromWire(String s) =>
-      NoteScopeKind.values.firstWhere((v) => v.wire == s,
-          orElse: () => throw FormatException('unknown scope kind: $s'));
+  static NoteScopeKind fromWire(String s) => NoteScopeKind.values.firstWhere(
+    (v) => v.wire == s,
+    orElse: () => throw FormatException('unknown scope kind: $s'),
+  );
 }
 
 enum NoteVisibility {
@@ -24,9 +25,10 @@ enum NoteVisibility {
   final String wire;
   const NoteVisibility(this.wire);
 
-  static NoteVisibility fromWire(String s) =>
-      NoteVisibility.values.firstWhere((v) => v.wire == s,
-          orElse: () => throw FormatException('unknown visibility: $s'));
+  static NoteVisibility fromWire(String s) => NoteVisibility.values.firstWhere(
+    (v) => v.wire == s,
+    orElse: () => throw FormatException('unknown visibility: $s'),
+  );
 }
 
 class NoteScope {
@@ -36,14 +38,14 @@ class NoteScope {
   const NoteScope({required this.kind, required this.targetUuid});
 
   factory NoteScope.fromJson(Map<String, dynamic> json) => NoteScope(
-        kind: NoteScopeKind.fromWire(json['kind'] as String),
-        targetUuid: json['target_uuid'] as String,
-      );
+    kind: NoteScopeKind.fromWire(json['kind'] as String),
+    targetUuid: json['target_uuid'] as String,
+  );
 
   Map<String, dynamic> toJson() => {
-        'kind': kind.wire,
-        'target_uuid': targetUuid,
-      };
+    'kind': kind.wire,
+    'target_uuid': targetUuid,
+  };
 }
 
 class LoreNote {
@@ -72,18 +74,19 @@ class LoreNote {
   });
 
   factory LoreNote.fromJson(Map<String, dynamic> json) => LoreNote(
-        uuid: json['uuid'] as String,
-        title: json['title'] as String,
-        bodyMarkdown: json['body_markdown'] as String? ?? '',
-        scope: NoteScope.fromJson(json['scope'] as Map<String, dynamic>),
-        visibility: NoteVisibility.fromWire(
-            json['visibility'] as String? ?? 'visible'),
-        derivedFromSettingNoteUuid:
-            json['derived_from_setting_note_uuid'] as String?,
-        createdByUserUuid: json['created_by_user_uuid'] as String?,
-        createdAt: DateTime.parse(json['created_at'] as String),
-        updatedAt: DateTime.parse(json['updated_at'] as String),
-      );
+    uuid: json['uuid'] as String,
+    title: json['title'] as String,
+    bodyMarkdown: json['body_markdown'] as String? ?? '',
+    scope: NoteScope.fromJson(json['scope'] as Map<String, dynamic>),
+    visibility: NoteVisibility.fromWire(
+      json['visibility'] as String? ?? 'visible',
+    ),
+    derivedFromSettingNoteUuid:
+        json['derived_from_setting_note_uuid'] as String?,
+    createdByUserUuid: json['created_by_user_uuid'] as String?,
+    createdAt: DateTime.parse(json['created_at'] as String),
+    updatedAt: DateTime.parse(json['updated_at'] as String),
+  );
 }
 
 class LoreNoteWithTags {

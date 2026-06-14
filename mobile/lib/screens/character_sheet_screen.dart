@@ -9,9 +9,12 @@
 // Edits autosave when the screen is popped; the save icon persists
 // immediately.
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 
 import '../compendium/categories.dart';
+import '../ffi/api/sheet.dart';
 import '../services/content_store.dart';
 import '../services/local_store.dart';
 import '../types/character.dart';
@@ -36,6 +39,13 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
   late CharacterSheet _sheet;
   bool _dirty = false;
 
+  // Derived 5e stats computed by the shared Rust core (lorewyld-domain)
+  // over FFI, cached per edit so widget builds stay synchronous.
+  late DerivedStats _derived;
+  Map<String, int> _abilityMods = const {};
+  Map<String, int> _saveBonuses = const {};
+  Map<String, int> _skillBonuses = const {};
+
   late final ContentStore _content = ContentStore(widget.store);
   List<Map<String, dynamic>> _alignments = const [];
 
@@ -46,6 +56,7 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
   void initState() {
     super.initState();
     _sheet = widget.sheet;
+    _recompute();
     _nameCtl = TextEditingController(text: _sheet.name);
     _hitDiceCtl = TextEditingController(text: _sheet.hitDice);
     _content.listAlignments().then((rows) {
@@ -63,20 +74,33 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
   void _mutate(CharacterSheet next) {
     setState(() {
       _sheet = next;
+      _recompute();
       _dirty = true;
     });
   }
 
+  // Recompute derived stats from the shared Rust core. The sheet already
+  // serializes to the wire shape the Rust `CharacterSheet` deserializes.
+  void _recompute() {
+    _derived = deriveStats(sheetJson: jsonEncode(_sheet.toJson()));
+    _abilityMods = {for (final b in _derived.abilityModifiers) b.name: b.bonus};
+    _saveBonuses = {
+      for (final b in _derived.savingThrowBonuses) b.name: b.bonus,
+    };
+    _skillBonuses = {for (final b in _derived.skillBonuses) b.name: b.bonus};
+  }
+
   CharacterSheet _withTextFields() => _sheet.copyWith(
-        name: _nameCtl.text.trim().isEmpty ? _sheet.name : _nameCtl.text.trim(),
-        hitDice: _hitDiceCtl.text.trim(),
-      );
+    name: _nameCtl.text.trim().isEmpty ? _sheet.name : _nameCtl.text.trim(),
+    hitDice: _hitDiceCtl.text.trim(),
+  );
 
   Future<void> _save() async {
     final next = await widget.store.saveCharacter(_withTextFields());
     if (!mounted) return;
     setState(() {
       _sheet = next;
+      _recompute();
       _dirty = false;
     });
     ScaffoldMessenger.of(context).showSnackBar(
@@ -90,7 +114,8 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('Delete character?'),
         content: Text(
-            '"${_sheet.name}" and their notes will be permanently removed.'),
+          '"${_sheet.name}" and their notes will be permanently removed.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -115,10 +140,8 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
   void _openNotes() {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (_) => CharacterNotesScreen(
-          store: widget.store,
-          character: _sheet,
-        ),
+        builder: (_) =>
+            CharacterNotesScreen(store: widget.store, character: _sheet),
       ),
     );
   }
@@ -207,68 +230,74 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
       TextField(
         controller: _nameCtl,
         decoration: const InputDecoration(
-            labelText: 'Name', border: OutlineInputBorder()),
+          labelText: 'Name',
+          border: OutlineInputBorder(),
+        ),
         onChanged: (_) => _dirty = true,
       ),
       const SizedBox(height: 12),
-      Row(children: [
-        Expanded(
-          child: ContentPickerField(
-            label: 'Species',
-            value: _sheet.race,
-            onTap: _pickSpecies,
-            onCleared: () => _mutate(_sheet.copyWith(race: '')),
+      Row(
+        children: [
+          Expanded(
+            child: ContentPickerField(
+              label: 'Species',
+              value: _sheet.race,
+              onTap: _pickSpecies,
+              onCleared: () => _mutate(_sheet.copyWith(race: '')),
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: ContentPickerField(
-            label: 'Class',
-            value: _sheet.className,
-            onTap: _pickClass,
-            onCleared: () => _mutate(_sheet.copyWith(className: '')),
+          const SizedBox(width: 12),
+          Expanded(
+            child: ContentPickerField(
+              label: 'Class',
+              value: _sheet.className,
+              onTap: _pickClass,
+              onCleared: () => _mutate(_sheet.copyWith(className: '')),
+            ),
           ),
-        ),
-      ]),
+        ],
+      ),
       const SizedBox(height: 12),
-      Row(children: [
-        Expanded(
-          child: _NumberStepper(
-            label: 'Level',
-            value: _sheet.level,
-            min: 1,
-            max: 20,
-            onChanged: (v) => _mutate(_sheet.copyWith(level: v)),
+      Row(
+        children: [
+          Expanded(
+            child: _NumberStepper(
+              label: 'Level',
+              value: _sheet.level,
+              min: 1,
+              max: 20,
+              onChanged: (v) => _mutate(_sheet.copyWith(level: v)),
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _StatBadge(
-            label: 'Proficiency',
-            value: CharacterSheet.formatBonus(_sheet.proficiencyBonus),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _StatBadge(
+              label: 'Proficiency',
+              value: CharacterSheet.formatBonus(_derived.proficiencyBonus),
+            ),
           ),
-        ),
-      ]),
+        ],
+      ),
       const SizedBox(height: 12),
-      Row(children: [
-        Expanded(
-          child: ContentPickerField(
-            label: 'Background',
-            value: _sheet.background,
-            onTap: _pickBackground,
-            onCleared: () => _mutate(_sheet.copyWith(background: '')),
+      Row(
+        children: [
+          Expanded(
+            child: ContentPickerField(
+              label: 'Background',
+              value: _sheet.background,
+              onTap: _pickBackground,
+              onCleared: () => _mutate(_sheet.copyWith(background: '')),
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(child: _alignmentDropdown()),
-      ]),
+          const SizedBox(width: 12),
+          Expanded(child: _alignmentDropdown()),
+        ],
+      ),
     ]);
   }
 
   Widget _alignmentDropdown() {
-    final options = [
-      for (final a in _alignments) humanizeSlug('${a['name']}'),
-    ];
+    final options = [for (final a in _alignments) humanizeSlug('${a['name']}')];
     // A previously saved free-text value stays selectable so opening
     // the dropdown never silently discards it.
     final current = _sheet.alignment;
@@ -295,8 +324,11 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
     );
   }
 
-  Future<Map<String, dynamic>?> _pickContent(String table, String title,
-      {String? where}) {
+  Future<Map<String, dynamic>?> _pickContent(
+    String table,
+    String title, {
+    String? where,
+  }) {
     return showContentPicker(
       context: context,
       content: _content,
@@ -313,8 +345,11 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
   }
 
   Future<void> _pickClass() async {
-    final record = await _pickContent('class', 'Choose a class',
-        where: 'subclass_of IS NULL');
+    final record = await _pickContent(
+      'class',
+      'Choose a class',
+      where: 'subclass_of IS NULL',
+    );
     if (record == null) return;
     final saves = record['prof_saving_throws'];
     final hitDie = record['hit_dice'];
@@ -323,15 +358,17 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
       className: record['name'] as String? ?? '',
       // Switching class re-derives save proficiencies from the new
       // class — the checkboxes stay editable afterwards.
-      savingThrowProficiencies:
-          saves is List ? Ability.parseWireSet(saves) : null,
+      savingThrowProficiencies: saves is List
+          ? Ability.parseWireSet(saves)
+          : null,
     );
     // Compute 1st-level HP (hit die max + Con modifier) only while HP
     // is still at the placeholder — never clobber a tracked value.
     if (next.maxHp <= 1 && hitDie is num) {
-      final hp = (hitDie.truncate() +
-              next.abilityModifier(Ability.constitution))
-          .clamp(1, 999);
+      final hp =
+          (hitDie.truncate() +
+                  abilityModifier(score: next.abilityScore(Ability.constitution)))
+              .clamp(1, 999);
       next = next.copyWith(maxHp: hp, currentHp: hp);
     }
     _mutate(next);
@@ -357,24 +394,25 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
           for (final a in Ability.values)
             SizedBox(
               width: 100,
-              child: Column(children: [
-                Text(a.abbr,
-                    style: Theme.of(context).textTheme.labelLarge),
-                _NumberStepper(
-                  label: '',
-                  compact: true,
-                  value: _sheet.abilityScore(a),
-                  min: 1,
-                  max: 30,
-                  onChanged: (v) => _mutate(_sheet.copyWith(
-                    abilities: {..._sheet.abilities, a: v},
-                  )),
-                ),
-                Text(
-                  CharacterSheet.formatBonus(_sheet.abilityModifier(a)),
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-              ]),
+              child: Column(
+                children: [
+                  Text(a.abbr, style: Theme.of(context).textTheme.labelLarge),
+                  _NumberStepper(
+                    label: '',
+                    compact: true,
+                    value: _sheet.abilityScore(a),
+                    min: 1,
+                    max: 30,
+                    onChanged: (v) => _mutate(
+                      _sheet.copyWith(abilities: {..._sheet.abilities, a: v}),
+                    ),
+                  ),
+                  Text(
+                    CharacterSheet.formatBonus(_abilityMods[a.name]!),
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ],
+              ),
             ),
         ],
       ),
@@ -383,66 +421,72 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
 
   Widget _combatSection() {
     return _sectionCard('Combat', [
-      Row(children: [
-        Expanded(
-          child: _NumberStepper(
-            label: 'Armor class',
-            value: _sheet.armorClass,
-            min: 0,
-            max: 40,
-            onChanged: (v) => _mutate(_sheet.copyWith(armorClass: v)),
+      Row(
+        children: [
+          Expanded(
+            child: _NumberStepper(
+              label: 'Armor class',
+              value: _sheet.armorClass,
+              min: 0,
+              max: 40,
+              onChanged: (v) => _mutate(_sheet.copyWith(armorClass: v)),
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _StatBadge(
-            label: 'Initiative',
-            value: CharacterSheet.formatBonus(_sheet.initiativeBonus),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _StatBadge(
+              label: 'Initiative',
+              value: CharacterSheet.formatBonus(_derived.initiative),
+            ),
           ),
-        ),
-      ]),
+        ],
+      ),
       const SizedBox(height: 12),
-      Row(children: [
-        Expanded(
-          child: _NumberStepper(
-            label: 'Speed',
-            value: _sheet.speed,
-            min: 0,
-            max: 200,
-            step: 5,
-            onChanged: (v) => _mutate(_sheet.copyWith(speed: v)),
+      Row(
+        children: [
+          Expanded(
+            child: _NumberStepper(
+              label: 'Speed',
+              value: _sheet.speed,
+              min: 0,
+              max: 200,
+              step: 5,
+              onChanged: (v) => _mutate(_sheet.copyWith(speed: v)),
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _StatBadge(
-            label: 'Passive Perception',
-            value: '${_sheet.passivePerception}',
+          const SizedBox(width: 12),
+          Expanded(
+            child: _StatBadge(
+              label: 'Passive Perception',
+              value: '${_derived.passivePerception}',
+            ),
           ),
-        ),
-      ]),
+        ],
+      ),
       const SizedBox(height: 12),
-      Row(children: [
-        Expanded(
-          child: _NumberStepper(
-            label: 'Current HP',
-            value: _sheet.currentHp,
-            min: 0,
-            max: 999,
-            onChanged: (v) => _mutate(_sheet.copyWith(currentHp: v)),
+      Row(
+        children: [
+          Expanded(
+            child: _NumberStepper(
+              label: 'Current HP',
+              value: _sheet.currentHp,
+              min: 0,
+              max: 999,
+              onChanged: (v) => _mutate(_sheet.copyWith(currentHp: v)),
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _NumberStepper(
-            label: 'Max HP',
-            value: _sheet.maxHp,
-            min: 1,
-            max: 999,
-            onChanged: (v) => _mutate(_sheet.copyWith(maxHp: v)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _NumberStepper(
+              label: 'Max HP',
+              value: _sheet.maxHp,
+              min: 1,
+              max: 999,
+              onChanged: (v) => _mutate(_sheet.copyWith(maxHp: v)),
+            ),
           ),
-        ),
-      ]),
+        ],
+      ),
       const SizedBox(height: 12),
       TextField(
         controller: _hitDiceCtl,
@@ -466,7 +510,7 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
           value: _sheet.savingThrowProficiencies.contains(a),
           title: Text(a.label),
           secondary: Text(
-            CharacterSheet.formatBonus(_sheet.savingThrowBonus(a)),
+            CharacterSheet.formatBonus(_saveBonuses[a.name]!),
             style: Theme.of(context).textTheme.titleMedium,
           ),
           onChanged: (checked) {
@@ -488,7 +532,7 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
           value: _sheet.skillProficiencies.contains(s),
           title: Text('${s.label} (${s.ability.abbr})'),
           secondary: Text(
-            CharacterSheet.formatBonus(_sheet.skillBonus(s)),
+            CharacterSheet.formatBonus(_skillBonuses[s.name]!),
             style: Theme.of(context).textTheme.titleMedium,
           ),
           onChanged: (checked) {
@@ -503,14 +547,14 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
   Widget _equipmentSection() {
     return _sectionCard('Equipment', [
       if (_sheet.equipment.isEmpty)
-        Text('Nothing yet.',
-            style: Theme.of(context).textTheme.bodyMedium),
+        Text('Nothing yet.', style: Theme.of(context).textTheme.bodyMedium),
       for (final (i, item) in _sheet.equipment.indexed)
         ListTile(
           dense: true,
           contentPadding: EdgeInsets.zero,
           title: Text(
-              item.quantity > 1 ? '${item.name} ×${item.quantity}' : item.name),
+            item.quantity > 1 ? '${item.name} ×${item.quantity}' : item.name,
+          ),
           subtitle: item.notes.isEmpty ? null : Text(item.notes),
           trailing: IconButton(
             icon: const Icon(Icons.remove_circle_outline),
@@ -534,13 +578,17 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
 
   Widget _spellsSection() {
     final sorted = [..._sheet.spells]
-      ..sort((a, b) => a.level != b.level
-          ? a.level.compareTo(b.level)
-          : a.name.compareTo(b.name));
+      ..sort(
+        (a, b) => a.level != b.level
+            ? a.level.compareTo(b.level)
+            : a.name.compareTo(b.name),
+      );
     return _sectionCard('Spells', [
       if (sorted.isEmpty)
-        Text('No spells recorded.',
-            style: Theme.of(context).textTheme.bodyMedium),
+        Text(
+          'No spells recorded.',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
       for (final spell in sorted)
         ListTile(
           dense: true,
@@ -599,11 +647,13 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
         ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Add')),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Add'),
+          ),
         ],
       ),
     );
@@ -621,10 +671,7 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
     if (record == null) return;
     final name = record['name'] as String? ?? '';
     if (name.isEmpty) return;
-    final spell = SpellEntry(
-      name: name,
-      level: record['level'] as int? ?? 0,
-    );
+    final spell = SpellEntry(name: name, level: record['level'] as int? ?? 0);
     _mutate(_sheet.copyWith(spells: [..._sheet.spells, spell]));
   }
 }
@@ -699,10 +746,12 @@ class _NumberStepper extends StatelessWidget {
       ],
     );
     if (label.isEmpty) return row;
-    return Column(children: [
-      Text(label, style: Theme.of(context).textTheme.labelMedium),
-      row,
-    ]);
+    return Column(
+      children: [
+        Text(label, style: Theme.of(context).textTheme.labelMedium),
+        row,
+      ],
+    );
   }
 }
 
@@ -714,10 +763,12 @@ class _StatBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(children: [
-      Text(label, style: Theme.of(context).textTheme.labelMedium),
-      const SizedBox(height: 8),
-      Text(value, style: Theme.of(context).textTheme.titleLarge),
-    ]);
+    return Column(
+      children: [
+        Text(label, style: Theme.of(context).textTheme.labelMedium),
+        const SizedBox(height: 8),
+        Text(value, style: Theme.of(context).textTheme.titleLarge),
+      ],
+    );
   }
 }

@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use typeshare::typeshare;
 
 use crate::common::{EntityId, Timestamp};
 
@@ -9,7 +8,6 @@ use crate::common::{EntityId, Timestamp};
 /// any license; it is valid for user-published modules but never for
 /// the pre-bundled content shipped with the app and server, which must
 /// carry one of the supported licenses.
-#[typeshare]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LicenseKind {
     #[serde(rename = "cc-by-4.0")]
@@ -69,7 +67,6 @@ impl LicenseKind {
 /// authoring-schema the bundle was produced against — independent of
 /// the publication date — and lets the importer detect packs that
 /// pre-date a structural change.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ContentModule {
     pub uuid: EntityId,

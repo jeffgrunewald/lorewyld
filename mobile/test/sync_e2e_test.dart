@@ -23,97 +23,107 @@ void main() {
       Platform.environment['LW_SERVER_URL'] ?? 'http://localhost:8080';
   final joinCode = Platform.environment['LW_JOIN_CODE'];
 
-  test('register → author offline → push → pull → publish round-trip',
-      () async {
-    sqfliteFfiInit();
-    databaseFactory = databaseFactoryFfi;
+  test(
+    'register → author offline → push → pull → publish round-trip',
+    () async {
+      sqfliteFfiInit();
+      databaseFactory = databaseFactoryFfi;
 
-    final api = ApiClient(baseUri: Uri.parse(serverUrl));
-    final suffix = DateTime.now().millisecondsSinceEpoch;
+      final api = ApiClient(baseUri: Uri.parse(serverUrl));
+      final suffix = DateTime.now().millisecondsSinceEpoch;
 
-    // ── register with the new username/email/password shape ─────────
-    final auth = await api.register(
-      joinCode: joinCode!,
-      username: 'mobile_e2e_$suffix',
-      email: 'mobile_e2e_$suffix@example.com',
-      password: 'mobilepass$suffix',
-    );
-    api.setSessionToken(auth.sessionToken);
-    expect(auth.user.username, 'mobile_e2e_$suffix');
+      // ── register with the new username/email/password shape ─────────
+      final auth = await api.register(
+        joinCode: joinCode!,
+        username: 'mobile_e2e_$suffix',
+        email: 'mobile_e2e_$suffix@example.com',
+        password: 'mobilepass$suffix',
+      );
+      api.setSessionToken(auth.sessionToken);
+      expect(auth.user.username, 'mobile_e2e_$suffix');
 
-    // me() resolves the session
-    final me = await api.me();
-    expect(me.uuid, auth.user.uuid);
+      // me() resolves the session
+      final me = await api.me();
+      expect(me.uuid, auth.user.uuid);
 
-    // ── author entirely locally ─────────────────────────────────────
-    final store = await LocalStore.open(path: inMemoryDatabasePath);
-    final setting = await store.createSetting('E2E Realm $suffix');
-    final scope =
-        NoteScope(kind: NoteScopeKind.setting, targetUuid: setting.uuid);
-    await store.createNote(
-      title: 'Fey Court',
-      bodyMarkdown: 'Ancient rulers.',
-      scope: scope,
-      tagSlugs: const ['npc'],
-    );
-    await store.createNote(
-      title: 'Secret Door',
-      bodyMarkdown: 'Behind the falls.',
-      scope: scope,
-      visibility: NoteVisibility.gamemasterOnly,
-    );
+      // ── author entirely locally ─────────────────────────────────────
+      final store = await LocalStore.open(path: inMemoryDatabasePath);
+      final setting = await store.createSetting('E2E Realm $suffix');
+      final scope = NoteScope(
+        kind: NoteScopeKind.setting,
+        targetUuid: setting.uuid,
+      );
+      await store.createNote(
+        title: 'Fey Court',
+        bodyMarkdown: 'Ancient rulers.',
+        scope: scope,
+        tagSlugs: const ['npc'],
+      );
+      await store.createNote(
+        title: 'Secret Door',
+        bodyMarkdown: 'Behind the falls.',
+        scope: scope,
+        visibility: NoteVisibility.gamemasterOnly,
+      );
 
-    // ── push ────────────────────────────────────────────────────────
-    final sync = SyncService(store: store, api: api);
-    final pushed = await sync.pushSetting(setting);
-    expect(pushed.created, 2);
-    expect(pushed.updated, 0);
+      // ── push ────────────────────────────────────────────────────────
+      final sync = SyncService(store: store, api: api);
+      final pushed = await sync.pushSetting(setting);
+      expect(pushed.created, 2);
+      expect(pushed.updated, 0);
 
-    final linked = (await store.getSetting(setting.uuid))!;
-    expect(linked.remoteUuid, isNotNull);
-    final localNotes = await store.listNotes(
-        scopeKind: NoteScopeKind.setting, scopeTarget: setting.uuid);
-    expect(localNotes.every((n) => n.remoteUuid != null), isTrue);
+      final linked = (await store.getSetting(setting.uuid))!;
+      expect(linked.remoteUuid, isNotNull);
+      final localNotes = await store.listNotes(
+        scopeKind: NoteScopeKind.setting,
+        scopeTarget: setting.uuid,
+      );
+      expect(localNotes.every((n) => n.remoteUuid != null), isTrue);
 
-    // ── second push updates instead of duplicating ──────────────────
-    final feyCourt =
-        localNotes.firstWhere((n) => n.title == 'Fey Court');
-    await store.updateNote(
-        uuid: feyCourt.uuid, bodyMarkdown: 'Ancient AND current rulers.');
-    final repush = await sync.pushSetting(linked);
-    expect(repush.created, 0);
-    expect(repush.updated, 2);
-    final serverCopy = await api.getLoreNote(feyCourt.remoteUuid!);
-    expect(serverCopy.note.bodyMarkdown, 'Ancient AND current rulers.');
+      // ── second push updates instead of duplicating ──────────────────
+      final feyCourt = localNotes.firstWhere((n) => n.title == 'Fey Court');
+      await store.updateNote(
+        uuid: feyCourt.uuid,
+        bodyMarkdown: 'Ancient AND current rulers.',
+      );
+      final repush = await sync.pushSetting(linked);
+      expect(repush.created, 0);
+      expect(repush.updated, 2);
+      final serverCopy = await api.getLoreNote(feyCourt.remoteUuid!);
+      expect(serverCopy.note.bodyMarkdown, 'Ancient AND current rulers.');
 
-    // ── server-side edit pulls back down (LWW overwrite) ────────────
-    await api.updateLoreNote(
-        uuid: feyCourt.remoteUuid!, title: 'The Fey Court (revised)');
-    final pulled = await sync.pullSetting(
-      remoteSettingUuid: linked.remoteUuid!,
-      remoteSettingName: linked.name,
-    );
-    expect(pulled.updated, greaterThanOrEqualTo(1));
-    final localAfterPull = (await store.getNote(feyCourt.uuid))!;
-    expect(localAfterPull.title, 'The Fey Court (revised)');
+      // ── server-side edit pulls back down (LWW overwrite) ────────────
+      await api.updateLoreNote(
+        uuid: feyCourt.remoteUuid!,
+        title: 'The Fey Court (revised)',
+      );
+      final pulled = await sync.pullSetting(
+        remoteSettingUuid: linked.remoteUuid!,
+        remoteSettingName: linked.name,
+      );
+      expect(pulled.updated, greaterThanOrEqualTo(1));
+      final localAfterPull = (await store.getNote(feyCourt.uuid))!;
+      expect(localAfterPull.title, 'The Fey Court (revised)');
 
-    // ── publish via remote uuids; server stamps the author email ────
-    final publishResult = await api.publishModule(
-      sourceSettingUuid: linked.remoteUuid!,
-      name: 'E2E Module $suffix',
-      slug: 'e2e-module-$suffix',
-      license: 'CC-BY 4.0',
-      versionString: '1.0.0',
-      selectedNoteUuids: [feyCourt.remoteUuid!],
-    );
-    final authors =
-        (publishResult['module']['authors'] as List<dynamic>).cast<String>();
-    expect(authors, contains('mobile_e2e_$suffix@example.com'));
+      // ── publish via remote uuids; server stamps the author email ────
+      final publishResult = await api.publishModule(
+        sourceSettingUuid: linked.remoteUuid!,
+        name: 'E2E Module $suffix',
+        slug: 'e2e-module-$suffix',
+        license: 'CC-BY 4.0',
+        versionString: '1.0.0',
+        selectedNoteUuids: [feyCourt.remoteUuid!],
+      );
+      final authors = (publishResult['module']['authors'] as List<dynamic>)
+          .cast<String>();
+      expect(authors, contains('mobile_e2e_$suffix@example.com'));
 
-    // ── logout revokes the session ──────────────────────────────────
-    await api.logout();
-    await expectLater(api.me(), throwsA(isA<ApiException>()));
+      // ── logout revokes the session ──────────────────────────────────
+      await api.logout();
+      await expectLater(api.me(), throwsA(isA<ApiException>()));
 
-    await store.close();
-  }, skip: enabled ? false : 'set LW_E2E=1 with a running server to enable');
+      await store.close();
+    },
+    skip: enabled ? false : 'set LW_E2E=1 with a running server to enable',
+  );
 }

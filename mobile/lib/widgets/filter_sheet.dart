@@ -38,12 +38,14 @@ Future<void> showContentFilterSheet({
                 child: Row(
                   children: [
                     Expanded(
-                      child: Text('Filter & sort',
-                          style: Theme.of(context).textTheme.titleMedium),
+                      child: Text(
+                        'Filter & sort',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
                     ),
                     TextButton(
-                      onPressed: state.activeCount == 0 &&
-                              state.sort == sorts.first
+                      onPressed:
+                          state.activeCount == 0 && state.sort == sorts.first
                           ? null
                           : () => both(() => state.reset(sorts.first)),
                       child: const Text('Reset'),
@@ -65,8 +67,7 @@ Future<void> showContentFilterSheet({
                             ChoiceChip(
                               label: Text(s.label),
                               selected: state.sort.key == s.key,
-                              onSelected: (_) =>
-                                  both(() => state.sort = s),
+                              onSelected: (_) => both(() => state.sort = s),
                             ),
                         ],
                       ),
@@ -80,12 +81,16 @@ Future<void> showContentFilterSheet({
                           for (final option in dim.options(records, lookups))
                             FilterChip(
                               label: Text(option.label),
-                              selected: state.selections[dim.key]
-                                      ?.contains(option.value) ??
+                              selected:
+                                  state.selections[dim.key]?.contains(
+                                    option.value,
+                                  ) ??
                                   false,
                               onSelected: (selected) => both(() {
-                                final set = state.selections
-                                    .putIfAbsent(dim.key, () => {});
+                                final set = state.selections.putIfAbsent(
+                                  dim.key,
+                                  () => {},
+                                );
                                 selected
                                     ? set.add(option.value)
                                     : set.remove(option.value);

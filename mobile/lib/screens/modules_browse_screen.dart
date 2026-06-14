@@ -50,12 +50,14 @@ class _ModulesBrowseScreenState extends State<ModulesBrowseScreen> {
           itemBuilder: (context, module) => _ModuleTile(
             module: module,
             onTap: () {
-              Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) => ModuleDetailScreen(
-                  connection: widget.connection,
-                  module: module,
+              Navigator.of(context).push(
+                MaterialPageRoute(
+                  builder: (_) => ModuleDetailScreen(
+                    connection: widget.connection,
+                    module: module,
+                  ),
                 ),
-              ));
+              );
             },
           ),
         ),
@@ -143,8 +145,10 @@ class _ModuleDetailScreenState extends State<ModuleDetailScreen> {
             padding: const EdgeInsets.all(16),
             children: [
               if (widget.module.description != null) ...[
-                Text(widget.module.description!,
-                    style: Theme.of(context).textTheme.bodyLarge),
+                Text(
+                  widget.module.description!,
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
                 const SizedBox(height: 16),
               ],
               if (notes.isEmpty)
@@ -173,8 +177,10 @@ class _NoteCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(entry.note.title,
-                style: Theme.of(context).textTheme.titleMedium),
+            Text(
+              entry.note.title,
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
             if (entry.tags.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 4),
@@ -182,10 +188,12 @@ class _NoteCard extends StatelessWidget {
                   spacing: 6,
                   runSpacing: 4,
                   children: entry.tags
-                      .map((t) => Chip(
-                            label: Text(t.slug),
-                            visualDensity: VisualDensity.compact,
-                          ))
+                      .map(
+                        (t) => Chip(
+                          label: Text(t.slug),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      )
                       .toList(),
                 ),
               ),
