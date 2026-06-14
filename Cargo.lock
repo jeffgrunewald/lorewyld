@@ -2378,6 +2378,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "lorewyld-domain-wasm"
+version = "0.1.0"
+dependencies = [
+ "getrandom 0.4.2",
+ "lorewyld-domain",
+ "lorewyld-types",
+ "serde_json",
+ "uuid",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "lorewyld-types"
 version = "0.1.0"
 dependencies = [

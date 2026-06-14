@@ -1,0 +1,5 @@
+# `uuid` (pulled by lorewyld-types) depends on `getrandom`, which needs an
+# explicit backend on wasm32-unknown-unknown. This lets lorewyld-domain-wasm
+# compile for the browser. Scoped to wasm — native builds are unaffected.
+[target.wasm32-unknown-unknown]
+rustflags = ['--cfg', 'getrandom_backend="wasm_js"']

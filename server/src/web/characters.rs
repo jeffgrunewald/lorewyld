@@ -360,6 +360,14 @@ const SHEET_SCRIPT: &str = r#"
     let sheet = null;
     let dirty = false;
     let canEdit = false;
+    // Derived 5e stats from the shared Rust core (WASM), recomputed once
+    // per render; sub-renders read from it instead of re-deriving in JS.
+    let derived = null;
+
+    function bonusOf(list, key) {
+        const e = list.find(function (b) { return b.name === key; });
+        return e ? e.bonus : 0;
+    }
 
     function markDirty() {
         if (!canEdit) return;
@@ -541,6 +549,7 @@ const SHEET_SCRIPT: &str = r#"
 
     function render() {
         sheetEl.replaceChildren();
+        derived = C.deriveStats(sheet);
         renderIdentity();
         renderAbilities();
         renderCombat();
@@ -629,7 +638,7 @@ const SHEET_SCRIPT: &str = r#"
         }));
         levelRow.appendChild(levelItem);
         const prof = C.el('div', 'lw-stat-badge', 'Proficiency');
-        prof.appendChild(C.el('span', 'lw-stat-value', C.formatBonus(C.proficiencyBonus(sheet.level || 1))));
+        prof.appendChild(C.el('span', 'lw-stat-value', C.formatBonus(derived.proficiency_bonus)));
         levelRow.appendChild(prof);
         c.appendChild(levelRow);
 
@@ -694,14 +703,11 @@ const SHEET_SCRIPT: &str = r#"
         grid.appendChild(statStepper('Armor class', sheet.armor_class, 0, 40, 1, function (v) {
             sheet.armor_class = v; markDirty(); render();
         }));
-        grid.appendChild(statBadge('Initiative', C.formatBonus(C.abilityMod(sheet.abilities.dexterity))));
+        grid.appendChild(statBadge('Initiative', C.formatBonus(derived.initiative)));
         grid.appendChild(statStepper('Speed', sheet.speed, 0, 200, 5, function (v) {
             sheet.speed = v; markDirty(); render();
         }));
-        const perceptionProficient = sheet.skill_proficiencies.includes('perception');
-        const passive = 10 + C.abilityMod(sheet.abilities.wisdom) +
-            (perceptionProficient ? C.proficiencyBonus(sheet.level || 1) : 0);
-        grid.appendChild(statBadge('Passive perception', String(passive)));
+        grid.appendChild(statBadge('Passive perception', String(derived.passive_perception)));
         grid.appendChild(statStepper('Current HP', sheet.current_hp, 0, 999, 1, function (v) {
             sheet.current_hp = v; markDirty(); render();
         }));
@@ -739,10 +745,9 @@ const SHEET_SCRIPT: &str = r#"
 
     function renderSaves() {
         const c = card('Saving throws');
-        const profBonus = C.proficiencyBonus(sheet.level || 1);
         for (const ability of C.abilityList) {
             const proficient = sheet.saving_throw_proficiencies.includes(ability.key);
-            const bonus = C.abilityMod(sheet.abilities[ability.key]) + (proficient ? profBonus : 0);
+            const bonus = bonusOf(derived.saving_throw_bonuses, ability.key);
             c.appendChild(checkRow(ability.label, null, proficient, C.formatBonus(bonus), function (on) {
                 sheet.saving_throw_proficiencies = on
                     ? sheet.saving_throw_proficiencies.concat([ability.key])
@@ -756,11 +761,10 @@ const SHEET_SCRIPT: &str = r#"
 
     function renderSkills() {
         const c = card('Skills');
-        const profBonus = C.proficiencyBonus(sheet.level || 1);
         for (const skill of C.skillList) {
             const ability = C.abilityList.find(function (a) { return a.key === skill.ability; });
             const proficient = sheet.skill_proficiencies.includes(skill.key);
-            const bonus = C.abilityMod(sheet.abilities[skill.ability]) + (proficient ? profBonus : 0);
+            const bonus = bonusOf(derived.skill_bonuses, skill.key);
             c.appendChild(checkRow(skill.label, ability.abbr, proficient, C.formatBonus(bonus), function (on) {
                 sheet.skill_proficiencies = on
                     ? sheet.skill_proficiencies.concat([skill.key])

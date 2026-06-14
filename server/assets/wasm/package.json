@@ -1,0 +1,16 @@
+{
+  "name": "lorewyld-domain-wasm",
+  "type": "module",
+  "description": "WASM bindings exposing lorewyld-domain (5e math) to the Leptos web client's JS",
+  "version": "0.1.0",
+  "files": [
+    "lorewyld_domain_bg.wasm",
+    "lorewyld_domain.js",
+    "lorewyld_domain.d.ts"
+  ],
+  "main": "lorewyld_domain.js",
+  "types": "lorewyld_domain.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

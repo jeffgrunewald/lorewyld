@@ -1,0 +1,22 @@
+[package]
+name = "lorewyld-domain-wasm"
+version.workspace = true
+edition.workspace = true
+publish.workspace = true
+description = "WASM bindings exposing lorewyld-domain (5e math) to the Leptos web client's JS"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+lorewyld-types = { path = "../types" }
+lorewyld-domain = { path = "../domain" }
+wasm-bindgen = "0.2"
+serde_json.workspace = true
+
+# uuid (via lorewyld-types) needs a wasm randomness source: its `js` feature
+# plus getrandom's wasm_js backend (cfg in .cargo/config.toml). The domain
+# math never generates UUIDs, but uuid's v4 feature requires this to compile.
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+uuid = { version = "1", features = ["js"] }
+getrandom = { version = "0.4", features = ["wasm_js"] }

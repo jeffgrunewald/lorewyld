@@ -1,8 +1,8 @@
 [workspace]
-# mobile-ffi is intentionally OUT of default-members: it builds a
-# cdylib/staticlib for iOS/Android and is compiled by flutter_rust_bridge's
-# cargokit during the Flutter build, not by a host `cargo build`.
-members = ["server", "shared/types", "shared/domain", "mobile-ffi", "tools/bundle-gen"]
+# mobile-ffi and shared/domain-wasm are intentionally OUT of default-members:
+# they build cdylib artifacts for non-host targets (iOS/Android via cargokit,
+# wasm32 via wasm-pack) rather than by a host `cargo build`.
+members = ["server", "shared/types", "shared/domain", "shared/domain-wasm", "mobile-ffi", "tools/bundle-gen"]
 default-members = ["server", "shared/types", "shared/domain"]
 resolver = "2"
 
