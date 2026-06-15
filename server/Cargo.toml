@@ -14,8 +14,10 @@ chrono.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 uuid.workspace = true
-lorewyld-types = { path = "../shared/types" }
+lorewyld-types = { path = "../shared/types", features = ["openapi"] }
 lorewyld-domain = { path = "../shared/domain" }
+utoipa = { version = "5", features = ["axum_extras"] }
+utoipa-swagger-ui = { version = "9", features = ["axum"] }
 axum = { version = "0.8", features = ["macros", "query"] }
 clap = { version = "4", features = ["derive"] }
 config = { version = "0.15", default-features = false, features = ["toml"] }

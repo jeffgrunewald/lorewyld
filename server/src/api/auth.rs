@@ -200,6 +200,17 @@ pub async fn insert_user(
     Ok(user_uuid)
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/users/register",
+    tag = "auth",
+    request_body = RegisterRequest,
+    responses(
+        (status = 200, description = "Account created; returns the user and a session token", body = AuthResponse),
+        (status = 403, description = "Invalid join code"),
+        (status = 409, description = "Username or email already taken"),
+    )
+)]
 pub async fn register(
     State(state): State<ApiState>,
     Json(req): Json<RegisterRequest>,
@@ -219,6 +230,16 @@ pub async fn register(
     Ok(Json(response))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/users/login",
+    tag = "auth",
+    request_body = LoginRequest,
+    responses(
+        (status = 200, description = "Authenticated; returns the user and a session token", body = AuthResponse),
+        (status = 401, description = "Invalid username or password"),
+    )
+)]
 pub async fn login(
     State(state): State<ApiState>,
     Json(req): Json<LoginRequest>,
@@ -242,6 +263,16 @@ pub async fn login(
 
 /// Revokes the presented session token. Idempotent: deleting an already
 /// revoked token still returns `204`.
+#[utoipa::path(
+    post,
+    path = "/api/users/logout",
+    tag = "auth",
+    security(("bearer" = [])),
+    responses(
+        (status = 204, description = "Session token revoked (idempotent)"),
+        (status = 401, description = "Missing or malformed bearer token"),
+    )
+)]
 pub async fn logout(
     State(state): State<ApiState>,
     headers: HeaderMap,
@@ -256,6 +287,16 @@ pub async fn logout(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/users/me",
+    tag = "auth",
+    security(("bearer" = [])),
+    responses(
+        (status = 200, description = "The authenticated user", body = User),
+        (status = 401, description = "Missing or invalid session"),
+    )
+)]
 pub async fn me(State(state): State<ApiState>, user: CurrentUser) -> Result<Json<User>, ApiError> {
     let user = fetch_user(&state.db, &user.uuid.to_string()).await?;
     Ok(Json(user))

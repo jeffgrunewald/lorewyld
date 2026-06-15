@@ -7,11 +7,14 @@ use crate::common::{EntityId, Timestamp};
 /// server's `join_code`; passwords are stored as argon2 PHC hashes.
 /// `admin` unlocks server settings and user management.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct User {
+    #[cfg_attr(feature = "openapi", schema(value_type = String))]
     pub uuid: EntityId,
     pub username: String,
     pub email: String,
     pub admin: bool,
+    #[cfg_attr(feature = "openapi", schema(value_type = String, format = DateTime))]
     pub created_at: Timestamp,
 }
 

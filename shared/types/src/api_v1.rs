@@ -17,6 +17,7 @@ use crate::{
 /// `POST /api/users/register` payload. The join code gates account
 /// creation; the password is hashed server-side before storage.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct RegisterRequest {
     pub join_code: String,
     pub username: String,
@@ -26,6 +27,7 @@ pub struct RegisterRequest {
 
 /// `POST /api/users/login` payload.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct LoginRequest {
     pub username: String,
     pub password: String,
@@ -35,6 +37,7 @@ pub struct LoginRequest {
 /// user plus the session token to attach to subsequent requests via
 /// `Authorization: Bearer <token>`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct AuthResponse {
     pub user: User,
     pub session_token: String,

@@ -5,8 +5,15 @@ edition.workspace = true
 publish.workspace = true
 description = "Shared schema types for the Lorewyld server, web UI, and mobile clients"
 
+[features]
+# Enables `utoipa::ToSchema` derives so the server can publish an OpenAPI
+# spec from these types. Off by default to keep the FFI (mobile) and WASM
+# (web) builds free of utoipa.
+openapi = ["dep:utoipa"]
+
 [dependencies]
 chrono.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 uuid.workspace = true
+utoipa = { version = "5", optional = true }
