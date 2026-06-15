@@ -7,6 +7,13 @@
 -- server/src/content.rs), so partial column updates never happen and
 -- serialization stays zero-mapping through lorewyld-types.
 --
+-- Display content tables additionally carry a `summary` column: the
+-- list-row projection serialized by each type's `summary()` (e.g.
+-- `Spell::summary` -> `SpellSummary`). It is single-sourced in
+-- lorewyld-types and served verbatim by the compendium list endpoint, so
+-- the slim list shape is never assembled in SQL. Lookup tables return
+-- full records and have no summary column.
+--
 -- FTS5 content search is deferred; when it lands, follow the
 -- lore_note external-content pattern from the lore_authoring migration.
 
@@ -150,6 +157,7 @@ CREATE TABLE weapon_property (
 );
 
 -- Major content ----------------------------------------------------------
+-- Display tables carry a single-sourced `summary` column (see header).
 
 CREATE TABLE spell (
     uuid                 TEXT    PRIMARY KEY NOT NULL,
@@ -161,6 +169,7 @@ CREATE TABLE spell (
     school_uuid          TEXT    NOT NULL REFERENCES spell_school(uuid),
     concentration        INTEGER NOT NULL DEFAULT 0,
     ritual               INTEGER NOT NULL DEFAULT 0,
+    summary              TEXT    NOT NULL,
     data                 TEXT    NOT NULL
 );
 
@@ -176,6 +185,7 @@ CREATE TABLE creature (
     challenge_rating     REAL NOT NULL,
     creature_type_uuid   TEXT NOT NULL REFERENCES creature_type(uuid),
     size_uuid            TEXT NOT NULL REFERENCES size(uuid),
+    summary              TEXT NOT NULL,
     data                 TEXT NOT NULL
 );
 
@@ -189,6 +199,7 @@ CREATE TABLE class (
     slug                 TEXT NOT NULL,
     name                 TEXT NOT NULL,
     subclass_of          TEXT REFERENCES class(uuid),
+    summary              TEXT NOT NULL,
     data                 TEXT NOT NULL
 );
 
@@ -201,6 +212,7 @@ CREATE TABLE species (
     slug                 TEXT    NOT NULL,
     name                 TEXT    NOT NULL,
     is_subspecies        INTEGER NOT NULL DEFAULT 0,
+    summary              TEXT    NOT NULL,
     data                 TEXT    NOT NULL
 );
 
@@ -210,6 +222,7 @@ CREATE TABLE feat (
     key                  TEXT NOT NULL UNIQUE,
     slug                 TEXT NOT NULL,
     name                 TEXT NOT NULL,
+    summary              TEXT NOT NULL,
     data                 TEXT NOT NULL
 );
 
@@ -219,6 +232,7 @@ CREATE TABLE background (
     key                  TEXT NOT NULL UNIQUE,
     slug                 TEXT NOT NULL,
     name                 TEXT NOT NULL,
+    summary              TEXT NOT NULL,
     data                 TEXT NOT NULL
 );
 
@@ -229,6 +243,7 @@ CREATE TABLE weapon (
     slug                 TEXT    NOT NULL,
     name                 TEXT    NOT NULL,
     is_simple            INTEGER NOT NULL DEFAULT 0,
+    summary              TEXT    NOT NULL,
     data                 TEXT    NOT NULL
 );
 
@@ -239,6 +254,7 @@ CREATE TABLE armor (
     slug                 TEXT NOT NULL,
     name                 TEXT NOT NULL,
     category             TEXT NOT NULL,
+    summary              TEXT NOT NULL,
     data                 TEXT NOT NULL
 );
 
@@ -251,6 +267,7 @@ CREATE TABLE item (
     category_uuid        TEXT    NOT NULL REFERENCES item_category(uuid),
     rarity               TEXT,
     is_magic             INTEGER NOT NULL DEFAULT 0,
+    summary              TEXT    NOT NULL,
     data                 TEXT    NOT NULL
 );
 

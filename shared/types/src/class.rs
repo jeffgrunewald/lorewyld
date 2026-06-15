@@ -89,3 +89,35 @@ pub struct Class {
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }
+
+/// Slim list-projection of a [`Class`]. Optionals serialize as `null`
+/// (not omitted) to match the list-row shape clients already read.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClassSummary {
+    pub uuid: EntityId,
+    pub content_module_uuid: EntityId,
+    pub document_uuid: EntityId,
+    pub key: String,
+    pub slug: String,
+    pub name: String,
+    pub subclass_of: Option<EntityId>,
+    pub hit_dice: Option<u8>,
+    pub caster_type: Option<String>,
+}
+
+impl Class {
+    /// Derives the list-row summary from the full record.
+    pub fn summary(&self) -> ClassSummary {
+        ClassSummary {
+            uuid: self.uuid,
+            content_module_uuid: self.content_module_uuid,
+            document_uuid: self.document_uuid,
+            key: self.key.clone(),
+            slug: self.slug.clone(),
+            name: self.name.clone(),
+            subclass_of: self.subclass_of,
+            hit_dice: self.hit_dice,
+            caster_type: self.caster_type.clone(),
+        }
+    }
+}

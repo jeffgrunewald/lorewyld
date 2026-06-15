@@ -225,3 +225,63 @@ pub struct Creature {
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }
+
+/// Slim list-projection of a [`Creature`]. Single source of truth for the
+/// creature list-row shape (see `Creature::summary`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CreatureSummary {
+    pub uuid: EntityId,
+    pub content_module_uuid: EntityId,
+    pub document_uuid: EntityId,
+    pub key: String,
+    pub slug: String,
+    pub name: String,
+    pub challenge_rating: f32,
+    #[serde(rename = "type")]
+    pub kind: EntityId,
+    pub size: EntityId,
+}
+
+#[cfg(test)]
+mod summary_tests {
+    use super::*;
+
+    #[test]
+    fn creature_summary_renames_kind_to_type() {
+        let s = CreatureSummary {
+            uuid: EntityId::nil(),
+            content_module_uuid: EntityId::nil(),
+            document_uuid: EntityId::nil(),
+            key: "k".into(),
+            slug: "s".into(),
+            name: "n".into(),
+            challenge_rating: 0.25,
+            kind: EntityId::nil(),
+            size: EntityId::nil(),
+        };
+        let v = serde_json::to_value(&s).unwrap();
+        let obj = v.as_object().unwrap();
+        // The FK serializes as "type" (matching the record + clients), not "kind".
+        assert!(obj.contains_key("type"));
+        assert!(!obj.contains_key("kind"));
+        // Fractional CR survives as a JSON number.
+        assert_eq!(v["challenge_rating"], serde_json::json!(0.25));
+    }
+}
+
+impl Creature {
+    /// Derives the list-row summary from the full record.
+    pub fn summary(&self) -> CreatureSummary {
+        CreatureSummary {
+            uuid: self.uuid,
+            content_module_uuid: self.content_module_uuid,
+            document_uuid: self.document_uuid,
+            key: self.key.clone(),
+            slug: self.slug.clone(),
+            name: self.name.clone(),
+            challenge_rating: self.challenge_rating,
+            kind: self.kind,
+            size: self.size,
+        }
+    }
+}

@@ -9,7 +9,8 @@
 
 use anyhow::{Context, Result, bail};
 use lorewyld_types::{
-    ContentBundle, ContentModule, MIN_SUPPORTED_SCHEMA_VERSION, ModuleOrigin, SCHEMA_VERSION, Spell,
+    Armor, Background, Class, ContentBundle, ContentModule, Creature, Feat, Item,
+    MIN_SUPPORTED_SCHEMA_VERSION, ModuleOrigin, SCHEMA_VERSION, Species, Spell, Weapon,
 };
 use serde::Serialize;
 use serde_json::Value;
@@ -227,7 +228,9 @@ pub fn category_spec(table: &str) -> Option<&'static CategorySpec> {
 /// verbatim by the list endpoint. The summary shape is single-sourced by
 /// each type's `summary()` (e.g. `Spell::summary` → `SpellSummary`).
 /// Inc 3b extends this to the remaining display categories.
-pub const SUMMARY_TABLES: &[&str] = &["spell"];
+pub const SUMMARY_TABLES: &[&str] = &[
+    "spell", "creature", "class", "species", "feat", "background", "weapon", "armor", "item",
+];
 
 pub fn has_summary(table: &str) -> bool {
     SUMMARY_TABLES.contains(&table)
@@ -527,12 +530,13 @@ async fn insert_bundle_records(
         |s: &Spell| s.summary(),
     )
     .await?;
-    n += insert_records(
+    n += insert_records_summarized(
         tx,
         allowed,
         "creature",
         spec_extras("creature"),
         &bundle.creatures,
+        |c: &Creature| c.summary(),
     )
     .await?;
     // Self-referential tables insert parents before children: bundle
@@ -542,34 +546,87 @@ async fn insert_bundle_records(
         .iter()
         .cloned()
         .partition(|c| c.subclass_of.is_none());
-    n += insert_records(tx, allowed, "class", spec_extras("class"), &base_classes).await?;
-    n += insert_records(tx, allowed, "class", spec_extras("class"), &subclasses).await?;
+    n += insert_records_summarized(
+        tx,
+        allowed,
+        "class",
+        spec_extras("class"),
+        &base_classes,
+        |c: &Class| c.summary(),
+    )
+    .await?;
+    n += insert_records_summarized(
+        tx,
+        allowed,
+        "class",
+        spec_extras("class"),
+        &subclasses,
+        |c: &Class| c.summary(),
+    )
+    .await?;
     let (base_species, subspecies): (Vec<_>, Vec<_>) = bundle
         .species
         .iter()
         .cloned()
         .partition(|s| s.subspecies_of.is_none());
-    n += insert_records(
+    n += insert_records_summarized(
         tx,
         allowed,
         "species",
         spec_extras("species"),
         &base_species,
+        |s: &Species| s.summary(),
     )
     .await?;
-    n += insert_records(tx, allowed, "species", spec_extras("species"), &subspecies).await?;
-    n += insert_records(tx, allowed, "feat", &[], &bundle.feats).await?;
-    n += insert_records(tx, allowed, "background", &[], &bundle.backgrounds).await?;
-    n += insert_records(
+    n += insert_records_summarized(
+        tx,
+        allowed,
+        "species",
+        spec_extras("species"),
+        &subspecies,
+        |s: &Species| s.summary(),
+    )
+    .await?;
+    n += insert_records_summarized(tx, allowed, "feat", &[], &bundle.feats, |f: &Feat| {
+        f.summary()
+    })
+    .await?;
+    n += insert_records_summarized(
+        tx,
+        allowed,
+        "background",
+        &[],
+        &bundle.backgrounds,
+        |b: &Background| b.summary(),
+    )
+    .await?;
+    n += insert_records_summarized(
         tx,
         allowed,
         "weapon",
         spec_extras("weapon"),
         &bundle.weapons,
+        |w: &Weapon| w.summary(),
     )
     .await?;
-    n += insert_records(tx, allowed, "armor", spec_extras("armor"), &bundle.armors).await?;
-    n += insert_records(tx, allowed, "item", spec_extras("item"), &bundle.items).await?;
+    n += insert_records_summarized(
+        tx,
+        allowed,
+        "armor",
+        spec_extras("armor"),
+        &bundle.armors,
+        |a: &Armor| a.summary(),
+    )
+    .await?;
+    n += insert_records_summarized(
+        tx,
+        allowed,
+        "item",
+        spec_extras("item"),
+        &bundle.items,
+        |i: &Item| i.summary(),
+    )
+    .await?;
     Ok(n)
 }
 
@@ -761,31 +818,4 @@ where
         inserted += 1;
     }
     Ok(inserted)
-}
-
-/// Backfills `summary` columns for content rows seeded before the column
-/// existed. Idempotent: only NULL-summary rows are touched, so it is a
-/// no-op once every row has a summary (new seeds write one at ingest).
-pub async fn backfill_summaries(db: &SqlitePool) -> Result<()> {
-    let rows: Vec<(String, String)> =
-        sqlx::query_as("SELECT uuid, data FROM spell WHERE summary IS NULL")
-            .fetch_all(db)
-            .await?;
-    if rows.is_empty() {
-        return Ok(());
-    }
-    let mut tx = db.begin().await?;
-    for (uuid, data) in &rows {
-        let spell: Spell = serde_json::from_str(data)
-            .with_context(|| format!("decoding spell {uuid} for summary backfill"))?;
-        let summary = serde_json::to_string(&spell.summary())?;
-        sqlx::query("UPDATE spell SET summary = ? WHERE uuid = ?")
-            .bind(summary)
-            .bind(uuid)
-            .execute(&mut *tx)
-            .await?;
-    }
-    tx.commit().await?;
-    tracing::info!(spells = rows.len(), "backfilled spell summaries");
-    Ok(())
 }

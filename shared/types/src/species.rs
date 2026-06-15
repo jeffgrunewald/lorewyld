@@ -59,3 +59,36 @@ pub struct Species {
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
 }
+
+/// Slim list-projection of a [`Species`] (see `Species::summary`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SpeciesSummary {
+    pub uuid: EntityId,
+    pub content_module_uuid: EntityId,
+    pub document_uuid: EntityId,
+    pub key: String,
+    pub slug: String,
+    pub name: String,
+    pub is_subspecies: bool,
+    pub size: EntityId,
+    pub speed: i32,
+    pub subspecies_of: Option<EntityId>,
+}
+
+impl Species {
+    /// Derives the list-row summary from the full record.
+    pub fn summary(&self) -> SpeciesSummary {
+        SpeciesSummary {
+            uuid: self.uuid,
+            content_module_uuid: self.content_module_uuid,
+            document_uuid: self.document_uuid,
+            key: self.key.clone(),
+            slug: self.slug.clone(),
+            name: self.name.clone(),
+            is_subspecies: self.is_subspecies,
+            size: self.size,
+            speed: self.speed,
+            subspecies_of: self.subspecies_of,
+        }
+    }
+}
