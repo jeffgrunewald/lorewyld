@@ -1,0 +1,1 @@
+ALTER TABLE spell DROP COLUMN summary;

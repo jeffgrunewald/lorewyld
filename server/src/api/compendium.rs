@@ -125,7 +125,10 @@ pub async fn list_category(
 ) -> Result<Json<Vec<Value>>, ApiError> {
     let spec = category_spec(&category).ok_or(ApiError::NotFound)?;
 
-    let projection = if spec.include_data {
+    let projection = if crate::content::has_summary(&category) {
+        // Materialized, single-sourced list shape (e.g. SpellSummary).
+        "t.summary".to_string()
+    } else if spec.include_data {
         "t.data".to_string()
     } else {
         summary_projection(spec)

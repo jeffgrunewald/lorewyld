@@ -9,7 +9,7 @@
 
 use anyhow::{Context, Result, bail};
 use lorewyld_types::{
-    ContentBundle, ContentModule, MIN_SUPPORTED_SCHEMA_VERSION, ModuleOrigin, SCHEMA_VERSION,
+    ContentBundle, ContentModule, MIN_SUPPORTED_SCHEMA_VERSION, ModuleOrigin, SCHEMA_VERSION, Spell,
 };
 use serde::Serialize;
 use serde_json::Value;
@@ -221,6 +221,16 @@ pub const DISPLAY_CATEGORIES: &[&str] = &[
 
 pub fn category_spec(table: &str) -> Option<&'static CategorySpec> {
     CATEGORIES.iter().find(|spec| spec.table == table)
+}
+
+/// Content tables that carry a materialized `summary` column, served
+/// verbatim by the list endpoint. The summary shape is single-sourced by
+/// each type's `summary()` (e.g. `Spell::summary` → `SpellSummary`).
+/// Inc 3b extends this to the remaining display categories.
+pub const SUMMARY_TABLES: &[&str] = &["spell"];
+
+pub fn has_summary(table: &str) -> bool {
+    SUMMARY_TABLES.contains(&table)
 }
 
 /// How an import reacts to a bundle module whose slug already exists.
@@ -508,7 +518,15 @@ async fn insert_bundle_records(
         &bundle.weapon_properties,
     )
     .await?;
-    n += insert_records(tx, allowed, "spell", spec_extras("spell"), &bundle.spells).await?;
+    n += insert_records_summarized(
+        tx,
+        allowed,
+        "spell",
+        spec_extras("spell"),
+        &bundle.spells,
+        |s: &Spell| s.summary(),
+    )
+    .await?;
     n += insert_records(
         tx,
         allowed,
@@ -665,4 +683,109 @@ async fn insert_records<T: Serialize>(
         inserted += 1;
     }
     Ok(inserted)
+}
+
+/// Like [`insert_records`] but also writes a materialized `summary` column
+/// (for tables in [`SUMMARY_TABLES`]). `summary_of` derives the list-row
+/// summary from the typed record, so its shape is single-sourced in
+/// lorewyld-types rather than assembled in SQL.
+async fn insert_records_summarized<T, S, F>(
+    tx: &mut Transaction<'_, Sqlite>,
+    allowed_modules: &std::collections::HashSet<String>,
+    table: &str,
+    extras: &[(&str, &str)],
+    records: &[T],
+    summary_of: F,
+) -> Result<u64>
+where
+    T: Serialize,
+    S: Serialize,
+    F: Fn(&T) -> S,
+{
+    if records.is_empty() {
+        return Ok(0);
+    }
+    let extra_cols = extras
+        .iter()
+        .map(|(col, _)| format!(", {col}"))
+        .collect::<String>();
+    let placeholders = ", ?".repeat(extras.len());
+    let sql = format!(
+        "INSERT INTO {table} (uuid, content_module_uuid, key, slug, name{extra_cols}, summary, data) \
+         VALUES (?, ?, ?, ?, ?{placeholders}, ?, ?)"
+    );
+
+    let mut inserted = 0;
+    for record in records {
+        let value = serde_json::to_value(record)?;
+        if !value
+            .pointer("/content_module_uuid")
+            .and_then(Value::as_str)
+            .is_some_and(|uuid| allowed_modules.contains(uuid))
+        {
+            continue;
+        }
+        let data = serde_json::to_string(&value)?;
+        let summary = serde_json::to_string(&summary_of(record))?;
+        let field = |ptr: &str| -> Result<&Value> {
+            value
+                .pointer(ptr)
+                .ok_or_else(|| anyhow::anyhow!("{table} record missing field {ptr}"))
+        };
+        let text = |ptr: &str| -> Result<String> {
+            Ok(field(ptr)?
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("{table} field {ptr} is not a string"))?
+                .to_string())
+        };
+
+        let mut query = sqlx::query(&sql)
+            .bind(text("/uuid")?)
+            .bind(text("/content_module_uuid")?)
+            .bind(text("/key")?)
+            .bind(text("/slug")?)
+            .bind(text("/name")?);
+        for (col, ptr) in extras {
+            query = match value.pointer(ptr) {
+                None | Some(Value::Null) => query.bind(None::<String>),
+                Some(Value::String(s)) => query.bind(s.clone()),
+                Some(Value::Bool(b)) => query.bind(*b),
+                Some(Value::Number(n)) if n.is_i64() || n.is_u64() => {
+                    query.bind(n.as_i64().unwrap_or_default())
+                }
+                Some(Value::Number(n)) => query.bind(n.as_f64().unwrap_or_default()),
+                Some(other) => bail!("{table} column {col}: unbindable JSON value {other}"),
+            };
+        }
+        query.bind(summary).bind(data).execute(&mut **tx).await?;
+        inserted += 1;
+    }
+    Ok(inserted)
+}
+
+/// Backfills `summary` columns for content rows seeded before the column
+/// existed. Idempotent: only NULL-summary rows are touched, so it is a
+/// no-op once every row has a summary (new seeds write one at ingest).
+pub async fn backfill_summaries(db: &SqlitePool) -> Result<()> {
+    let rows: Vec<(String, String)> =
+        sqlx::query_as("SELECT uuid, data FROM spell WHERE summary IS NULL")
+            .fetch_all(db)
+            .await?;
+    if rows.is_empty() {
+        return Ok(());
+    }
+    let mut tx = db.begin().await?;
+    for (uuid, data) in &rows {
+        let spell: Spell = serde_json::from_str(data)
+            .with_context(|| format!("decoding spell {uuid} for summary backfill"))?;
+        let summary = serde_json::to_string(&spell.summary())?;
+        sqlx::query("UPDATE spell SET summary = ? WHERE uuid = ?")
+            .bind(summary)
+            .bind(uuid)
+            .execute(&mut *tx)
+            .await?;
+    }
+    tx.commit().await?;
+    tracing::info!(spells = rows.len(), "backfilled spell summaries");
+    Ok(())
 }
