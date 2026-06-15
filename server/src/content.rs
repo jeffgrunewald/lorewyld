@@ -819,3 +819,161 @@ where
     }
     Ok(inserted)
 }
+
+#[cfg(test)]
+mod compendium_contract {
+    //! Drift guard for surface #2: the web (server/src/web/compendium.rs)
+    //! and mobile (mobile/lib/compendium/) compendia read content records
+    //! by stringly-typed field key. Those keys ARE the serde field names of
+    //! the Rust content types. The clients are plain JS / dynamic Dart, so
+    //! a Rust field rename can't be caught at compile time there — it would
+    //! silently blank a fact row. This test pins every field the clients
+    //! read to the live types: rename/remove one and the test fails loudly,
+    //! pointing at the consumers to update in lockstep.
+    //!
+    //! Field presence is checked against the shipped bundle (real records),
+    //! unioned across every record so `skip_serializing_if = None` optionals
+    //! that are populated somewhere still count.
+
+    use super::*;
+    use std::collections::BTreeSet;
+
+    fn keys_union<T: Serialize>(records: &[T]) -> BTreeSet<String> {
+        let mut keys = BTreeSet::new();
+        for record in records {
+            if let Ok(Value::Object(map)) = serde_json::to_value(record) {
+                keys.extend(map.into_iter().map(|(k, _)| k));
+            }
+        }
+        keys
+    }
+
+    #[track_caller]
+    fn assert_fields(category: &str, present: &BTreeSet<String>, consumed: &[&str]) {
+        let missing: Vec<&str> = consumed
+            .iter()
+            .copied()
+            .filter(|f| !present.contains(*f))
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "content type `{category}` no longer serializes {missing:?}, which the \
+             compendium clients read — update server/src/web/compendium.rs and \
+             mobile/lib/compendium/ in lockstep with the type change",
+        );
+    }
+
+    #[test]
+    fn clients_consumed_fields_exist_on_current_types() {
+        let bundle: ContentBundle =
+            serde_json::from_str(SRD_BUNDLE_JSON).expect("embedded bundle decodes");
+
+        assert_fields(
+            "spell",
+            &keys_union(&bundle.spells),
+            &[
+                "uuid", "key", "slug", "name", "level", "school", "concentration", "ritual",
+                "verbal", "somatic", "material", "material_specified", "casting_time",
+                "range_text", "duration", "description", "higher_level", "document_uuid",
+            ],
+        );
+        assert_fields(
+            "creature",
+            &keys_union(&bundle.creatures),
+            &[
+                "uuid", "key", "slug", "name", "type", "size", "challenge_rating", "armor_class",
+                "armor_detail", "hit_points", "hit_dice", "speed", "ability_scores",
+                "experience_points", "languages", "actions", "document_uuid",
+            ],
+        );
+        assert_fields(
+            "class",
+            &keys_union(&bundle.classes),
+            &[
+                "uuid", "key", "slug", "name", "subclass_of", "caster_type", "hit_dice",
+                "prof_saving_throws", "prof_armor", "prof_weapons", "prof_skills", "features",
+                "desc", "document_uuid",
+            ],
+        );
+        assert_fields(
+            "species",
+            &keys_union(&bundle.species),
+            &[
+                "uuid", "key", "slug", "name", "is_subspecies", "subspecies_of", "size", "speed",
+                "asi_desc", "traits", "desc", "document_uuid",
+            ],
+        );
+        assert_fields(
+            "feat",
+            &keys_union(&bundle.feats),
+            &[
+                "uuid", "key", "slug", "name", "has_prerequisite", "prerequisite", "benefits",
+                "desc", "document_uuid",
+            ],
+        );
+        assert_fields(
+            "background",
+            &keys_union(&bundle.backgrounds),
+            &["uuid", "key", "slug", "name", "benefits", "desc", "document_uuid"],
+        );
+        assert_fields(
+            "item",
+            &keys_union(&bundle.items),
+            &[
+                "uuid", "key", "slug", "name", "category_uuid", "cost", "weight", "is_magic",
+                "rarity", "requires_attunement", "desc", "document_uuid",
+            ],
+        );
+        assert_fields(
+            "weapon",
+            &keys_union(&bundle.weapons),
+            &[
+                "uuid", "key", "slug", "name", "is_simple", "damage_dice", "damage_type",
+                "properties", "document_uuid",
+            ],
+        );
+        assert_fields(
+            "armor",
+            &keys_union(&bundle.armors),
+            &[
+                "uuid", "key", "slug", "name", "category", "ac_display",
+                "grants_stealth_disadvantage", "document_uuid",
+            ],
+        );
+    }
+
+    #[test]
+    fn nested_named_list_sections_keep_name_and_desc() {
+        // The entry view renders class.features / species.traits /
+        // creature.actions / background.benefits as `{name, desc}` cards
+        // (compendium.rs `namedList`). Guard those nested keys too. Feat
+        // benefits are excluded: `FeatBenefit.name` is optional by design
+        // (unnamed benefits are intentionally skipped by the client).
+        let bundle: ContentBundle =
+            serde_json::from_str(SRD_BUNDLE_JSON).expect("embedded bundle decodes");
+
+        // Asserts the first non-empty list found under `field` has rows
+        // carrying both `name` and `desc`.
+        fn assert_name_desc<T: Serialize>(records: &[T], field: &str, label: &str) {
+            let row = records
+                .iter()
+                .filter_map(|r| serde_json::to_value(r).ok())
+                .find_map(|r| {
+                    r.get(field)
+                        .and_then(Value::as_array)
+                        .and_then(|a| a.first())
+                        .cloned()
+                });
+            let row = row.unwrap_or_else(|| panic!("{label}: no records carry a non-empty `{field}` list"));
+            assert!(
+                row.get("name").is_some() && row.get("desc").is_some(),
+                "{label} rows lost `name`/`desc` — update compendium clients' namedList rendering",
+            );
+        }
+
+        assert_name_desc(&bundle.classes, "features", "class.features");
+        assert_name_desc(&bundle.species, "traits", "species.traits");
+        assert_name_desc(&bundle.creatures, "actions", "creature.actions");
+        assert_name_desc(&bundle.backgrounds, "benefits", "background.benefits");
+    }
+}
