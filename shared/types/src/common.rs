@@ -45,6 +45,7 @@ pub enum AbilityScore {
 /// modifier maps. All six axes are required so consumers don't have to
 /// branch on missing entries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct AbilityScores {
     pub strength: i32,
     pub dexterity: i32,

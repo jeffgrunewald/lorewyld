@@ -16,14 +16,18 @@ use crate::common::{EntityId, Timestamp};
 /// `introduced_by_module_uuid` records attribution when a tag entered
 /// the namespace via a published content module.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Tag {
+    #[cfg_attr(feature = "openapi", schema(value_type = String))]
     pub uuid: EntityId,
     pub slug: String,
     pub display_name: String,
     #[serde(default)]
     pub is_system: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "openapi", schema(value_type = Option<String>))]
     pub introduced_by_module_uuid: Option<EntityId>,
+    #[cfg_attr(feature = "openapi", schema(value_type = String, format = DateTime))]
     pub created_at: Timestamp,
 }
 

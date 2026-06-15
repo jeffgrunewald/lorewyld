@@ -51,6 +51,13 @@ impl TagRow {
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/tags",
+    tag = "tags",
+    params(("q" = Option<String>, Query, description = "Slug/name prefix filter")),
+    responses((status = 200, description = "Tags, optionally filtered", body = [Tag]))
+)]
 pub async fn list_tags(
     State(state): State<ApiState>,
     Query(query): Query<TagListQuery>,
@@ -87,6 +94,17 @@ pub async fn list_tags(
         .map(Json)
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/tags",
+    tag = "tags",
+    security(("bearer" = [])),
+    request_body = CreateTagRequest,
+    responses(
+        (status = 200, description = "The created tag", body = Tag),
+        (status = 409, description = "Slug already exists"),
+    )
+)]
 pub async fn create_tag(
     State(state): State<ApiState>,
     _user: CurrentUser,

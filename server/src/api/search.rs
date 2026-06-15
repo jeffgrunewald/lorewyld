@@ -21,6 +21,14 @@ const MAX_LIMIT: u32 = 200;
 ///   - visibility filter (Visible always; AuthorOnly only for the
 ///     caller's own notes; GamemasterOnly for their creator or any
 ///     admin — the server-wide GM role)
+#[utoipa::path(
+    post,
+    path = "/api/search",
+    tag = "search",
+    security(("bearer" = [])),
+    request_body = SearchRequest,
+    responses((status = 200, description = "Matching lore notes with their tags", body = SearchResponse))
+)]
 pub async fn search(
     State(state): State<ApiState>,
     user: CurrentUser,

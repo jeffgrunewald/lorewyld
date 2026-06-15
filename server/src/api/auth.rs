@@ -307,6 +307,17 @@ pub async fn me(State(state): State<ApiState>, user: CurrentUser) -> Result<Json
 /// the new one, then revokes every *other* session so a stolen token
 /// can't outlive a password rotation; the presenting session stays
 /// valid.
+#[utoipa::path(
+    post,
+    path = "/api/users/password",
+    tag = "auth",
+    security(("bearer" = [])),
+    request_body = ChangePasswordRequest,
+    responses(
+        (status = 204, description = "Password changed; other sessions revoked"),
+        (status = 401, description = "Current password incorrect or no session"),
+    )
+)]
 pub async fn change_password(
     State(state): State<ApiState>,
     headers: HeaderMap,

@@ -34,6 +34,13 @@ const ACTIVE_JOIN: &str = "JOIN content_module m ON m.uuid = t.content_module_uu
 
 /// `GET /api/content/counts` — entry counts per compendium category
 /// across active modules, for the landing-grid tiles.
+#[utoipa::path(
+    get,
+    path = "/api/content/counts",
+    tag = "content",
+    security(("bearer" = [])),
+    responses((status = 200, description = "Entry counts per compendium category across active modules", body = ContentCountsResponse))
+)]
 pub async fn content_counts(
     State(state): State<ApiState>,
     _user: CurrentUser,
@@ -65,6 +72,14 @@ pub struct RecentContentQuery {
 /// Content tables carry no insert timestamp, so recency comes from the
 /// record's own `created_at` (RFC 3339 strings compare lexically) —
 /// bundle generation/publish time, which is what "added" means here.
+#[utoipa::path(
+    get,
+    path = "/api/content/recent",
+    tag = "content",
+    security(("bearer" = [])),
+    params(("limit" = Option<u32>, Query, description = "Max items (default 10, capped 50)")),
+    responses((status = 200, description = "Newest content entries across active modules", body = RecentContentResponse))
+)]
 pub async fn recent_content(
     State(state): State<ApiState>,
     _user: CurrentUser,
@@ -117,6 +132,18 @@ pub struct ContentListQuery {
 /// from active modules, name-sorted. `category` must name a known
 /// content table; it is resolved through the static spec map, never
 /// interpolated from user input.
+#[utoipa::path(
+    get,
+    path = "/api/content/{category}",
+    tag = "content",
+    security(("bearer" = [])),
+    params(
+        ("category" = String, Path, description = "Content table, e.g. spell, creature, item"),
+        ("q" = Option<String>, Query, description = "Case-insensitive name filter"),
+        ("limit" = Option<u32>, Query, description = "Max rows"),
+    ),
+    responses((status = 200, description = "Slim list rows. For display categories each row is that category's typed summary (e.g. SpellSummary); lookup categories return full records.")),
+)]
 pub async fn list_category(
     State(state): State<ApiState>,
     _user: CurrentUser,
@@ -166,6 +193,20 @@ pub async fn list_category(
 
 /// `GET /api/content/{category}/{uuid}` — one entry's stored record
 /// JSON, verbatim. Disabled-module entries 404.
+#[utoipa::path(
+    get,
+    path = "/api/content/{category}/{uuid}",
+    tag = "content",
+    security(("bearer" = [])),
+    params(
+        ("category" = String, Path, description = "Content table, e.g. spell, creature, item"),
+        ("uuid" = String, Path, description = "Record UUID"),
+    ),
+    responses(
+        (status = 200, description = "The full stored record JSON for the entry"),
+        (status = 404, description = "Unknown category or entry (or its module is disabled)"),
+    ),
+)]
 pub async fn get_entry(
     State(state): State<ApiState>,
     _user: CurrentUser,

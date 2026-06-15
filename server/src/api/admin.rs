@@ -33,6 +33,14 @@ pub struct UserListQuery {
 }
 
 /// `GET /api/admin/users?page&limit` — one page of registered users.
+#[utoipa::path(
+    get,
+    path = "/api/admin/users",
+    tag = "admin",
+    security(("bearer" = [])),
+    params(("page" = Option<u32>, Query), ("limit" = Option<u32>, Query)),
+    responses((status = 200, description = "One page of registered users (admin only)", body = UserListResponse))
+)]
 pub async fn list_users(
     State(state): State<ApiState>,
     _admin: AdminUser,
@@ -78,6 +86,14 @@ pub async fn list_users(
 
 /// `POST /api/admin/users` — admin-driven account creation. Same shape
 /// as registration minus the join code; admin access supersedes it.
+#[utoipa::path(
+    post,
+    path = "/api/admin/users",
+    tag = "admin",
+    security(("bearer" = [])),
+    request_body = AdminCreateUserRequest,
+    responses((status = 201, description = "Created user (admin only)", body = User))
+)]
 pub async fn create_user(
     State(state): State<ApiState>,
     _admin: AdminUser,
@@ -93,6 +109,14 @@ pub async fn create_user(
 /// collaborator rows cascade; authored settings/notes orphan to a NULL
 /// author. Self-deletion is blocked, which also guarantees at least one
 /// admin always survives.
+#[utoipa::path(
+    delete,
+    path = "/api/admin/users/{uuid}",
+    tag = "admin",
+    security(("bearer" = [])),
+    params(("uuid" = String, Path, description = "User UUID")),
+    responses((status = 204, description = "User deleted (admin only)"))
+)]
 pub async fn delete_user(
     State(state): State<ApiState>,
     admin: AdminUser,
@@ -117,6 +141,15 @@ pub async fn delete_user(
 /// `PATCH /api/admin/users/:uuid` — toggle the admin flag. Removing
 /// your own admin access is blocked so the server can't end up with no
 /// admins.
+#[utoipa::path(
+    patch,
+    path = "/api/admin/users/{uuid}",
+    tag = "admin",
+    security(("bearer" = [])),
+    params(("uuid" = String, Path, description = "User UUID")),
+    request_body = AdminUpdateUserRequest,
+    responses((status = 200, description = "Updated user (admin only)", body = User))
+)]
 pub async fn set_admin(
     State(state): State<ApiState>,
     admin: AdminUser,
@@ -145,6 +178,13 @@ pub async fn set_admin(
 
 /// `GET /api/admin/server` — server identity (editable name, read-only
 /// join code) plus the read-only software version for display.
+#[utoipa::path(
+    get,
+    path = "/api/admin/server",
+    tag = "admin",
+    security(("bearer" = [])),
+    responses((status = 200, description = "Editable server identity + join code (admin only)", body = ServerSettings))
+)]
 pub async fn get_server_settings(
     State(state): State<ApiState>,
     _admin: AdminUser,
@@ -154,6 +194,14 @@ pub async fn get_server_settings(
 
 /// `PATCH /api/admin/server` — partial update of the server name. The
 /// join code is never edited directly; see [`regenerate_join_code`].
+#[utoipa::path(
+    patch,
+    path = "/api/admin/server",
+    tag = "admin",
+    security(("bearer" = [])),
+    request_body = UpdateServerSettingsRequest,
+    responses((status = 200, description = "Updated server settings (admin only)", body = ServerSettings))
+)]
 pub async fn update_server_settings(
     State(state): State<ApiState>,
     _admin: AdminUser,
@@ -182,6 +230,13 @@ pub async fn update_server_settings(
 /// freshly generated one. The old code stops gating registration
 /// immediately. Generation reuses the boot-time generator, so the new
 /// code satisfies the same format constraint by construction.
+#[utoipa::path(
+    post,
+    path = "/api/admin/server/join-code",
+    tag = "admin",
+    security(("bearer" = [])),
+    responses((status = 200, description = "A freshly generated join code (admin only)", body = ServerSettings))
+)]
 pub async fn regenerate_join_code(
     State(state): State<ApiState>,
     _admin: AdminUser,

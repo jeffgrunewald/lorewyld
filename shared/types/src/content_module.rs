@@ -9,6 +9,7 @@ use crate::common::{EntityId, Timestamp};
 /// the pre-bundled content shipped with the app and server, which must
 /// carry one of the supported licenses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub enum LicenseKind {
     #[serde(rename = "cc-by-4.0")]
     CcBy40,
@@ -68,7 +69,9 @@ impl LicenseKind {
 /// the publication date — and lets the importer detect packs that
 /// pre-date a structural change.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct ContentModule {
+    #[cfg_attr(feature = "openapi", schema(value_type = String))]
     pub uuid: EntityId,
     pub name: String,
     pub slug: String,
@@ -80,6 +83,7 @@ pub struct ContentModule {
     #[serde(default = "default_schema_version")]
     pub schema_version: u32,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "openapi", schema(value_type = Option<String>, format = Date))]
     pub release_date: Option<chrono::NaiveDate>,
     #[serde(default)]
     pub authors: Vec<String>,
@@ -103,13 +107,17 @@ pub struct ContentModule {
     /// The chain of `previous_version_uuid` links forms the module's
     /// version history; consumers can pin or upgrade.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "openapi", schema(value_type = Option<String>))]
     pub previous_version_uuid: Option<EntityId>,
     /// Set when the module was created via the Promote-to-Module
     /// wizard. Distinct from `created_at` because draft modules (used
     /// as setting-scoped staging) exist before they're published.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "openapi", schema(value_type = Option<String>, format = DateTime))]
     pub published_at: Option<Timestamp>,
+    #[cfg_attr(feature = "openapi", schema(value_type = String, format = DateTime))]
     pub created_at: Timestamp,
+    #[cfg_attr(feature = "openapi", schema(value_type = String, format = DateTime))]
     pub updated_at: Timestamp,
 }
 

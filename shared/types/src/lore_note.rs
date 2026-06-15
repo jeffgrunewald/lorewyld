@@ -17,6 +17,7 @@ use crate::common::{EntityId, Timestamp};
 /// - `Character` — character backstories and journal entries attached to
 ///   a `PlayerCharacter`. (`PlayerCharacter` arrives in v1.5.)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum NoteScopeKind {
     Module,
@@ -30,8 +31,10 @@ pub enum NoteScopeKind {
 /// `scope_target_uuid` columns. On the wire it serializes as a small JSON
 /// object the client can deconstruct without parsing a union type.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct NoteScope {
     pub kind: NoteScopeKind,
+    #[cfg_attr(feature = "openapi", schema(value_type = String))]
     pub target_uuid: EntityId,
 }
 
@@ -43,6 +46,7 @@ pub struct NoteScope {
 /// copied or exported. Visibility metadata travels with the note; what
 /// a recipient sees depends on the recipient's role at render time.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "snake_case")]
 pub enum NoteVisibility {
     #[default]
@@ -64,7 +68,9 @@ pub enum NoteVisibility {
 /// `Setting`-scope source. It powers the republish-diff algorithm
 /// when a setting publishes an updated module version.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct LoreNote {
+    #[cfg_attr(feature = "openapi", schema(value_type = String))]
     pub uuid: EntityId,
     pub title: String,
     #[serde(default)]
@@ -73,11 +79,15 @@ pub struct LoreNote {
     #[serde(default)]
     pub visibility: NoteVisibility,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "openapi", schema(value_type = Option<String>))]
     pub derived_from_setting_note_uuid: Option<EntityId>,
     /// `None` when the authoring account has been deleted — content
     /// outlives its author.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "openapi", schema(value_type = Option<String>))]
     pub created_by_user_uuid: Option<EntityId>,
+    #[cfg_attr(feature = "openapi", schema(value_type = String, format = DateTime))]
     pub created_at: Timestamp,
+    #[cfg_attr(feature = "openapi", schema(value_type = String, format = DateTime))]
     pub updated_at: Timestamp,
 }

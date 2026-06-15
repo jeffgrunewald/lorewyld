@@ -35,6 +35,13 @@ pub struct LoreNoteListQuery {
     pub limit: Option<i64>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/lore-notes",
+    tag = "lore-notes",
+    security(("bearer" = [])),
+    responses((status = 200, description = "Lore notes visible to the caller, with their tags", body = [LoreNoteWithTags]))
+)]
 pub async fn list_lore_notes(
     State(state): State<ApiState>,
     user: CurrentUser,
@@ -98,6 +105,17 @@ pub async fn list_lore_notes(
         .map(Json)
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/lore-notes/{uuid}",
+    tag = "lore-notes",
+    security(("bearer" = [])),
+    params(("uuid" = String, Path, description = "Lore-note UUID")),
+    responses(
+        (status = 200, description = "The lore note with its tags", body = LoreNoteWithTags),
+        (status = 404, description = "No such note (or not visible to the caller)"),
+    )
+)]
 pub async fn get_lore_note(
     State(state): State<ApiState>,
     user: CurrentUser,
@@ -116,6 +134,14 @@ pub async fn get_lore_note(
     Ok(Json(LoreNoteWithTags { note, tags }))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/lore-notes",
+    tag = "lore-notes",
+    security(("bearer" = [])),
+    request_body = CreateLoreNoteRequest,
+    responses((status = 201, description = "Created note with resolved tags", body = LoreNoteWithTags))
+)]
 pub async fn create_lore_note(
     State(state): State<ApiState>,
     user: CurrentUser,
@@ -172,6 +198,18 @@ pub async fn create_lore_note(
     Ok((StatusCode::CREATED, Json(LoreNoteWithTags { note, tags })))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/lore-notes/{uuid}",
+    tag = "lore-notes",
+    security(("bearer" = [])),
+    params(("uuid" = String, Path, description = "Lore-note UUID")),
+    request_body = UpdateLoreNoteRequest,
+    responses(
+        (status = 200, description = "The updated note with its tags", body = LoreNoteWithTags),
+        (status = 404, description = "No such note"),
+    )
+)]
 pub async fn update_lore_note(
     State(state): State<ApiState>,
     user: CurrentUser,
@@ -251,6 +289,17 @@ pub async fn update_lore_note(
     Ok(Json(LoreNoteWithTags { note, tags }))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/lore-notes/{uuid}",
+    tag = "lore-notes",
+    security(("bearer" = [])),
+    params(("uuid" = String, Path, description = "Lore-note UUID")),
+    responses(
+        (status = 204, description = "Deleted"),
+        (status = 404, description = "No such note"),
+    )
+)]
 pub async fn delete_lore_note(
     State(state): State<ApiState>,
     user: CurrentUser,
