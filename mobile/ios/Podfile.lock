@@ -1,0 +1,22 @@
+PODS:
+  - Flutter (1.0.0)
+  - lorewyld_mobile_ffi (0.0.1):
+    - Flutter
+
+DEPENDENCIES:
+  - Flutter (from `Flutter`)
+  - lorewyld_mobile_ffi (from `.symlinks/plugins/lorewyld_mobile_ffi/ios`)
+
+EXTERNAL SOURCES:
+  Flutter:
+    :path: Flutter
+  lorewyld_mobile_ffi:
+    :path: ".symlinks/plugins/lorewyld_mobile_ffi/ios"
+
+SPEC CHECKSUMS:
+  Flutter: cabc95a1d2626b1b06e7179b784ebcf0c0cde467
+  lorewyld_mobile_ffi: 973c47c65ab1cc4f7e954f473bbc3c9193c42175
+
+PODFILE CHECKSUM: 3c63482e143d1b91d2d2560aee9fb04ecc74ac7e
+
+COCOAPODS: 1.16.2
