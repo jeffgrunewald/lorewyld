@@ -1,7 +1,7 @@
 //! Shared schema types for Lorewyld.
 //!
 //! All types follow the D&D 5e SRD data model documented in
-//! `dnd5e_data_model/README.md`, aligned with the Open5e v2 API
+//! `docs/DATA_MODEL.md`, aligned with the Open5e v2 API
 //! structure.
 //!
 //! This crate is the single source of truth for the schema. It is pure

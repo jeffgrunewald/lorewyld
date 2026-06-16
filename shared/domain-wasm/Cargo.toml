@@ -8,6 +8,8 @@ description = "WASM bindings exposing lorewyld-domain (5e math) to the Leptos we
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+# Not opted into workspace `unsafe_code = "forbid"`: #[wasm_bindgen] macro-expands
+# to unsafe FFI glue within this crate.
 [dependencies]
 lorewyld-types = { path = "../types" }
 lorewyld-domain = { path = "../domain" }

@@ -8,6 +8,8 @@ description = "flutter_rust_bridge FFI boundary exposing the shared Rust core to
 [lib]
 crate-type = ["cdylib", "staticlib"]
 
+# Not opted into workspace `unsafe_code = "forbid"`: flutter_rust_bridge
+# generates unavoidable unsafe in src/frb_generated.rs.
 [dependencies]
 lorewyld-types = { path = "../shared/types" }
 lorewyld-domain = { path = "../shared/domain" }
