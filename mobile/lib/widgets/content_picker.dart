@@ -62,8 +62,9 @@ class _ContentPickerSheet extends StatefulWidget {
 class _ContentPickerSheetState extends State<_ContentPickerSheet> {
   final _searchCtl = TextEditingController();
   late final CompendiumCategory _category = categoryFor(widget.table);
-  late final List<FilterDimension> _dimensions =
-      filterDimensionsFor(widget.table);
+  late final List<FilterDimension> _dimensions = filterDimensionsFor(
+    widget.table,
+  );
   late final List<PickerSort> _sorts = sortOptionsFor(widget.table);
   late final FilterState _filters = FilterState(_sorts.first);
 
@@ -78,11 +79,14 @@ class _ContentPickerSheetState extends State<_ContentPickerSheet> {
       if (mounted) setState(() => _lookups = l);
     });
     widget.content
-        .listNamed(widget.table,
-            where: widget.where, whereArgs: widget.whereArgs)
+        .listNamed(
+          widget.table,
+          where: widget.where,
+          whereArgs: widget.whereArgs,
+        )
         .then((rows) {
-      if (mounted) setState(() => _all = rows);
-    });
+          if (mounted) setState(() => _all = rows);
+        });
   }
 
   @override
@@ -118,8 +122,10 @@ class _ContentPickerSheetState extends State<_ContentPickerSheet> {
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text(widget.title,
-                  style: Theme.of(context).textTheme.titleMedium),
+              child: Text(
+                widget.title,
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -148,14 +154,14 @@ class _ContentPickerSheetState extends State<_ContentPickerSheet> {
                         onPressed: _all == null
                             ? null
                             : () => showContentFilterSheet(
-                                  context: context,
-                                  dimensions: _dimensions,
-                                  sorts: _sorts,
-                                  lookups: _lookups,
-                                  records: _all!,
-                                  state: _filters,
-                                  onChanged: () => setState(() {}),
-                                ),
+                                context: context,
+                                dimensions: _dimensions,
+                                sorts: _sorts,
+                                lookups: _lookups,
+                                records: _all!,
+                                state: _filters,
+                                onChanged: () => setState(() {}),
+                              ),
                       ),
                     ),
                   ],
@@ -166,29 +172,23 @@ class _ContentPickerSheetState extends State<_ContentPickerSheet> {
               child: _all == null
                   ? const Center(child: CircularProgressIndicator())
                   : rows.isEmpty
-                      ? const Center(child: Text('No matches.'))
-                      : ListView.builder(
-                          itemCount: rows.length,
-                          itemBuilder: (_, i) {
-                            final record = rows[i];
-                            final subtitle =
-                                _category.subtitle(record, _lookups);
-                            final source = _lookups.sourceSlugOf(record);
-                            return ListTile(
-                              title:
-                                  Text(_category.displayName(record)),
-                              subtitle:
-                                  (subtitle == null || subtitle.isEmpty)
-                                      ? null
-                                      : Text(subtitle),
-                              trailing: source == null
-                                  ? null
-                                  : SourceBadge(source),
-                              onTap: () =>
-                                  Navigator.of(context).pop(record),
-                            );
-                          },
-                        ),
+                  ? const Center(child: Text('No matches.'))
+                  : ListView.builder(
+                      itemCount: rows.length,
+                      itemBuilder: (_, i) {
+                        final record = rows[i];
+                        final subtitle = _category.subtitle(record, _lookups);
+                        final source = _lookups.sourceSlugOf(record);
+                        return ListTile(
+                          title: Text(_category.displayName(record)),
+                          subtitle: (subtitle == null || subtitle.isEmpty)
+                              ? null
+                              : Text(subtitle),
+                          trailing: source == null ? null : SourceBadge(source),
+                          onTap: () => Navigator.of(context).pop(record),
+                        );
+                      },
+                    ),
             ),
           ],
         ),

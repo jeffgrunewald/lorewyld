@@ -31,7 +31,8 @@ class MarkdownEditor extends StatefulWidget {
     required String title,
     required String body,
     required List<String> tagSlugs,
-  }) onSave;
+  })
+  onSave;
   final VoidCallback? onDelete;
   final bool saving;
   final bool deleting;
@@ -225,10 +226,12 @@ class _TagChipInputState extends State<TagChipInput> {
             spacing: 6,
             runSpacing: 4,
             children: widget.slugs
-                .map((slug) => InputChip(
-                      label: Text(slug),
-                      onDeleted: () => _remove(slug),
-                    ))
+                .map(
+                  (slug) => InputChip(
+                    label: Text(slug),
+                    onDeleted: () => _remove(slug),
+                  ),
+                )
                 .toList(),
           ),
         const SizedBox(height: 4),

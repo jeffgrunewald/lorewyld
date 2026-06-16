@@ -99,10 +99,8 @@ class _LorewyldShellState extends State<LorewyldShell> {
           observers: [_observer],
           onGenerateRoute: (settings) => MaterialPageRoute(
             settings: settings,
-            builder: (_) => HomeScreen(
-              connection: widget.connection,
-              store: widget.store,
-            ),
+            builder: (_) =>
+                HomeScreen(connection: widget.connection, store: widget.store),
           ),
         ),
       ),

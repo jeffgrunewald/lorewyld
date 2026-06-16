@@ -59,16 +59,18 @@ class _SettingDetailScreenState extends State<SettingDetailScreen> {
 
   void _openNote(LocalNote? existing) {
     Navigator.of(context)
-        .push(MaterialPageRoute(
-          builder: (_) => LoreNoteEditScreen(
-            store: widget.store,
-            scope: NoteScope(
-              kind: NoteScopeKind.setting,
-              targetUuid: _setting.uuid,
+        .push(
+          MaterialPageRoute(
+            builder: (_) => LoreNoteEditScreen(
+              store: widget.store,
+              scope: NoteScope(
+                kind: NoteScopeKind.setting,
+                targetUuid: _setting.uuid,
+              ),
+              existing: existing,
             ),
-            existing: existing,
           ),
-        ))
+        )
         .then((_) => _refresh());
   }
 
@@ -76,7 +78,8 @@ class _SettingDetailScreenState extends State<SettingDetailScreen> {
     if (widget.connection.isLoggedIn) return false;
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-          content: Text('Log in to a server first (cloud icon, top right).')),
+        content: Text('Log in to a server first (cloud icon, top right).'),
+      ),
     );
     return true;
   }
@@ -86,18 +89,20 @@ class _SettingDetailScreenState extends State<SettingDetailScreen> {
     setState(() => _syncing = true);
     try {
       final sync = SyncService(
-          store: widget.store, api: widget.connection.api!);
+        store: widget.store,
+        api: widget.connection.api!,
+      );
       final result = await sync.pushSetting(_setting);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.describe('Pushed'))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(result.describe('Pushed'))));
       await _refresh();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Push failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Push failed: $e')));
     } finally {
       if (mounted) setState(() => _syncing = false);
     }
@@ -109,8 +114,10 @@ class _SettingDetailScreenState extends State<SettingDetailScreen> {
     if (remoteUuid == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content: Text(
-                'This setting has never been pushed — there is nothing to pull.')),
+          content: Text(
+            'This setting has never been pushed — there is nothing to pull.',
+          ),
+        ),
       );
       return;
     }
@@ -119,15 +126,18 @@ class _SettingDetailScreenState extends State<SettingDetailScreen> {
       builder: (ctx) => AlertDialog(
         title: const Text('Pull from server?'),
         content: const Text(
-            'Server versions overwrite the local copies of previously '
-            'synced notes. Local-only notes are kept.'),
+          'Server versions overwrite the local copies of previously '
+          'synced notes. Local-only notes are kept.',
+        ),
         actions: [
           TextButton(
-              onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel')),
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-              onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Pull')),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Pull'),
+          ),
         ],
       ),
     );
@@ -135,21 +145,23 @@ class _SettingDetailScreenState extends State<SettingDetailScreen> {
     setState(() => _syncing = true);
     try {
       final sync = SyncService(
-          store: widget.store, api: widget.connection.api!);
+        store: widget.store,
+        api: widget.connection.api!,
+      );
       final result = await sync.pullSetting(
         remoteSettingUuid: remoteUuid,
         remoteSettingName: _setting.name,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.describe('Pulled'))),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(result.describe('Pulled'))));
       await _refresh();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Pull failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Pull failed: $e')));
     } finally {
       if (mounted) setState(() => _syncing = false);
     }
@@ -160,8 +172,10 @@ class _SettingDetailScreenState extends State<SettingDetailScreen> {
     if (_setting.remoteUuid == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-            content:
-                Text('Push this setting to the server before publishing it.')),
+          content: Text(
+            'Push this setting to the server before publishing it.',
+          ),
+        ),
       );
       return;
     }

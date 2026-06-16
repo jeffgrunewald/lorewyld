@@ -22,12 +22,12 @@ class Setting {
   });
 
   factory Setting.fromJson(Map<String, dynamic> json) => Setting(
-        uuid: json['uuid'] as String,
-        name: json['name'] as String,
-        descriptionNoteUuid: json['description_note_uuid'] as String?,
-        ownerUserUuid: json['owner_user_uuid'] as String?,
-        publishedAsModuleUuid: json['published_as_module_uuid'] as String?,
-        createdAt: DateTime.parse(json['created_at'] as String),
-        updatedAt: DateTime.parse(json['updated_at'] as String),
-      );
+    uuid: json['uuid'] as String,
+    name: json['name'] as String,
+    descriptionNoteUuid: json['description_note_uuid'] as String?,
+    ownerUserUuid: json['owner_user_uuid'] as String?,
+    publishedAsModuleUuid: json['published_as_module_uuid'] as String?,
+    createdAt: DateTime.parse(json['created_at'] as String),
+    updatedAt: DateTime.parse(json['updated_at'] as String),
+  );
 }

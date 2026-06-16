@@ -31,6 +31,14 @@ use crate::{
 
 /// `GET /api/admin/modules` — every module on the server (active or
 /// not) with provenance and record counts for the management UI.
+#[utoipa::path(
+    get,
+    path = "/api/admin/modules",
+    tag = "admin",
+    operation_id = "admin_list_modules",
+    security(("bearer" = [])),
+    responses((status = 200, description = "Every module (active or not) with provenance + record counts (admin only)", body = [AdminModuleSummary]))
+)]
 pub async fn list_modules(
     State(state): State<ApiState>,
     _admin: AdminUser,
@@ -88,6 +96,14 @@ pub async fn list_modules(
 /// `POST /api/admin/modules/install` — install a `ContentBundle`
 /// package. The request body is the bundle file itself; slug
 /// collisions with installed modules reject the whole package.
+#[utoipa::path(
+    post,
+    path = "/api/admin/modules/install",
+    tag = "admin",
+    security(("bearer" = [])),
+    request_body(content = String, description = "A complete ContentBundle JSON package (schema omitted here — it embeds the full content type graph)"),
+    responses((status = 201, description = "Modules installed (admin only)", body = InstallModuleResponse))
+)]
 pub async fn install_module(
     State(state): State<ApiState>,
     _admin: AdminUser,
@@ -134,6 +150,15 @@ pub async fn install_module(
 /// but is excluded from every content read. The pinned SRD module can
 /// never be disabled — every other module references its shared rules
 /// vocabulary.
+#[utoipa::path(
+    patch,
+    path = "/api/admin/modules/{uuid}",
+    tag = "admin",
+    security(("bearer" = [])),
+    params(("uuid" = String, Path, description = "Module UUID")),
+    request_body = UpdateModuleStatusRequest,
+    responses((status = 200, description = "Updated module (admin only)", body = lorewyld_types::ContentModule))
+)]
 pub async fn update_module_status(
     State(state): State<ApiState>,
     _admin: AdminUser,
@@ -178,6 +203,14 @@ pub async fn update_module_status(
 /// `DELETE /api/admin/modules/:uuid` — full uninstall: removes the
 /// module row, all its content records, and its module-scope lore
 /// notes. Bundled modules are rejected with 400 (disable instead).
+#[utoipa::path(
+    delete,
+    path = "/api/admin/modules/{uuid}",
+    tag = "admin",
+    security(("bearer" = [])),
+    params(("uuid" = String, Path, description = "Module UUID")),
+    responses((status = 204, description = "Module uninstalled; bundled modules can only be disabled (admin only)"))
+)]
 pub async fn uninstall_module(
     State(state): State<ApiState>,
     _admin: AdminUser,

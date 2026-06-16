@@ -7,13 +7,12 @@
 //! than content references, so a sheet survives module changes intact.
 
 use serde::{Deserialize, Serialize};
-use typeshare::typeshare;
 
 use crate::common::{AbilityScores, EntityId, Timestamp};
 
 /// One carried item line on the sheet.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct CharacterEquipmentItem {
     pub name: String,
     #[serde(default = "default_quantity")]
@@ -23,8 +22,8 @@ pub struct CharacterEquipmentItem {
 }
 
 /// One known/prepared spell line on the sheet. `level` 0 = cantrip.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct CharacterSpellEntry {
     pub name: String,
     #[serde(default)]
@@ -36,16 +35,18 @@ pub struct CharacterSpellEntry {
 /// A complete character sheet. Proficiencies are permissive name-string
 /// lists (lowercase ability/skill names) rather than closed enums —
 /// content is data we read, not data we control.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct CharacterSheet {
     /// Server-assigned; clients may omit on create (defaults to nil).
     #[serde(default = "nil_uuid")]
+    #[cfg_attr(feature = "openapi", schema(value_type = String))]
     pub uuid: EntityId,
     pub name: String,
     /// Populated by the server on read; ignored on write (ownership
     /// comes from the authenticated session / the existing row).
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "openapi", schema(value_type = Option<String>))]
     pub owner_user_uuid: Option<EntityId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub owner_username: Option<String>,
@@ -81,8 +82,10 @@ pub struct CharacterSheet {
     pub spells: Vec<CharacterSpellEntry>,
     /// Server-stamped; clients may omit on create/replace.
     #[serde(default = "now")]
+    #[cfg_attr(feature = "openapi", schema(value_type = String, format = DateTime))]
     pub created_at: Timestamp,
     #[serde(default = "now")]
+    #[cfg_attr(feature = "openapi", schema(value_type = String, format = DateTime))]
     pub updated_at: Timestamp,
 }
 

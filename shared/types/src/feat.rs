@@ -1,10 +1,8 @@
 use serde::{Deserialize, Serialize};
-use typeshare::typeshare;
 
 use crate::common::{EntityId, Timestamp};
 
 /// One discrete benefit a feat grants (Open5e v2 `benefits`).
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FeatBenefit {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -13,7 +11,6 @@ pub struct FeatBenefit {
 }
 
 /// A character feat.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Feat {
     pub uuid: EntityId,
@@ -37,4 +34,33 @@ pub struct Feat {
     pub is_restricted: bool,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
+}
+
+/// Slim list-projection of a [`Feat`] (see `Feat::summary`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FeatSummary {
+    pub uuid: EntityId,
+    pub content_module_uuid: EntityId,
+    pub document_uuid: EntityId,
+    pub key: String,
+    pub slug: String,
+    pub name: String,
+    pub has_prerequisite: bool,
+    pub prerequisite: Option<String>,
+}
+
+impl Feat {
+    /// Derives the list-row summary from the full record.
+    pub fn summary(&self) -> FeatSummary {
+        FeatSummary {
+            uuid: self.uuid,
+            content_module_uuid: self.content_module_uuid,
+            document_uuid: self.document_uuid,
+            key: self.key.clone(),
+            slug: self.slug.clone(),
+            name: self.name.clone(),
+            has_prerequisite: self.has_prerequisite,
+            prerequisite: self.prerequisite.clone(),
+        }
+    }
 }

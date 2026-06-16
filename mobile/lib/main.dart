@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'ffi/frb_generated.dart';
 import 'services/content_store.dart';
 import 'services/local_store.dart';
 import 'services/server_connection.dart';
@@ -7,6 +8,9 @@ import 'widgets/lorewyld_shell.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Initialize the shared Rust core (5e math, etc.) before any screen can
+  // call into it synchronously.
+  await RustLib.init();
   final connection = ServerConnection();
   final store = await LocalStore.open();
   await connection.load();
@@ -14,11 +18,7 @@ Future<void> main() async {
 }
 
 class LorewyldApp extends StatelessWidget {
-  const LorewyldApp({
-    super.key,
-    required this.connection,
-    required this.store,
-  });
+  const LorewyldApp({super.key, required this.connection, required this.store});
 
   final ServerConnection connection;
   final LocalStore store;

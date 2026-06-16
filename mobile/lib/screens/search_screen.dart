@@ -153,9 +153,7 @@ class _SearchScreenState extends State<SearchScreen> {
         }
         final results = snap.data ?? const [];
         if (results.isEmpty) {
-          return const Center(
-            child: Text('No results.'),
-          );
+          return const Center(child: Text('No results.'));
         }
         return ListView.separated(
           itemCount: results.length,
@@ -173,13 +171,15 @@ class _SearchScreenState extends State<SearchScreen> {
               ),
               onTap: () {
                 Navigator.of(context)
-                    .push(MaterialPageRoute(
-                      builder: (_) => LoreNoteEditScreen(
-                        store: widget.store,
-                        scope: note.scope,
-                        existing: note,
+                    .push(
+                      MaterialPageRoute(
+                        builder: (_) => LoreNoteEditScreen(
+                          store: widget.store,
+                          scope: note.scope,
+                          existing: note,
+                        ),
                       ),
-                    ))
+                    )
                     // Re-run the search so an edit (or delete) made in
                     // the editor is reflected in the results list.
                     .then((_) {

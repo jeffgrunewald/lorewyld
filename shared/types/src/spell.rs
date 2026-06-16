@@ -1,12 +1,10 @@
 use serde::{Deserialize, Serialize};
-use typeshare::typeshare;
 
 use crate::common::{AbilityScore, DamageTypeName, EntityId, SpellSchoolName, Timestamp};
 
 /// One row of a spell's upcast/scaling table (Open5e v2
 /// `casting_options`). Every field other than `kind` is an override of
 /// the spell's default value; `None` means "unchanged".
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SpellCastingOption {
     /// `"default"`, `"slot_level_N"` (slot upcast), or
@@ -30,7 +28,6 @@ pub struct SpellCastingOption {
 }
 
 /// A magical spell, structured per the Open5e v2 schema.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Spell {
     pub uuid: EntityId,
@@ -105,9 +102,100 @@ pub struct Spell {
     pub updated_at: Timestamp,
 }
 
+/// Slim list-projection of a [`Spell`] — the shape returned by the
+/// compendium list endpoint and stored in the `summary` column. Single
+/// source of truth for "what a spell list row contains"; mirrors the
+/// fields the clients' list views and filters read, so the wire shape is
+/// defined here rather than in SQL.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SpellSummary {
+    pub uuid: EntityId,
+    pub content_module_uuid: EntityId,
+    pub document_uuid: EntityId,
+    pub key: String,
+    pub slug: String,
+    pub name: String,
+    pub level: u8,
+    pub school: EntityId,
+    pub concentration: bool,
+    pub ritual: bool,
+    pub verbal: bool,
+    pub somatic: bool,
+    pub material: bool,
+}
+
+impl Spell {
+    /// Derives the list-row summary from the full record.
+    pub fn summary(&self) -> SpellSummary {
+        SpellSummary {
+            uuid: self.uuid,
+            content_module_uuid: self.content_module_uuid,
+            document_uuid: self.document_uuid,
+            key: self.key.clone(),
+            slug: self.slug.clone(),
+            name: self.name.clone(),
+            level: self.level,
+            school: self.school,
+            concentration: self.concentration,
+            ritual: self.ritual,
+            verbal: self.verbal,
+            somatic: self.somatic,
+            material: self.material,
+        }
+    }
+}
+
+#[cfg(test)]
+mod summary_tests {
+    use super::*;
+
+    #[test]
+    fn spell_summary_wire_shape_is_stable() {
+        let s = SpellSummary {
+            uuid: EntityId::nil(),
+            content_module_uuid: EntityId::nil(),
+            document_uuid: EntityId::nil(),
+            key: "k".into(),
+            slug: "s".into(),
+            name: "n".into(),
+            level: 3,
+            school: EntityId::nil(),
+            concentration: true,
+            ritual: false,
+            verbal: true,
+            somatic: false,
+            material: true,
+        };
+        let v = serde_json::to_value(&s).unwrap();
+        let mut keys: Vec<&str> = v.as_object().unwrap().keys().map(String::as_str).collect();
+        keys.sort_unstable();
+        assert_eq!(
+            keys,
+            [
+                "concentration",
+                "content_module_uuid",
+                "document_uuid",
+                "key",
+                "level",
+                "material",
+                "name",
+                "ritual",
+                "school",
+                "slug",
+                "somatic",
+                "uuid",
+                "verbal",
+            ]
+        );
+        // Booleans serialize as JSON true/false (not the SQL projection's
+        // 0/1), which the clients' list filters rely on.
+        assert_eq!(v["concentration"], serde_json::json!(true));
+        assert_eq!(v["level"], serde_json::json!(3));
+    }
+}
+
 /// One of the eight schools of magic. Lookup-table row backing the
 /// closed-set `SpellSchoolName` enum.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpellSchool {
     pub uuid: EntityId,

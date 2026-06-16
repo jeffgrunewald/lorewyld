@@ -1,10 +1,8 @@
 use serde::{Deserialize, Serialize};
-use typeshare::typeshare;
 
 use crate::common::{ConditionName, EntityId, Timestamp};
 
 /// A standard SRD condition with mechanical effects on creatures.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Condition {
     pub uuid: EntityId,

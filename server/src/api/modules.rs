@@ -31,6 +31,12 @@ fn note_is_publicly_visible(visibility: &str) -> bool {
 }
 
 /// `GET /api/modules` — list installed (active) content modules.
+#[utoipa::path(
+    get,
+    path = "/api/modules",
+    tag = "modules",
+    responses((status = 200, description = "Active content modules on the server", body = [ContentModule]))
+)]
 pub async fn list_modules(
     State(state): State<ApiState>,
 ) -> Result<Json<Vec<ContentModule>>, ApiError> {
@@ -45,6 +51,16 @@ pub async fn list_modules(
 
 /// `GET /api/modules/:uuid` — read a single module with its notes.
 /// Public: published modules are by definition meant to be shareable.
+#[utoipa::path(
+    get,
+    path = "/api/modules/{uuid}",
+    tag = "modules",
+    params(("uuid" = String, Path, description = "Module UUID")),
+    responses(
+        (status = 200, description = "The module plus its lore notes", body = ModuleWithNotes),
+        (status = 404, description = "No such module"),
+    )
+)]
 pub async fn get_module(
     State(state): State<ApiState>,
     Path(uuid): Path<Uuid>,
@@ -85,6 +101,14 @@ pub async fn get_module(
 
 /// `POST /api/modules` — Promote-to-Module commit. Snapshot-publishes
 /// a `Setting`'s selected notes into a new `ContentModule` row.
+#[utoipa::path(
+    post,
+    path = "/api/modules",
+    tag = "modules",
+    security(("bearer" = [])),
+    request_body = PublishModuleRequest,
+    responses((status = 201, description = "The newly published module", body = PublishModuleResponse))
+)]
 pub async fn publish_module(
     State(state): State<ApiState>,
     user: CurrentUser,
@@ -292,7 +316,7 @@ struct SelectedNoteRow {
     visibility: String,
 }
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, utoipa::ToSchema)]
 pub struct ModuleWithNotes {
     pub module: ContentModule,
     pub notes: Vec<LoreNoteWithTags>,

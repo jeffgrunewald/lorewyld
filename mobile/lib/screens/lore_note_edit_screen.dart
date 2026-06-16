@@ -41,9 +41,9 @@ class _LoreNoteEditScreenState extends State<LoreNoteEditScreen> {
     required List<String> tagSlugs,
   }) async {
     if (title.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Title is required.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Title is required.')));
       return;
     }
     setState(() => _saving = true);
@@ -70,9 +70,9 @@ class _LoreNoteEditScreenState extends State<LoreNoteEditScreen> {
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Save failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Save failed: $e')));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -109,9 +109,9 @@ class _LoreNoteEditScreenState extends State<LoreNoteEditScreen> {
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Delete failed: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
     } finally {
       if (mounted) setState(() => _deleting = false);
     }
@@ -155,14 +155,14 @@ class _LoreNoteEditScreenState extends State<LoreNoteEditScreen> {
   }
 
   String _visibilityLabel(NoteVisibility v) => switch (v) {
-        NoteVisibility.visible => 'Visible to everyone',
-        NoteVisibility.authorOnly => 'Only me',
-        NoteVisibility.gamemasterOnly => 'GMs only',
-      };
+    NoteVisibility.visible => 'Visible to everyone',
+    NoteVisibility.authorOnly => 'Only me',
+    NoteVisibility.gamemasterOnly => 'GMs only',
+  };
 
   IconData _visibilityIcon(NoteVisibility v) => switch (v) {
-        NoteVisibility.visible => Icons.visibility_outlined,
-        NoteVisibility.authorOnly => Icons.lock_outline,
-        NoteVisibility.gamemasterOnly => Icons.shield_outlined,
-      };
+    NoteVisibility.visible => Icons.visibility_outlined,
+    NoteVisibility.authorOnly => Icons.lock_outline,
+    NoteVisibility.gamemasterOnly => Icons.shield_outlined,
+  };
 }

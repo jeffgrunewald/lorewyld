@@ -10,10 +10,16 @@ void main() {
       for (final type in DiceType.values) {
         for (var i = 0; i < 10000; i++) {
           final result = type.roll(random);
-          expect(result, greaterThanOrEqualTo(1),
-              reason: '${type.label} produced $result (< 1)');
-          expect(result, lessThanOrEqualTo(type.sides),
-              reason: '${type.label} produced $result (> ${type.sides})');
+          expect(
+            result,
+            greaterThanOrEqualTo(1),
+            reason: '${type.label} produced $result (< 1)',
+          );
+          expect(
+            result,
+            lessThanOrEqualTo(type.sides),
+            reason: '${type.label} produced $result (> ${type.sides})',
+          );
         }
       }
     });
@@ -26,8 +32,11 @@ void main() {
       }
       expect(counts[0], 0, reason: 'face 0 should never appear');
       for (var face = 1; face <= 20; face++) {
-        expect(counts[face], greaterThan(3000),
-            reason: 'face $face under-represented: ${counts[face]} / 100000');
+        expect(
+          counts[face],
+          greaterThan(3000),
+          reason: 'face $face under-represented: ${counts[face]} / 100000',
+        );
       }
     });
 

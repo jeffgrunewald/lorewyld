@@ -6,6 +6,7 @@ pub mod compendium;
 pub mod error;
 pub mod lore_notes;
 pub mod modules;
+pub mod openapi;
 pub mod rows;
 pub mod search;
 pub mod server_info;
@@ -25,6 +26,7 @@ use std::net::SocketAddr;
 use tokio::net::TcpListener;
 use tower_http::services::ServeDir;
 use tracing::info;
+use utoipa::OpenApi;
 
 use crate::web::InstanceName;
 
@@ -174,6 +176,10 @@ impl ApiServer {
 
         let router = Router::new()
             .route("/health", get(health))
+            .merge(
+                utoipa_swagger_ui::SwaggerUi::new("/swagger-ui")
+                    .url("/api/openapi.json", crate::api::openapi::ApiDoc::openapi()),
+            )
             .merge(api_router)
             .merge(leptos_router);
 

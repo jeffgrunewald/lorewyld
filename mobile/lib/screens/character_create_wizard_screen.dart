@@ -11,6 +11,7 @@
 import 'package:flutter/material.dart';
 
 import '../compendium/categories.dart';
+import '../ffi/api/sheet.dart';
 import '../services/content_store.dart';
 import '../services/local_store.dart';
 import '../types/character.dart';
@@ -84,22 +85,25 @@ class _CharacterCreateWizardScreenState
     final classSaves = _characterClass?['prof_saving_throws'];
     final startingHp = classHitDie is num
         ? (classHitDie.truncate() +
-                created.abilityModifier(Ability.constitution))
-            .clamp(1, 999)
+                  abilityModifier(score: created.abilityScore(Ability.constitution)))
+              .clamp(1, 999)
         : created.maxHp;
 
-    final sheet = await widget.store.saveCharacter(created.copyWith(
-      race: _species?['name'] as String? ?? '',
-      className: _characterClass?['name'] as String? ?? '',
-      background: _background?['name'] as String? ?? '',
-      alignment: _alignment,
-      speed: (_species?['speed'] as num?)?.truncate() ?? created.speed,
-      hitDice: classHitDie is num ? '1d${classHitDie.truncate()}' : '',
-      savingThrowProficiencies:
-          classSaves is List ? Ability.parseWireSet(classSaves) : null,
-      maxHp: startingHp,
-      currentHp: startingHp,
-    ));
+    final sheet = await widget.store.saveCharacter(
+      created.copyWith(
+        race: _species?['name'] as String? ?? '',
+        className: _characterClass?['name'] as String? ?? '',
+        background: _background?['name'] as String? ?? '',
+        alignment: _alignment,
+        speed: (_species?['speed'] as num?)?.truncate() ?? created.speed,
+        hitDice: classHitDie is num ? '1d${classHitDie.truncate()}' : '',
+        savingThrowProficiencies: classSaves is List
+            ? Ability.parseWireSet(classSaves)
+            : null,
+        maxHp: startingHp,
+        currentHp: startingHp,
+      ),
+    );
     if (!mounted) return;
     Navigator.of(context).pop<CharacterSheet>(sheet);
   }
@@ -124,8 +128,7 @@ class _CharacterCreateWizardScreenState
       ),
       Step(
         title: const Text('Species'),
-        subtitle:
-            _species != null ? Text('${_species!['name']}') : null,
+        subtitle: _species != null ? Text('${_species!['name']}') : null,
         isActive: _step >= 1,
         content: ContentPickerField(
           label: 'Species',
@@ -162,7 +165,10 @@ class _CharacterCreateWizardScreenState
               label: 'Background',
               value: _background?['name'] as String? ?? '',
               onTap: () => _pick(
-                  'background', 'Choose a background', (r) => _background = r),
+                'background',
+                'Choose a background',
+                (r) => _background = r,
+              ),
               onCleared: () => setState(() => _background = null),
             ),
             const SizedBox(height: 12),
@@ -199,8 +205,7 @@ class _CharacterCreateWizardScreenState
             _create();
           }
         },
-        onStepCancel:
-            _step > 0 ? () => setState(() => _step--) : null,
+        onStepCancel: _step > 0 ? () => setState(() => _step--) : null,
         // Stepper builds controls for every step (collapsed ones stay
         // in the tree), so the label must come from the step being
         // built, not the active step.

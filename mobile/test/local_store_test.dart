@@ -22,8 +22,9 @@ void main() {
     final created = await store.createCharacter('Thistle');
     expect(created.level, 1);
 
-    final updated =
-        await store.saveCharacter(created.copyWith(level: 3, race: 'Halfling'));
+    final updated = await store.saveCharacter(
+      created.copyWith(level: 3, race: 'Halfling'),
+    );
     expect(updated.level, 3);
 
     final listed = await store.listCharacters();
@@ -55,26 +56,31 @@ void main() {
     await store.deleteSetting(setting.uuid);
     expect(
       await store.listNotes(
-          scopeKind: NoteScopeKind.setting, scopeTarget: setting.uuid),
+        scopeKind: NoteScopeKind.setting,
+        scopeTarget: setting.uuid,
+      ),
       isEmpty,
     );
   });
 
-  test('search: free text, tags (quoted match), and scope filters',
-      () async {
+  test('search: free text, tags (quoted match), and scope filters', () async {
     final setting = await store.createSetting('World');
-    final scope =
-        NoteScope(kind: NoteScopeKind.setting, targetUuid: setting.uuid);
+    final scope = NoteScope(
+      kind: NoteScopeKind.setting,
+      targetUuid: setting.uuid,
+    );
     await store.createNote(
-        title: 'Fey Court',
-        bodyMarkdown: 'rulers',
-        scope: scope,
-        tagSlugs: const ['fey']);
+      title: 'Fey Court',
+      bodyMarkdown: 'rulers',
+      scope: scope,
+      tagSlugs: const ['fey'],
+    );
     await store.createNote(
-        title: 'Iron Keep',
-        bodyMarkdown: 'fey-realm border fort',
-        scope: scope,
-        tagSlugs: const ['fey-realm']);
+      title: 'Iron Keep',
+      bodyMarkdown: 'fey-realm border fort',
+      scope: scope,
+      tagSlugs: const ['fey-realm'],
+    );
 
     final byText = await store.searchNotes(q: 'court');
     expect(byText.single.title, 'Fey Court');
@@ -83,13 +89,11 @@ void main() {
     final byTag = await store.searchNotes(tagSlugs: const ['fey']);
     expect(byTag.single.title, 'Fey Court');
 
-    final byScope =
-        await store.searchNotes(scopeKind: NoteScopeKind.character);
+    final byScope = await store.searchNotes(scopeKind: NoteScopeKind.character);
     expect(byScope, isEmpty);
   });
 
-  test('remote linking: settings and notes track their server uuids',
-      () async {
+  test('remote linking: settings and notes track their server uuids', () async {
     final setting = await store.createSetting('Pushed');
     await store.linkSettingRemote(setting.uuid, 'remote-123');
     final linked = await store.getSettingByRemoteUuid('remote-123');
@@ -97,8 +101,7 @@ void main() {
     expect(linked?.isLinked, isTrue);
   });
 
-  test(
-      'v2→v3 migration adds content_module_uuid (backfilled from data) '
+  test('v2→v3 migration adds content_module_uuid (backfilled from data) '
       'and the uninstall tombstone table', () async {
     // A v2-shaped database needs a real file: in-memory databases
     // vanish on close and can't be reopened by LocalStore.open.
@@ -180,14 +183,17 @@ void main() {
     await v2.close();
 
     final migrated = await LocalStore.open(path: path);
-    final rows = await migrated.database
-        .query('spell', columns: ['uuid', 'content_module_uuid']);
+    final rows = await migrated.database.query(
+      'spell',
+      columns: ['uuid', 'content_module_uuid'],
+    );
     expect(rows.single['content_module_uuid'], 'module-1');
     // Tombstone table exists and is usable.
-    await migrated.database.insert('removed_content_module',
-        {'slug': 'tob', 'removed_at': '2026-06-12T00:00:00Z'});
-    expect(
-        (await migrated.database.query('removed_content_module')).length, 1);
+    await migrated.database.insert('removed_content_module', {
+      'slug': 'tob',
+      'removed_at': '2026-06-12T00:00:00Z',
+    });
+    expect((await migrated.database.query('removed_content_module')).length, 1);
     await migrated.close();
     await databaseFactory.deleteDatabase(path);
   });

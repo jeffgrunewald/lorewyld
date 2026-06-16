@@ -50,14 +50,16 @@ class _ModuleManagementScreenState extends State<ModuleManagementScreen> {
   }
 
   Future<void> _openDetail(BundledModule module) async {
-    final changed = await Navigator.of(context).push<bool>(MaterialPageRoute(
-      builder: (_) => ModuleInfoScreen(
-        content: _content,
-        module: module,
-        installed: _installed.contains(module.slug),
-        removedAt: _removed[module.slug],
+    final changed = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => ModuleInfoScreen(
+          content: _content,
+          module: module,
+          installed: _installed.contains(module.slug),
+          removedAt: _removed[module.slug],
+        ),
       ),
-    ));
+    );
     if (changed == true) await _load();
   }
 
@@ -117,13 +119,17 @@ class _ModuleTile extends StatelessWidget {
       trailing: pinned
           ? Text('Required', style: theme.textTheme.labelSmall)
           : removed
-              ? Text(
-                  'Removed',
-                  style: theme.textTheme.labelSmall
-                      ?.copyWith(color: theme.colorScheme.error),
-                )
-              : Icon(Icons.check_circle_outline,
-                  size: 18, color: theme.colorScheme.primary),
+          ? Text(
+              'Removed',
+              style: theme.textTheme.labelSmall?.copyWith(
+                color: theme.colorScheme.error,
+              ),
+            )
+          : Icon(
+              Icons.check_circle_outline,
+              size: 18,
+              color: theme.colorScheme.primary,
+            ),
       onTap: onTap,
     );
     // Uninstalled modules read as absent but stay tappable.
@@ -161,9 +167,10 @@ class _ModuleInfoScreenState extends State<ModuleInfoScreen> {
       builder: (ctx) => AlertDialog(
         title: Text('Uninstall ${widget.module.name}?'),
         content: Text(
-            'Its ${widget.module.totalRecords} records will be removed from '
-            'this device. You can reinstall it from this screen at any '
-            'time — the content ships with the app.'),
+          'Its ${widget.module.totalRecords} records will be removed from '
+          'this device. You can reinstall it from this screen at any '
+          'time — the content ships with the app.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -209,8 +216,7 @@ class _ModuleInfoScreenState extends State<ModuleInfoScreen> {
       ('License', licenseDisplayName(module.license)),
       if (module.publisher case final String p) ('Publisher', p),
       if (module.authors.isNotEmpty) ('Authors', module.authors.join(', ')),
-      if (module.documents.isNotEmpty)
-        ('Sources', module.documents.join('\n')),
+      if (module.documents.isNotEmpty) ('Sources', module.documents.join('\n')),
       if (module.websiteUrl case final String w) ('Website', w),
       if (module.licenseUrl case final String l) ('License text', l),
     ];
@@ -237,8 +243,10 @@ class _ModuleInfoScreenState extends State<ModuleInfoScreen> {
                         children: [
                           SizedBox(
                             width: 110,
-                            child: Text(label,
-                                style: theme.textTheme.labelLarge),
+                            child: Text(
+                              label,
+                              style: theme.textTheme.labelLarge,
+                            ),
                           ),
                           Expanded(child: Text(value)),
                         ],
@@ -270,8 +278,9 @@ class _ModuleInfoScreenState extends State<ModuleInfoScreen> {
               'Required module — it provides the shared rules vocabulary '
               '(schools, sizes, conditions, …) that every other module '
               'references, and cannot be removed.',
-              style: theme.textTheme.bodySmall
-                  ?.copyWith(color: theme.colorScheme.outline),
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.outline,
+              ),
             )
           else if (_working && widget.removedAt != null) ...[
             Text('Reinstalling…', style: theme.textTheme.bodySmall),

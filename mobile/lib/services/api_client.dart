@@ -32,7 +32,7 @@ class ApiClient {
   String? _sessionToken;
 
   ApiClient({required this.baseUri, http.Client? httpClient})
-      : _http = httpClient ?? http.Client();
+    : _http = httpClient ?? http.Client();
 
   void setSessionToken(String? token) {
     _sessionToken = token;
@@ -67,8 +67,11 @@ class ApiClient {
       } on FormatException catch (e) {
         // A non-JSON 2xx (proxy page, captive portal) should surface as
         // an ApiException like every other failure, not a raw parse error.
-        throw ApiException(res.statusCode, 'parse_error',
-            'Server returned a malformed response: ${e.message}');
+        throw ApiException(
+          res.statusCode,
+          'parse_error',
+          'Server returned a malformed response: ${e.message}',
+        );
       }
     }
     String code = 'http_${res.statusCode}';
@@ -91,16 +94,18 @@ class ApiClient {
     required String email,
     required String password,
   }) async {
-    final body = await _send(() => _http.post(
-          _u('/api/users/register'),
-          headers: _headers(json: true, auth: false),
-          body: jsonEncode({
-            'join_code': joinCode,
-            'username': username,
-            'email': email,
-            'password': password,
-          }),
-        ));
+    final body = await _send(
+      () => _http.post(
+        _u('/api/users/register'),
+        headers: _headers(json: true, auth: false),
+        body: jsonEncode({
+          'join_code': joinCode,
+          'username': username,
+          'email': email,
+          'password': password,
+        }),
+      ),
+    );
     return AuthResponse.fromJson(body as Map<String, dynamic>);
   }
 
@@ -108,40 +113,37 @@ class ApiClient {
     required String username,
     required String password,
   }) async {
-    final body = await _send(() => _http.post(
-          _u('/api/users/login'),
-          headers: _headers(json: true, auth: false),
-          body: jsonEncode({'username': username, 'password': password}),
-        ));
+    final body = await _send(
+      () => _http.post(
+        _u('/api/users/login'),
+        headers: _headers(json: true, auth: false),
+        body: jsonEncode({'username': username, 'password': password}),
+      ),
+    );
     return AuthResponse.fromJson(body as Map<String, dynamic>);
   }
 
   /// Revokes the current session server-side. Idempotent on the server;
   /// callers should clear local session state regardless of outcome.
   Future<void> logout() async {
-    await _send(() => _http.post(
-          _u('/api/users/logout'),
-          headers: _headers(),
-        ));
+    await _send(() => _http.post(_u('/api/users/logout'), headers: _headers()));
   }
 
   /// Resolves the current session token to its user — used to validate
   /// a persisted session on app launch.
   Future<User> me() async {
-    final body = await _send(() => _http.get(
-          _u('/api/users/me'),
-          headers: _headers(),
-        ));
+    final body = await _send(
+      () => _http.get(_u('/api/users/me'), headers: _headers()),
+    );
     return User.fromJson(body as Map<String, dynamic>);
   }
 
   // ── server info ─────────────────────────────────────────────────────
 
   Future<ServerInfo> serverInfo() async {
-    final body = await _send(() => _http.get(
-          _u('/api/server-info'),
-          headers: _headers(auth: false),
-        ));
+    final body = await _send(
+      () => _http.get(_u('/api/server-info'), headers: _headers(auth: false)),
+    );
     return ServerInfo.fromJson(body as Map<String, dynamic>);
   }
 
@@ -150,10 +152,9 @@ class ApiClient {
   Future<List<Tag>> listTags({String? query, int limit = 50}) async {
     final qs = <String, String>{'limit': '$limit'};
     if (query != null && query.isNotEmpty) qs['q'] = query;
-    final body = await _send(() => _http.get(
-          _u('/api/tags', qs),
-          headers: _headers(),
-        ));
+    final body = await _send(
+      () => _http.get(_u('/api/tags', qs), headers: _headers()),
+    );
     return (body as List<dynamic>)
         .map((e) => Tag.fromJson(e as Map<String, dynamic>))
         .toList();
@@ -162,43 +163,40 @@ class ApiClient {
   // ── settings ────────────────────────────────────────────────────────
 
   Future<List<Setting>> listSettings() async {
-    final body = await _send(() => _http.get(
-          _u('/api/settings'),
-          headers: _headers(),
-        ));
+    final body = await _send(
+      () => _http.get(_u('/api/settings'), headers: _headers()),
+    );
     return (body as List<dynamic>)
         .map((e) => Setting.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 
   Future<Setting> createSetting({required String name}) async {
-    final body = await _send(() => _http.post(
-          _u('/api/settings'),
-          headers: _headers(json: true),
-          body: jsonEncode({'name': name}),
-        ));
+    final body = await _send(
+      () => _http.post(
+        _u('/api/settings'),
+        headers: _headers(json: true),
+        body: jsonEncode({'name': name}),
+      ),
+    );
     return Setting.fromJson(body as Map<String, dynamic>);
   }
 
-  Future<Setting> updateSetting({
-    required String uuid,
-    String? name,
-  }) async {
-    final body = await _send(() => _http.patch(
-          _u('/api/settings/$uuid'),
-          headers: _headers(json: true),
-          body: jsonEncode({
-            if (name != null) 'name': name,
-          }),
-        ));
+  Future<Setting> updateSetting({required String uuid, String? name}) async {
+    final body = await _send(
+      () => _http.patch(
+        _u('/api/settings/$uuid'),
+        headers: _headers(json: true),
+        body: jsonEncode({if (name != null) 'name': name}),
+      ),
+    );
     return Setting.fromJson(body as Map<String, dynamic>);
   }
 
   Future<void> deleteSetting(String uuid) async {
-    await _send(() => _http.delete(
-          _u('/api/settings/$uuid'),
-          headers: _headers(),
-        ));
+    await _send(
+      () => _http.delete(_u('/api/settings/$uuid'), headers: _headers()),
+    );
   }
 
   // ── lore notes ──────────────────────────────────────────────────────
@@ -213,20 +211,18 @@ class ApiClient {
     if (scopeKind != null) qs['scope_kind'] = scopeKind.wire;
     if (scopeTarget != null) qs['scope_target'] = scopeTarget;
     if (tag != null) qs['tag'] = tag;
-    final body = await _send(() => _http.get(
-          _u('/api/lore-notes', qs),
-          headers: _headers(),
-        ));
+    final body = await _send(
+      () => _http.get(_u('/api/lore-notes', qs), headers: _headers()),
+    );
     return (body as List<dynamic>)
         .map((e) => LoreNoteWithTags.fromJson(e as Map<String, dynamic>))
         .toList();
   }
 
   Future<LoreNoteWithTags> getLoreNote(String uuid) async {
-    final body = await _send(() => _http.get(
-          _u('/api/lore-notes/$uuid'),
-          headers: _headers(),
-        ));
+    final body = await _send(
+      () => _http.get(_u('/api/lore-notes/$uuid'), headers: _headers()),
+    );
     return LoreNoteWithTags.fromJson(body as Map<String, dynamic>);
   }
 
@@ -237,17 +233,19 @@ class ApiClient {
     NoteVisibility visibility = NoteVisibility.visible,
     List<String> tagSlugs = const [],
   }) async {
-    final body = await _send(() => _http.post(
-          _u('/api/lore-notes'),
-          headers: _headers(json: true),
-          body: jsonEncode({
-            'title': title,
-            'body_markdown': bodyMarkdown,
-            'scope': scope.toJson(),
-            'visibility': visibility.wire,
-            'tag_slugs': tagSlugs,
-          }),
-        ));
+    final body = await _send(
+      () => _http.post(
+        _u('/api/lore-notes'),
+        headers: _headers(json: true),
+        body: jsonEncode({
+          'title': title,
+          'body_markdown': bodyMarkdown,
+          'scope': scope.toJson(),
+          'visibility': visibility.wire,
+          'tag_slugs': tagSlugs,
+        }),
+      ),
+    );
     return LoreNoteWithTags.fromJson(body as Map<String, dynamic>);
   }
 
@@ -263,19 +261,20 @@ class ApiClient {
     if (bodyMarkdown != null) payload['body_markdown'] = bodyMarkdown;
     if (visibility != null) payload['visibility'] = visibility.wire;
     if (tagSlugs != null) payload['tag_slugs'] = tagSlugs;
-    final body = await _send(() => _http.patch(
-          _u('/api/lore-notes/$uuid'),
-          headers: _headers(json: true),
-          body: jsonEncode(payload),
-        ));
+    final body = await _send(
+      () => _http.patch(
+        _u('/api/lore-notes/$uuid'),
+        headers: _headers(json: true),
+        body: jsonEncode(payload),
+      ),
+    );
     return LoreNoteWithTags.fromJson(body as Map<String, dynamic>);
   }
 
   Future<void> deleteLoreNote(String uuid) async {
-    await _send(() => _http.delete(
-          _u('/api/lore-notes/$uuid'),
-          headers: _headers(),
-        ));
+    await _send(
+      () => _http.delete(_u('/api/lore-notes/$uuid'), headers: _headers()),
+    );
   }
 
   // ── search ──────────────────────────────────────────────────────────
@@ -294,11 +293,13 @@ class ApiClient {
       'tag_slugs': tagSlugs,
       'limit': limit,
     };
-    final body = await _send(() => _http.post(
-          _u('/api/search'),
-          headers: _headers(json: true),
-          body: jsonEncode(payload),
-        ));
+    final body = await _send(
+      () => _http.post(
+        _u('/api/search'),
+        headers: _headers(json: true),
+        body: jsonEncode(payload),
+      ),
+    );
     return SearchResponse.fromJson(body as Map<String, dynamic>);
   }
 
@@ -314,19 +315,21 @@ class ApiClient {
     required String versionString,
     required List<String> selectedNoteUuids,
   }) async {
-    return await _send(() => _http.post(
-          _u('/api/modules'),
-          headers: _headers(json: true),
-          body: jsonEncode({
-            'source_setting_uuid': sourceSettingUuid,
-            'name': name,
-            'slug': slug,
-            'license': license,
-            if (description != null) 'description': description,
-            'authors': authors,
-            'version_string': versionString,
-            'selected_note_uuids': selectedNoteUuids,
-          }),
-        ));
+    return await _send(
+      () => _http.post(
+        _u('/api/modules'),
+        headers: _headers(json: true),
+        body: jsonEncode({
+          'source_setting_uuid': sourceSettingUuid,
+          'name': name,
+          'slug': slug,
+          'license': license,
+          if (description != null) 'description': description,
+          'authors': authors,
+          'version_string': versionString,
+          'selected_note_uuids': selectedNoteUuids,
+        }),
+      ),
+    );
   }
 }

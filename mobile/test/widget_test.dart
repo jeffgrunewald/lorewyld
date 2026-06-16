@@ -36,12 +36,12 @@ void main() {
     // The gate's importBundle early-returns on its seeded check, but
     // that query resolves in the real zone — give it a beat, then pump.
     await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 100)));
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
     await tester.pump();
   }
 
-  testWidgets('app boots offline and shows the lorewyld brand',
-      (tester) async {
+  testWidgets('app boots offline and shows the lorewyld brand', (tester) async {
     final connection = ServerConnection();
     final store = await openSeededStore(tester);
     await tester.pumpWidget(LorewyldApp(connection: connection, store: store));
@@ -51,8 +51,9 @@ void main() {
     await tester.runAsync(store.close);
   });
 
-  testWidgets('home screen offers local features without a server',
-      (tester) async {
+  testWidgets('home screen offers local features without a server', (
+    tester,
+  ) async {
     final connection = ServerConnection();
     final store = await openSeededStore(tester);
     await tester.pumpWidget(LorewyldApp(connection: connection, store: store));
@@ -79,7 +80,8 @@ void main() {
     await tester.pump(const Duration(milliseconds: 400));
     // Category counts/lookups resolve in the real zone.
     await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 100)));
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
     await tester.pump();
 
     expect(find.text('Spells'), findsOneWidget);
@@ -100,7 +102,8 @@ void main() {
     // spinner would keep pumpAndSettle from ever settling. Bounded
     // pumps instead.
     await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 50)));
+      () => Future<void>.delayed(const Duration(milliseconds: 50)),
+    );
     await tester.pump();
 
     // The + button opens the creation wizard.
@@ -118,13 +121,15 @@ void main() {
     await tester.tap(find.text('Create'));
     await tester.pump();
     await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 100)));
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     // The wizard pops to the list, which refreshes (real-zone IO) and
     // then pushes the sheet.
     await tester.runAsync(
-        () => Future<void>.delayed(const Duration(milliseconds: 100)));
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 

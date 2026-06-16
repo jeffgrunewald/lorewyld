@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use typeshare::typeshare;
 
 use crate::common::{EntityId, Timestamp};
 
@@ -17,34 +16,42 @@ use crate::common::{EntityId, Timestamp};
 /// After publication, the source Setting persists with
 /// `published_as_module_uuid` set, and continues to evolve
 /// independently of the frozen module versions it has spawned.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Setting {
+    #[cfg_attr(feature = "openapi", schema(value_type = String))]
     pub uuid: EntityId,
     pub name: String,
     /// Optional `SettingScope` lore note serving as the world primer.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "openapi", schema(value_type = Option<String>))]
     pub description_note_uuid: Option<EntityId>,
     /// `None` when the owning account has been deleted — content
     /// outlives its owner.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "openapi", schema(value_type = Option<String>))]
     pub owner_user_uuid: Option<EntityId>,
     /// Set when the setting has been published as a module via the
     /// Promote-to-Module wizard. Points to the most recent published
     /// version; older versions are reachable via the module's own
     /// `previous_version_uuid` chain.
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "openapi", schema(value_type = Option<String>))]
     pub published_as_module_uuid: Option<EntityId>,
+    #[cfg_attr(feature = "openapi", schema(value_type = String, format = DateTime))]
     pub created_at: Timestamp,
+    #[cfg_attr(feature = "openapi", schema(value_type = String, format = DateTime))]
     pub updated_at: Timestamp,
 }
 
 /// Co-author relationship — a user invited to collaborate on a setting
 /// has read/write access to its notes and (in later tiers) its draft
 /// structured records.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct SettingCollaborator {
+    #[cfg_attr(feature = "openapi", schema(value_type = String))]
     pub setting_uuid: EntityId,
+    #[cfg_attr(feature = "openapi", schema(value_type = String))]
     pub user_uuid: EntityId,
 }

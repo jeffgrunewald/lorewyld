@@ -53,10 +53,8 @@ class _DiceRollerScreenState extends State<DiceRollerScreen> {
     });
   }
 
-  int get _grandTotal => _lastRolls.values.fold(
-        0,
-        (a, list) => a + list.fold(0, (p, n) => p + n),
-      );
+  int get _grandTotal =>
+      _lastRolls.values.fold(0, (a, list) => a + list.fold(0, (p, n) => p + n));
 
   @override
   Widget build(BuildContext context) {
@@ -83,7 +81,7 @@ class _DiceRollerScreenState extends State<DiceRollerScreen> {
                           type: t,
                           count: _queue[t] ?? 0,
                           rolls: _lastRolls[t],
-                         );
+                        );
                       },
                     ),
             ),
@@ -154,9 +152,7 @@ class _DiceRollerScreenState extends State<DiceRollerScreen> {
                   backgroundColor: const Color(0xFF414143),
                   foregroundColor: Colors.white,
                 ),
-                onPressed: !rollEnabled
-                    ? null
-                    : (_rolled ? _clear : _roll),
+                onPressed: !rollEnabled ? null : (_rolled ? _clear : _roll),
                 child: Text(_rolled ? 'Clear' : 'Roll'),
               ),
             ),
@@ -218,28 +214,28 @@ class _QueueRow extends StatelessWidget {
     required this.type,
     required this.count,
     required this.rolls,
-   });
+  });
 
-   final DiceType type;
-   final int count;
-   final List<int>? rolls;
+  final DiceType type;
+  final int count;
+  final List<int>? rolls;
 
-    @override
-   Widget build(BuildContext context) {
-     final style = Theme.of(context).textTheme.titleMedium;
-     final detail = rolls != null
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.titleMedium;
+    final detail = rolls != null
         ? '${rolls!.join(', ')} = ${rolls!.fold(0, (a, b) => a + b)}'
         : 'x$count';
 
-     return Padding(
-       padding: const EdgeInsets.symmetric(vertical: 6),
-       child: Row(
-         children: [
-           DiceIcon(type: type, size: 44),
-           const SizedBox(width: 12),
-           Text(detail, style: style),
-         ],
-       ),
-     );
-    }
- }
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      child: Row(
+        children: [
+          DiceIcon(type: type, size: 44),
+          const SizedBox(width: 12),
+          Text(detail, style: style),
+        ],
+      ),
+    );
+  }
+}

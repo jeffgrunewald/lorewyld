@@ -1,10 +1,8 @@
 use serde::{Deserialize, Serialize};
-use typeshare::typeshare;
 
 use crate::common::{AbilityScore, ChoiceFrom, EntityId, Json, Timestamp};
 
 /// The character level(s) at which a class feature is gained.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FeatureLevel {
     pub level: u8,
@@ -15,7 +13,6 @@ pub struct FeatureLevel {
 }
 
 /// A named class or subclass feature with its level progression.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ClassFeature {
     /// Stable external identifier (Open5e key for imported content).
@@ -36,7 +33,6 @@ pub struct ClassFeature {
 /// data* that Open5e v2 dropped to prose; the bundle generator populates
 /// them from the v1 API and curated overrides. They are `None`/empty on
 /// subclass rows, which inherit from their parent class.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Class {
     pub uuid: EntityId,
@@ -92,4 +88,36 @@ pub struct Class {
     pub is_restricted: bool,
     pub created_at: Timestamp,
     pub updated_at: Timestamp,
+}
+
+/// Slim list-projection of a [`Class`]. Optionals serialize as `null`
+/// (not omitted) to match the list-row shape clients already read.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ClassSummary {
+    pub uuid: EntityId,
+    pub content_module_uuid: EntityId,
+    pub document_uuid: EntityId,
+    pub key: String,
+    pub slug: String,
+    pub name: String,
+    pub subclass_of: Option<EntityId>,
+    pub hit_dice: Option<u8>,
+    pub caster_type: Option<String>,
+}
+
+impl Class {
+    /// Derives the list-row summary from the full record.
+    pub fn summary(&self) -> ClassSummary {
+        ClassSummary {
+            uuid: self.uuid,
+            content_module_uuid: self.content_module_uuid,
+            document_uuid: self.document_uuid,
+            key: self.key.clone(),
+            slug: self.slug.clone(),
+            name: self.name.clone(),
+            subclass_of: self.subclass_of,
+            hit_dice: self.hit_dice,
+            caster_type: self.caster_type.clone(),
+        }
+    }
 }

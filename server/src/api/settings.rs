@@ -55,6 +55,13 @@ const SETTING_SELECT: &str = "SELECT uuid, name, description_note_uuid, owner_us
                               published_as_module_uuid, created_at, updated_at \
                               FROM setting";
 
+#[utoipa::path(
+    get,
+    path = "/api/settings",
+    tag = "settings",
+    security(("bearer" = [])),
+    responses((status = 200, description = "Settings the caller owns or collaborates on", body = [Setting]))
+)]
 pub async fn list_settings(
     State(state): State<ApiState>,
     user: CurrentUser,
@@ -74,6 +81,17 @@ pub async fn list_settings(
         .map(Json)
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/settings/{uuid}",
+    tag = "settings",
+    security(("bearer" = [])),
+    params(("uuid" = String, Path, description = "Setting UUID")),
+    responses(
+        (status = 200, description = "The setting", body = Setting),
+        (status = 404, description = "No such setting"),
+    )
+)]
 pub async fn get_setting(
     State(state): State<ApiState>,
     user: CurrentUser,
@@ -96,6 +114,14 @@ pub async fn get_setting(
     Ok(Json(row.into_dto()?))
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/settings",
+    tag = "settings",
+    security(("bearer" = [])),
+    request_body = CreateSettingRequest,
+    responses((status = 201, description = "The created setting", body = Setting))
+)]
 pub async fn create_setting(
     State(state): State<ApiState>,
     user: CurrentUser,
@@ -123,6 +149,18 @@ pub async fn create_setting(
     Ok((StatusCode::CREATED, Json(row.into_dto()?)))
 }
 
+#[utoipa::path(
+    patch,
+    path = "/api/settings/{uuid}",
+    tag = "settings",
+    security(("bearer" = [])),
+    params(("uuid" = String, Path, description = "Setting UUID")),
+    request_body = UpdateSettingRequest,
+    responses(
+        (status = 200, description = "The updated setting", body = Setting),
+        (status = 404, description = "No such setting"),
+    )
+)]
 pub async fn update_setting(
     State(state): State<ApiState>,
     user: CurrentUser,
@@ -156,6 +194,17 @@ pub async fn update_setting(
     Ok(Json(row.into_dto()?))
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/settings/{uuid}",
+    tag = "settings",
+    security(("bearer" = [])),
+    params(("uuid" = String, Path, description = "Setting UUID")),
+    responses(
+        (status = 204, description = "Deleted"),
+        (status = 404, description = "No such setting"),
+    )
+)]
 pub async fn delete_setting(
     State(state): State<ApiState>,
     user: CurrentUser,
@@ -169,6 +218,18 @@ pub async fn delete_setting(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/settings/{uuid}/collaborators",
+    tag = "settings",
+    security(("bearer" = [])),
+    params(("uuid" = String, Path, description = "Setting UUID")),
+    request_body = AddCollaboratorRequest,
+    responses(
+        (status = 204, description = "Collaborator added"),
+        (status = 404, description = "No such setting"),
+    )
+)]
 pub async fn add_collaborator(
     State(state): State<ApiState>,
     user: CurrentUser,
@@ -193,6 +254,17 @@ pub async fn add_collaborator(
     Ok(StatusCode::NO_CONTENT)
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/settings/{uuid}/collaborators/{collab_uuid}",
+    tag = "settings",
+    security(("bearer" = [])),
+    params(
+        ("uuid" = String, Path, description = "Setting UUID"),
+        ("collab_uuid" = String, Path, description = "Collaborator user UUID"),
+    ),
+    responses((status = 204, description = "Collaborator removed (idempotent)"))
+)]
 pub async fn remove_collaborator(
     State(state): State<ApiState>,
     user: CurrentUser,

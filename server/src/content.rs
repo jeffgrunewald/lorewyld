@@ -9,7 +9,8 @@
 
 use anyhow::{Context, Result, bail};
 use lorewyld_types::{
-    ContentBundle, ContentModule, MIN_SUPPORTED_SCHEMA_VERSION, ModuleOrigin, SCHEMA_VERSION,
+    Armor, Background, Class, ContentBundle, ContentModule, Creature, Feat, Item,
+    MIN_SUPPORTED_SCHEMA_VERSION, ModuleOrigin, SCHEMA_VERSION, Species, Spell, Weapon,
 };
 use serde::Serialize;
 use serde_json::Value;
@@ -221,6 +222,18 @@ pub const DISPLAY_CATEGORIES: &[&str] = &[
 
 pub fn category_spec(table: &str) -> Option<&'static CategorySpec> {
     CATEGORIES.iter().find(|spec| spec.table == table)
+}
+
+/// Content tables that carry a materialized `summary` column, served
+/// verbatim by the list endpoint. The summary shape is single-sourced by
+/// each type's `summary()` (e.g. `Spell::summary` → `SpellSummary`).
+/// Inc 3b extends this to the remaining display categories.
+pub const SUMMARY_TABLES: &[&str] = &[
+    "spell", "creature", "class", "species", "feat", "background", "weapon", "armor", "item",
+];
+
+pub fn has_summary(table: &str) -> bool {
+    SUMMARY_TABLES.contains(&table)
 }
 
 /// How an import reacts to a bundle module whose slug already exists.
@@ -508,13 +521,22 @@ async fn insert_bundle_records(
         &bundle.weapon_properties,
     )
     .await?;
-    n += insert_records(tx, allowed, "spell", spec_extras("spell"), &bundle.spells).await?;
-    n += insert_records(
+    n += insert_records_summarized(
+        tx,
+        allowed,
+        "spell",
+        spec_extras("spell"),
+        &bundle.spells,
+        |s: &Spell| s.summary(),
+    )
+    .await?;
+    n += insert_records_summarized(
         tx,
         allowed,
         "creature",
         spec_extras("creature"),
         &bundle.creatures,
+        |c: &Creature| c.summary(),
     )
     .await?;
     // Self-referential tables insert parents before children: bundle
@@ -524,34 +546,87 @@ async fn insert_bundle_records(
         .iter()
         .cloned()
         .partition(|c| c.subclass_of.is_none());
-    n += insert_records(tx, allowed, "class", spec_extras("class"), &base_classes).await?;
-    n += insert_records(tx, allowed, "class", spec_extras("class"), &subclasses).await?;
+    n += insert_records_summarized(
+        tx,
+        allowed,
+        "class",
+        spec_extras("class"),
+        &base_classes,
+        |c: &Class| c.summary(),
+    )
+    .await?;
+    n += insert_records_summarized(
+        tx,
+        allowed,
+        "class",
+        spec_extras("class"),
+        &subclasses,
+        |c: &Class| c.summary(),
+    )
+    .await?;
     let (base_species, subspecies): (Vec<_>, Vec<_>) = bundle
         .species
         .iter()
         .cloned()
         .partition(|s| s.subspecies_of.is_none());
-    n += insert_records(
+    n += insert_records_summarized(
         tx,
         allowed,
         "species",
         spec_extras("species"),
         &base_species,
+        |s: &Species| s.summary(),
     )
     .await?;
-    n += insert_records(tx, allowed, "species", spec_extras("species"), &subspecies).await?;
-    n += insert_records(tx, allowed, "feat", &[], &bundle.feats).await?;
-    n += insert_records(tx, allowed, "background", &[], &bundle.backgrounds).await?;
-    n += insert_records(
+    n += insert_records_summarized(
+        tx,
+        allowed,
+        "species",
+        spec_extras("species"),
+        &subspecies,
+        |s: &Species| s.summary(),
+    )
+    .await?;
+    n += insert_records_summarized(tx, allowed, "feat", &[], &bundle.feats, |f: &Feat| {
+        f.summary()
+    })
+    .await?;
+    n += insert_records_summarized(
+        tx,
+        allowed,
+        "background",
+        &[],
+        &bundle.backgrounds,
+        |b: &Background| b.summary(),
+    )
+    .await?;
+    n += insert_records_summarized(
         tx,
         allowed,
         "weapon",
         spec_extras("weapon"),
         &bundle.weapons,
+        |w: &Weapon| w.summary(),
     )
     .await?;
-    n += insert_records(tx, allowed, "armor", spec_extras("armor"), &bundle.armors).await?;
-    n += insert_records(tx, allowed, "item", spec_extras("item"), &bundle.items).await?;
+    n += insert_records_summarized(
+        tx,
+        allowed,
+        "armor",
+        spec_extras("armor"),
+        &bundle.armors,
+        |a: &Armor| a.summary(),
+    )
+    .await?;
+    n += insert_records_summarized(
+        tx,
+        allowed,
+        "item",
+        spec_extras("item"),
+        &bundle.items,
+        |i: &Item| i.summary(),
+    )
+    .await?;
     Ok(n)
 }
 
@@ -665,4 +740,240 @@ async fn insert_records<T: Serialize>(
         inserted += 1;
     }
     Ok(inserted)
+}
+
+/// Like [`insert_records`] but also writes a materialized `summary` column
+/// (for tables in [`SUMMARY_TABLES`]). `summary_of` derives the list-row
+/// summary from the typed record, so its shape is single-sourced in
+/// lorewyld-types rather than assembled in SQL.
+async fn insert_records_summarized<T, S, F>(
+    tx: &mut Transaction<'_, Sqlite>,
+    allowed_modules: &std::collections::HashSet<String>,
+    table: &str,
+    extras: &[(&str, &str)],
+    records: &[T],
+    summary_of: F,
+) -> Result<u64>
+where
+    T: Serialize,
+    S: Serialize,
+    F: Fn(&T) -> S,
+{
+    if records.is_empty() {
+        return Ok(0);
+    }
+    let extra_cols = extras
+        .iter()
+        .map(|(col, _)| format!(", {col}"))
+        .collect::<String>();
+    let placeholders = ", ?".repeat(extras.len());
+    let sql = format!(
+        "INSERT INTO {table} (uuid, content_module_uuid, key, slug, name{extra_cols}, summary, data) \
+         VALUES (?, ?, ?, ?, ?{placeholders}, ?, ?)"
+    );
+
+    let mut inserted = 0;
+    for record in records {
+        let value = serde_json::to_value(record)?;
+        if !value
+            .pointer("/content_module_uuid")
+            .and_then(Value::as_str)
+            .is_some_and(|uuid| allowed_modules.contains(uuid))
+        {
+            continue;
+        }
+        let data = serde_json::to_string(&value)?;
+        let summary = serde_json::to_string(&summary_of(record))?;
+        let field = |ptr: &str| -> Result<&Value> {
+            value
+                .pointer(ptr)
+                .ok_or_else(|| anyhow::anyhow!("{table} record missing field {ptr}"))
+        };
+        let text = |ptr: &str| -> Result<String> {
+            Ok(field(ptr)?
+                .as_str()
+                .ok_or_else(|| anyhow::anyhow!("{table} field {ptr} is not a string"))?
+                .to_string())
+        };
+
+        let mut query = sqlx::query(&sql)
+            .bind(text("/uuid")?)
+            .bind(text("/content_module_uuid")?)
+            .bind(text("/key")?)
+            .bind(text("/slug")?)
+            .bind(text("/name")?);
+        for (col, ptr) in extras {
+            query = match value.pointer(ptr) {
+                None | Some(Value::Null) => query.bind(None::<String>),
+                Some(Value::String(s)) => query.bind(s.clone()),
+                Some(Value::Bool(b)) => query.bind(*b),
+                Some(Value::Number(n)) if n.is_i64() || n.is_u64() => {
+                    query.bind(n.as_i64().unwrap_or_default())
+                }
+                Some(Value::Number(n)) => query.bind(n.as_f64().unwrap_or_default()),
+                Some(other) => bail!("{table} column {col}: unbindable JSON value {other}"),
+            };
+        }
+        query.bind(summary).bind(data).execute(&mut **tx).await?;
+        inserted += 1;
+    }
+    Ok(inserted)
+}
+
+#[cfg(test)]
+mod compendium_contract {
+    //! Drift guard for surface #2: the web (server/src/web/compendium.rs)
+    //! and mobile (mobile/lib/compendium/) compendia read content records
+    //! by stringly-typed field key. Those keys ARE the serde field names of
+    //! the Rust content types. The clients are plain JS / dynamic Dart, so
+    //! a Rust field rename can't be caught at compile time there — it would
+    //! silently blank a fact row. This test pins every field the clients
+    //! read to the live types: rename/remove one and the test fails loudly,
+    //! pointing at the consumers to update in lockstep.
+    //!
+    //! Field presence is checked against the shipped bundle (real records),
+    //! unioned across every record so `skip_serializing_if = None` optionals
+    //! that are populated somewhere still count.
+
+    use super::*;
+    use std::collections::BTreeSet;
+
+    fn keys_union<T: Serialize>(records: &[T]) -> BTreeSet<String> {
+        let mut keys = BTreeSet::new();
+        for record in records {
+            if let Ok(Value::Object(map)) = serde_json::to_value(record) {
+                keys.extend(map.into_iter().map(|(k, _)| k));
+            }
+        }
+        keys
+    }
+
+    #[track_caller]
+    fn assert_fields(category: &str, present: &BTreeSet<String>, consumed: &[&str]) {
+        let missing: Vec<&str> = consumed
+            .iter()
+            .copied()
+            .filter(|f| !present.contains(*f))
+            .collect();
+        assert!(
+            missing.is_empty(),
+            "content type `{category}` no longer serializes {missing:?}, which the \
+             compendium clients read — update server/src/web/compendium.rs and \
+             mobile/lib/compendium/ in lockstep with the type change",
+        );
+    }
+
+    #[test]
+    fn clients_consumed_fields_exist_on_current_types() {
+        let bundle: ContentBundle =
+            serde_json::from_str(SRD_BUNDLE_JSON).expect("embedded bundle decodes");
+
+        assert_fields(
+            "spell",
+            &keys_union(&bundle.spells),
+            &[
+                "uuid", "key", "slug", "name", "level", "school", "concentration", "ritual",
+                "verbal", "somatic", "material", "material_specified", "casting_time",
+                "range_text", "duration", "description", "higher_level", "document_uuid",
+            ],
+        );
+        assert_fields(
+            "creature",
+            &keys_union(&bundle.creatures),
+            &[
+                "uuid", "key", "slug", "name", "type", "size", "challenge_rating", "armor_class",
+                "armor_detail", "hit_points", "hit_dice", "speed", "ability_scores",
+                "experience_points", "languages", "actions", "document_uuid",
+            ],
+        );
+        assert_fields(
+            "class",
+            &keys_union(&bundle.classes),
+            &[
+                "uuid", "key", "slug", "name", "subclass_of", "caster_type", "hit_dice",
+                "prof_saving_throws", "prof_armor", "prof_weapons", "prof_skills", "features",
+                "desc", "document_uuid",
+            ],
+        );
+        assert_fields(
+            "species",
+            &keys_union(&bundle.species),
+            &[
+                "uuid", "key", "slug", "name", "is_subspecies", "subspecies_of", "size", "speed",
+                "asi_desc", "traits", "desc", "document_uuid",
+            ],
+        );
+        assert_fields(
+            "feat",
+            &keys_union(&bundle.feats),
+            &[
+                "uuid", "key", "slug", "name", "has_prerequisite", "prerequisite", "benefits",
+                "desc", "document_uuid",
+            ],
+        );
+        assert_fields(
+            "background",
+            &keys_union(&bundle.backgrounds),
+            &["uuid", "key", "slug", "name", "benefits", "desc", "document_uuid"],
+        );
+        assert_fields(
+            "item",
+            &keys_union(&bundle.items),
+            &[
+                "uuid", "key", "slug", "name", "category_uuid", "cost", "weight", "is_magic",
+                "rarity", "requires_attunement", "desc", "document_uuid",
+            ],
+        );
+        assert_fields(
+            "weapon",
+            &keys_union(&bundle.weapons),
+            &[
+                "uuid", "key", "slug", "name", "is_simple", "damage_dice", "damage_type",
+                "properties", "document_uuid",
+            ],
+        );
+        assert_fields(
+            "armor",
+            &keys_union(&bundle.armors),
+            &[
+                "uuid", "key", "slug", "name", "category", "ac_display",
+                "grants_stealth_disadvantage", "document_uuid",
+            ],
+        );
+    }
+
+    #[test]
+    fn nested_named_list_sections_keep_name_and_desc() {
+        // The entry view renders class.features / species.traits /
+        // creature.actions / background.benefits as `{name, desc}` cards
+        // (compendium.rs `namedList`). Guard those nested keys too. Feat
+        // benefits are excluded: `FeatBenefit.name` is optional by design
+        // (unnamed benefits are intentionally skipped by the client).
+        let bundle: ContentBundle =
+            serde_json::from_str(SRD_BUNDLE_JSON).expect("embedded bundle decodes");
+
+        // Asserts the first non-empty list found under `field` has rows
+        // carrying both `name` and `desc`.
+        fn assert_name_desc<T: Serialize>(records: &[T], field: &str, label: &str) {
+            let row = records
+                .iter()
+                .filter_map(|r| serde_json::to_value(r).ok())
+                .find_map(|r| {
+                    r.get(field)
+                        .and_then(Value::as_array)
+                        .and_then(|a| a.first())
+                        .cloned()
+                });
+            let row = row.unwrap_or_else(|| panic!("{label}: no records carry a non-empty `{field}` list"));
+            assert!(
+                row.get("name").is_some() && row.get("desc").is_some(),
+                "{label} rows lost `name`/`desc` — update compendium clients' namedList rendering",
+            );
+        }
+
+        assert_name_desc(&bundle.classes, "features", "class.features");
+        assert_name_desc(&bundle.species, "traits", "species.traits");
+        assert_name_desc(&bundle.creatures, "actions", "creature.actions");
+        assert_name_desc(&bundle.backgrounds, "benefits", "background.benefits");
+    }
 }

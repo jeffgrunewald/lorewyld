@@ -47,6 +47,12 @@ dependencies:
   sqflite: ^2.4.0
   flutter_markdown_plus: ^1.0.7
 
+  # FFI bridge to the shared Rust core (lorewyld-domain via lorewyld-mobile-ffi).
+  # Version must match the installed flutter_rust_bridge_codegen.
+  flutter_rust_bridge: 2.12.0
+  lorewyld_mobile_ffi:
+    path: rust_builder
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

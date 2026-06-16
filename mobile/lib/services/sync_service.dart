@@ -50,13 +50,11 @@ class SyncService {
         final remote = await api.createLoreNote(
           title: note.title,
           bodyMarkdown: note.bodyMarkdown,
-          scope: NoteScope(
-              kind: NoteScopeKind.setting, targetUuid: remoteUuid),
+          scope: NoteScope(kind: NoteScopeKind.setting, targetUuid: remoteUuid),
           visibility: note.visibility,
           tagSlugs: note.tagSlugs,
         );
-        await store.updateNote(
-            uuid: note.uuid, remoteUuid: remote.note.uuid);
+        await store.updateNote(uuid: note.uuid, remoteUuid: remote.note.uuid);
         created++;
       } else {
         await api.updateLoreNote(
@@ -79,11 +77,13 @@ class SyncService {
     final candidates = <RemoteSettingCandidate>[];
     for (final s in remote) {
       final local = await store.getSettingByRemoteUuid(s.uuid);
-      candidates.add(RemoteSettingCandidate(
-        remoteUuid: s.uuid,
-        name: s.name,
-        alreadyLinkedLocalUuid: local?.uuid,
-      ));
+      candidates.add(
+        RemoteSettingCandidate(
+          remoteUuid: s.uuid,
+          name: s.name,
+          alreadyLinkedLocalUuid: local?.uuid,
+        ),
+      );
     }
     return candidates;
   }
@@ -97,8 +97,10 @@ class SyncService {
   }) async {
     var local = await store.getSettingByRemoteUuid(remoteSettingUuid);
     if (local == null) {
-      local = await store.createSetting(remoteSettingName,
-          remoteUuid: remoteSettingUuid);
+      local = await store.createSetting(
+        remoteSettingName,
+        remoteUuid: remoteSettingUuid,
+      );
     } else {
       await store.renameSetting(local.uuid, remoteSettingName);
     }
@@ -126,8 +128,7 @@ class SyncService {
         await store.createNote(
           title: remote.note.title,
           bodyMarkdown: remote.note.bodyMarkdown,
-          scope: NoteScope(
-              kind: NoteScopeKind.setting, targetUuid: local.uuid),
+          scope: NoteScope(kind: NoteScopeKind.setting, targetUuid: local.uuid),
           visibility: remote.note.visibility,
           tagSlugs: slugs,
           remoteUuid: remote.note.uuid,

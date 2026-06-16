@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use typeshare::typeshare;
 
 use crate::common::{EntityId, Timestamp};
 
@@ -16,22 +15,24 @@ use crate::common::{EntityId, Timestamp};
 /// slugs that user-introduced tags must not collide with).
 /// `introduced_by_module_uuid` records attribution when a tag entered
 /// the namespace via a published content module.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct Tag {
+    #[cfg_attr(feature = "openapi", schema(value_type = String))]
     pub uuid: EntityId,
     pub slug: String,
     pub display_name: String,
     #[serde(default)]
     pub is_system: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "openapi", schema(value_type = Option<String>))]
     pub introduced_by_module_uuid: Option<EntityId>,
+    #[cfg_attr(feature = "openapi", schema(value_type = String, format = DateTime))]
     pub created_at: Timestamp,
 }
 
 /// Alternate slug that resolves to the same tag — supports synonyms like
 /// `npc` ↔ `non-player-character`. Aliases do not introduce new tags.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TagAlias {
     pub tag_uuid: EntityId,

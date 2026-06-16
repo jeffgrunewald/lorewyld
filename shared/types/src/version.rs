@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use typeshare::typeshare;
 
 /// Current Lorewyld content-bundle schema version.
 ///
@@ -14,7 +13,6 @@ pub const SCHEMA_VERSION: u32 = 2;
 pub const MIN_SUPPORTED_SCHEMA_VERSION: u32 = 2;
 
 /// Envelope metadata exposed at the top of every `ContentBundle`.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SchemaVersion {
     /// Schema version the bundle was authored against.

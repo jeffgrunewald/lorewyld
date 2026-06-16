@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use typeshare::typeshare;
 
 use crate::{
     AbilityScoreEntry, Alignment, Armor, Background, Class, Condition, ContentModule, Creature,
@@ -16,7 +15,6 @@ use crate::{
 ///
 /// Field order is import-dependency order: importers that insert
 /// sequentially never reference a row that hasn't landed yet.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
 pub struct ContentBundle {
     pub schema: SchemaVersion,

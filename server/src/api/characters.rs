@@ -21,6 +21,13 @@ use crate::api::{
 
 /// `GET /api/characters` — every character on the server, name-sorted,
 /// with owner attribution.
+#[utoipa::path(
+    get,
+    path = "/api/characters",
+    tag = "characters",
+    security(("bearer" = [])),
+    responses((status = 200, description = "Every character on the server, name-sorted", body = [CharacterSheet]))
+)]
 pub async fn list_characters(
     State(state): State<ApiState>,
     _user: CurrentUser,
@@ -35,6 +42,14 @@ pub async fn list_characters(
 
 /// `POST /api/characters` — create a sheet. The server owns identity:
 /// client-supplied uuid, owner, and timestamps are overwritten.
+#[utoipa::path(
+    post,
+    path = "/api/characters",
+    tag = "characters",
+    security(("bearer" = [])),
+    request_body = CharacterSheet,
+    responses((status = 201, description = "Created; server-assigned uuid/owner/timestamps", body = CharacterSheet))
+)]
 pub async fn create_character(
     State(state): State<ApiState>,
     user: CurrentUser,
@@ -72,6 +87,17 @@ pub async fn create_character(
 }
 
 /// `GET /api/characters/:uuid` — readable by any authenticated user.
+#[utoipa::path(
+    get,
+    path = "/api/characters/{uuid}",
+    tag = "characters",
+    security(("bearer" = [])),
+    params(("uuid" = String, Path, description = "Character UUID")),
+    responses(
+        (status = 200, description = "The character sheet", body = CharacterSheet),
+        (status = 404, description = "No such character"),
+    )
+)]
 pub async fn get_character(
     State(state): State<ApiState>,
     _user: CurrentUser,
@@ -84,6 +110,19 @@ pub async fn get_character(
 /// wins, matching the mobile sheet-save model). Owner and `created_at`
 /// are preserved — an admin editing keeps the original owner;
 /// `updated_at` is bumped server-side.
+#[utoipa::path(
+    put,
+    path = "/api/characters/{uuid}",
+    tag = "characters",
+    security(("bearer" = [])),
+    params(("uuid" = String, Path, description = "Character UUID")),
+    request_body = CharacterSheet,
+    responses(
+        (status = 200, description = "The updated sheet", body = CharacterSheet),
+        (status = 403, description = "Not the owner or an admin"),
+        (status = 404, description = "No such character"),
+    )
+)]
 pub async fn replace_character(
     State(state): State<ApiState>,
     user: CurrentUser,
@@ -118,6 +157,18 @@ pub async fn replace_character(
 }
 
 /// `DELETE /api/characters/:uuid` — owner or admin.
+#[utoipa::path(
+    delete,
+    path = "/api/characters/{uuid}",
+    tag = "characters",
+    security(("bearer" = [])),
+    params(("uuid" = String, Path, description = "Character UUID")),
+    responses(
+        (status = 204, description = "Deleted"),
+        (status = 403, description = "Not the owner or an admin"),
+        (status = 404, description = "No such character"),
+    )
+)]
 pub async fn delete_character(
     State(state): State<ApiState>,
     user: CurrentUser,

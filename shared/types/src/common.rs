@@ -3,16 +3,13 @@
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use typeshare::typeshare;
 use uuid::Uuid;
 
 /// Canonical UUID alias. Typeshare emits this as `String` in target
 /// languages, matching the v4-UUID-as-text storage convention.
-#[typeshare(serialized_as = "string")]
 pub type EntityId = Uuid;
 
 /// Canonical timestamp alias.
-#[typeshare(serialized_as = "string")]
 pub type Timestamp = DateTime<Utc>;
 
 /// Fixed namespace for deterministic content UUIDs. Never change this
@@ -33,7 +30,6 @@ pub fn content_uuid(type_tag: &str, key: &str) -> Uuid {
 }
 
 /// One of the six core ability scores.
-#[typeshare]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AbilityScore {
@@ -48,8 +44,8 @@ pub enum AbilityScore {
 /// Per-ability values, used for monster ability scores, ASIs, and
 /// modifier maps. All six axes are required so consumers don't have to
 /// branch on missing entries.
-#[typeshare]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 pub struct AbilityScores {
     pub strength: i32,
     pub dexterity: i32,
@@ -60,7 +56,6 @@ pub struct AbilityScores {
 }
 
 /// One of the nine SRD alignment values on the law/chaos × good/evil axes.
-#[typeshare]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AlignmentName {
@@ -78,7 +73,6 @@ pub enum AlignmentName {
 
 /// SRD damage type enum. Used by weapons, spells, and monster
 /// resistance/immunity arrays.
-#[typeshare]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum DamageTypeName {
@@ -98,7 +92,6 @@ pub enum DamageTypeName {
 }
 
 /// SRD condition names. Referenced by `condition_immunities` arrays.
-#[typeshare]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum ConditionName {
@@ -120,7 +113,6 @@ pub enum ConditionName {
 }
 
 /// One of the eight schools of magic.
-#[typeshare]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum SpellSchoolName {
@@ -136,7 +128,6 @@ pub enum SpellSchoolName {
 
 /// SRD rarity grades for magic items. Variant order encodes the
 /// Open5e rarity rank (Common = 1 … Artifact = 6).
-#[typeshare]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Rarity {
@@ -150,7 +141,6 @@ pub enum Rarity {
 
 /// Movement modes a creature can use, in feet. `Walk` is required;
 /// other modes default to 0 when absent.
-#[typeshare]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct MovementSpeed {
     pub walk: i32,
@@ -171,7 +161,6 @@ pub struct MovementSpeed {
 /// Senses with numeric range (feet) and a free-text human-readable
 /// summary that the SRD prints inline (e.g.
 /// `"darkvision 60 ft., passive Perception 10"`).
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct Senses {
     pub passive_perception: i32,
@@ -189,7 +178,6 @@ pub struct Senses {
 
 /// Generic "choose N from a list" pattern that appears for skill,
 /// language, tool, and equipment proficiencies.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ChoiceFrom {
     pub choose: u32,
@@ -202,7 +190,6 @@ pub struct ChoiceFrom {
 
 /// Optional named modifier — used for saving-throw and skill bonuses
 /// keyed by their canonical name.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct NamedModifier {
     pub name: String,
@@ -214,11 +201,9 @@ pub struct NamedModifier {
 ///
 /// Typeshare emits this as a permissive type in non-Rust targets
 /// (`any` / `dynamic` / `Map<String, Any>` depending on language).
-#[typeshare(serialized_as = "object")]
 pub type Json = serde_json::Value;
 
 /// Audit columns shared by every persisted record.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuditFields {
     pub created_at: Timestamp,
@@ -229,7 +214,6 @@ pub struct AuditFields {
 
 /// Persisted ability-score lookup row. The `name` enum acts as the
 /// canonical identifier; UUID + slug remain for FK and URL ergonomics.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AbilityScoreEntry {
     pub uuid: EntityId,
@@ -251,7 +235,6 @@ pub struct AbilityScoreEntry {
 
 /// SRD alignment lookup row. Boolean axes match the README schema and
 /// support partial-alignment queries (e.g. `is_evil=true`).
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Alignment {
     pub uuid: EntityId,
@@ -272,7 +255,6 @@ pub struct Alignment {
 
 /// Creature/object size lookup row (Open5e v2 `sizes`). Replaces the
 /// former closed `CreatureSize` enum so content packs can add sizes.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Size {
     pub uuid: EntityId,
@@ -292,7 +274,6 @@ pub struct Size {
 }
 
 /// Skill lookup row (Open5e v2 `skills`), keyed to its governing ability.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Skill {
     pub uuid: EntityId,
@@ -309,7 +290,6 @@ pub struct Skill {
 }
 
 /// SRD damage-type lookup row.
-#[typeshare]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DamageType {
     pub uuid: EntityId,

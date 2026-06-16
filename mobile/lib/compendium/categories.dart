@@ -121,7 +121,7 @@ class CompendiumCategory {
   final String label;
   final IconData icon;
   final String? Function(Map<String, dynamic> record, ContentLookups lookups)
-      subtitle;
+  subtitle;
 
   /// Most names are already display-ready; conditions carry lowercase
   /// wire values ("blinded") that need title-casing.

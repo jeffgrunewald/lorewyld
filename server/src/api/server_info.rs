@@ -11,6 +11,12 @@ use crate::api::{
     rows::{ContentModuleRow, MODULE_SELECT_ACTIVE},
 };
 
+#[utoipa::path(
+    get,
+    path = "/api/server-info",
+    tag = "server",
+    responses((status = 200, description = "Server identity plus the installed-module manifest", body = ServerInfo))
+)]
 pub async fn server_info(State(state): State<ApiState>) -> Result<Json<ServerInfo>, ApiError> {
     let (id, name, version): (String, String, String) =
         sqlx::query_as("SELECT id, name, version FROM game_server LIMIT 1")

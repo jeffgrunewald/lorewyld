@@ -18,18 +18,18 @@ class User {
   });
 
   factory User.fromJson(Map<String, dynamic> json) => User(
-        uuid: json['uuid'] as String,
-        username: json['username'] as String,
-        email: json['email'] as String,
-        admin: json['admin'] as bool,
-        createdAt: DateTime.parse(json['created_at'] as String),
-      );
+    uuid: json['uuid'] as String,
+    username: json['username'] as String,
+    email: json['email'] as String,
+    admin: json['admin'] as bool,
+    createdAt: DateTime.parse(json['created_at'] as String),
+  );
 
   Map<String, dynamic> toJson() => {
-        'uuid': uuid,
-        'username': username,
-        'email': email,
-        'admin': admin,
-        'created_at': createdAt.toIso8601String(),
-      };
+    'uuid': uuid,
+    'username': username,
+    'email': email,
+    'admin': admin,
+    'created_at': createdAt.toIso8601String(),
+  };
 }

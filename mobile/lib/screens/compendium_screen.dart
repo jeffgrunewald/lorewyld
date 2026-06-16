@@ -73,8 +73,11 @@ class _CompendiumScreenState extends State<CompendiumScreen> {
     }
     final grouped = <String, List<Map<String, dynamic>>>{};
     for (final category in compendiumCategories) {
-      final rows = await widget.content
-          .listNamed(category.table, query: query, limit: _searchLimit);
+      final rows = await widget.content.listNamed(
+        category.table,
+        query: query,
+        limit: _searchLimit,
+      );
       if (rows.isNotEmpty) grouped[category.table] = rows;
     }
     // A newer keystroke superseded this query while it ran.
@@ -111,9 +114,7 @@ class _CompendiumScreenState extends State<CompendiumScreen> {
               onChanged: _search,
             ),
           ),
-          Expanded(
-            child: searching ? _searchResults() : _categoryList(),
-          ),
+          Expanded(child: searching ? _searchResults() : _categoryList()),
         ],
       ),
     );
@@ -131,13 +132,15 @@ class _CompendiumScreenState extends State<CompendiumScreen> {
               '${_counts[category.table] ?? ''}',
               style: Theme.of(context).textTheme.bodySmall,
             ),
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => CompendiumCategoryScreen(
-                content: widget.content,
-                category: category,
-                lookups: _lookups,
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => CompendiumCategoryScreen(
+                  content: widget.content,
+                  category: category,
+                  lookups: _lookups,
+                ),
               ),
-            )),
+            ),
           ),
         if (loggedIn) ...[
           const Divider(),
@@ -146,10 +149,12 @@ class _CompendiumScreenState extends State<CompendiumScreen> {
             title: const Text('Server modules'),
             subtitle: const Text('Lore modules published on your server'),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) =>
-                  ModulesBrowseScreen(connection: widget.connection),
-            )),
+            onTap: () => Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) =>
+                    ModulesBrowseScreen(connection: widget.connection),
+              ),
+            ),
           ),
         ],
       ],
@@ -188,8 +193,8 @@ class _GroupHeader extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.titleSmall?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-            ),
+          color: Theme.of(context).colorScheme.primary,
+        ),
       ),
     );
   }
@@ -212,16 +217,17 @@ class _EntryTile extends StatelessWidget {
     final source = lookups.sourceSlugOf(record);
     return ListTile(
       title: Text(category.displayName(record)),
-      subtitle:
-          (subtitle == null || subtitle.isEmpty) ? null : Text(subtitle),
+      subtitle: (subtitle == null || subtitle.isEmpty) ? null : Text(subtitle),
       trailing: source == null ? null : SourceBadge(source),
-      onTap: () => Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => CompendiumEntryScreen(
-          record: record,
-          category: category,
-          lookups: lookups,
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => CompendiumEntryScreen(
+            record: record,
+            category: category,
+            lookups: lookups,
+          ),
         ),
-      )),
+      ),
     );
   }
 }
@@ -245,8 +251,9 @@ class CompendiumCategoryScreen extends StatefulWidget {
 
 class _CompendiumCategoryScreenState extends State<CompendiumCategoryScreen> {
   final _searchCtl = TextEditingController();
-  late final List<FilterDimension> _dimensions =
-      filterDimensionsFor(widget.category.table);
+  late final List<FilterDimension> _dimensions = filterDimensionsFor(
+    widget.category.table,
+  );
   late final List<PickerSort> _sorts = sortOptionsFor(widget.category.table);
   late final FilterState _filters = FilterState(_sorts.first);
 
@@ -315,14 +322,14 @@ class _CompendiumCategoryScreenState extends State<CompendiumCategoryScreen> {
                       onPressed: _all == null
                           ? null
                           : () => showContentFilterSheet(
-                                context: context,
-                                dimensions: _dimensions,
-                                sorts: _sorts,
-                                lookups: widget.lookups,
-                                records: _all!,
-                                state: _filters,
-                                onChanged: () => setState(() {}),
-                              ),
+                              context: context,
+                              dimensions: _dimensions,
+                              sorts: _sorts,
+                              lookups: widget.lookups,
+                              records: _all!,
+                              state: _filters,
+                              onChanged: () => setState(() {}),
+                            ),
                     ),
                   ),
                 ],
@@ -333,15 +340,15 @@ class _CompendiumCategoryScreenState extends State<CompendiumCategoryScreen> {
             child: _all == null
                 ? const Center(child: CircularProgressIndicator())
                 : rows.isEmpty
-                    ? const Center(child: Text('No matches.'))
-                    : ListView.builder(
-                        itemCount: rows.length,
-                        itemBuilder: (_, i) => _EntryTile(
-                          record: rows[i],
-                          category: widget.category,
-                          lookups: widget.lookups,
-                        ),
-                      ),
+                ? const Center(child: Text('No matches.'))
+                : ListView.builder(
+                    itemCount: rows.length,
+                    itemBuilder: (_, i) => _EntryTile(
+                      record: rows[i],
+                      category: widget.category,
+                      lookups: widget.lookups,
+                    ),
+                  ),
           ),
         ],
       ),
@@ -394,8 +401,7 @@ class CompendiumEntryScreen extends StatelessWidget {
                               width: 120,
                               child: Text(
                                 label,
-                                style:
-                                    Theme.of(context).textTheme.labelLarge,
+                                style: Theme.of(context).textTheme.labelLarge,
                               ),
                             ),
                             Expanded(child: Text(value)),
@@ -423,8 +429,7 @@ class CompendiumEntryScreen extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      Text(name,
-                          style: Theme.of(context).textTheme.titleSmall),
+                      Text(name, style: Theme.of(context).textTheme.titleSmall),
                       const SizedBox(height: 4),
                       MarkdownBody(data: desc),
                     ],
@@ -442,8 +447,8 @@ class CompendiumEntryScreen extends StatelessWidget {
               child: Text(
                 'Source: $source',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.outline,
-                    ),
+                  color: Theme.of(context).colorScheme.outline,
+                ),
               ),
             ),
           ],
@@ -453,13 +458,13 @@ class CompendiumEntryScreen extends StatelessWidget {
   }
 
   String? _description() => switch (category.table) {
-        'spell' => [
-            record['description'] as String? ?? '',
-            if (record['higher_level'] case final String h when h.isNotEmpty)
-              '**At higher levels.** $h',
-          ].join('\n\n'),
-        _ => record['desc'] as String?,
-      };
+    'spell' => [
+      record['description'] as String? ?? '',
+      if (record['higher_level'] case final String h when h.isNotEmpty)
+        '**At higher levels.** $h',
+    ].join('\n\n'),
+    _ => record['desc'] as String?,
+  };
 
   List<(String, String)> _facts() {
     final r = record;
@@ -469,8 +474,7 @@ class CompendiumEntryScreen extends StatelessWidget {
           if (r['casting_time'] case final String v)
             ('Casting time', humanizeSlug(v)),
           if (r['range_text'] case final String v) ('Range', v),
-          if (r['duration'] case final String v)
-            ('Duration', humanizeSlug(v)),
+          if (r['duration'] case final String v) ('Duration', humanizeSlug(v)),
           ('Components', _spellComponents(r)),
           if (r['concentration'] == true) ('Concentration', 'Yes'),
           if (r['ritual'] == true) ('Ritual', 'Yes'),
@@ -480,12 +484,12 @@ class CompendiumEntryScreen extends StatelessWidget {
           if (r['armor_class'] case final num v)
             (
               'Armor class',
-              '${v.truncate()}${r['armor_detail'] is String && (r['armor_detail'] as String).isNotEmpty ? ' (${r['armor_detail']})' : ''}'
+              '${v.truncate()}${r['armor_detail'] is String && (r['armor_detail'] as String).isNotEmpty ? ' (${r['armor_detail']})' : ''}',
             ),
           if (r['hit_points'] case final num v)
             (
               'Hit points',
-              '${v.truncate()}${r['hit_dice'] is String ? ' (${r['hit_dice']})' : ''}'
+              '${v.truncate()}${r['hit_dice'] is String ? ' (${r['hit_dice']})' : ''}',
             ),
           if (_speeds(r) case final String v when v.isNotEmpty) ('Speed', v),
           if (r['ability_scores'] case final Map<String, dynamic> scores)
@@ -498,8 +502,7 @@ class CompendiumEntryScreen extends StatelessWidget {
       case 'class':
         return [
           if (r['hit_dice'] != null) ('Hit die', 'd${r['hit_dice']}'),
-          if (r['prof_saving_throws'] case final String v)
-            ('Saving throws', v),
+          if (r['prof_saving_throws'] case final String v) ('Saving throws', v),
           if (r['prof_armor'] case final String v) ('Armor', v),
           if (r['prof_weapons'] case final String v) ('Weapons', v),
           if (r['prof_skills'] case final String v) ('Skills', v),
@@ -538,8 +541,7 @@ class CompendiumEntryScreen extends StatelessWidget {
         ];
       case 'armor':
         return [
-          if (r['category'] case final String v)
-            ('Category', humanizeSlug(v)),
+          if (r['category'] case final String v) ('Category', humanizeSlug(v)),
           if (r['ac_display'] case final String v) ('Armor class', v),
           if (r['grants_stealth_disadvantage'] == true)
             ('Stealth', 'Disadvantage'),
@@ -551,10 +553,10 @@ class CompendiumEntryScreen extends StatelessWidget {
 
   List<(String, List<(String, String)>)> _sections() {
     List<(String, String)> namedList(Object? value) => [
-          for (final e in value as List<dynamic>? ?? const [])
-            if (e case {'name': final String name, 'desc': final String desc})
-              (name, desc),
-        ];
+      for (final e in value as List<dynamic>? ?? const [])
+        if (e case {'name': final String name, 'desc': final String desc})
+          (name, desc),
+    ];
     final sections = switch (category.table) {
       'species' => [('Traits', namedList(record['traits']))],
       'background' => [('Benefits', namedList(record['benefits']))],
@@ -589,24 +591,24 @@ class CompendiumEntryScreen extends StatelessWidget {
   }
 
   String _abilityLine(Map<String, dynamic> scores) => [
-        for (final key in const [
-          'strength',
-          'dexterity',
-          'constitution',
-          'intelligence',
-          'wisdom',
-          'charisma'
-        ])
-          if (scores[key] case final num v)
-            '${key.substring(0, 3).toUpperCase()} ${v.truncate()}',
-      ].join(' · ');
+    for (final key in const [
+      'strength',
+      'dexterity',
+      'constitution',
+      'intelligence',
+      'wisdom',
+      'charisma',
+    ])
+      if (scores[key] case final num v)
+        '${key.substring(0, 3).toUpperCase()} ${v.truncate()}',
+  ].join(' · ');
 
   String _weaponProperties(Map<String, dynamic> r) => [
-        for (final p in r['properties'] as List<dynamic>? ?? const [])
-          if (p case {'property_uuid': final String uuid})
-            [
-              lookups.weaponProperties[uuid] ?? 'Unknown',
-              if (p['detail'] case final String d when d.isNotEmpty) '($d)',
-            ].join(' '),
-      ].join(', ');
+    for (final p in r['properties'] as List<dynamic>? ?? const [])
+      if (p case {'property_uuid': final String uuid})
+        [
+          lookups.weaponProperties[uuid] ?? 'Unknown',
+          if (p['detail'] case final String d when d.isNotEmpty) '($d)',
+        ].join(' '),
+  ].join(', ');
 }

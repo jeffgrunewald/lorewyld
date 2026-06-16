@@ -996,12 +996,26 @@ window.lwContent = (function () {
         { key: 'survival', label: 'Survival', ability: 'wisdom' },
     ];
 
+    /* 5e math is single-sourced in the Rust core (lorewyld-domain),
+     * compiled to WASM (lorewyld-domain-wasm). The module loads async at
+     * startup; requireAuth() awaits readiness before any page init, so the
+     * sync wrappers below are only ever called after _wasm is set. */
+    let _wasm = null;
+    const _wasmReady = import('/assets/wasm/lorewyld_domain.js')
+        .then(function (m) { return m.default().then(function () { _wasm = m; }); });
+
     function abilityMod(score) {
-        return Math.floor((score - 10) / 2);
+        return _wasm.ability_modifier(score);
     }
 
     function proficiencyBonus(level) {
-        return 2 + Math.floor((level - 1) / 4);
+        return _wasm.proficiency_bonus(level);
+    }
+
+    /* Full derived-stat block from a sheet object (already in API wire
+     * shape). Mirrors the mobile FFI's derive_stats. */
+    function deriveStats(sheet) {
+        return JSON.parse(_wasm.derive_stats(JSON.stringify(sheet)));
     }
 
     function formatBonus(n) {
@@ -1030,7 +1044,9 @@ window.lwContent = (function () {
             }
             if (gate) gate.hidden = true;
             if (root) root.hidden = false;
-            init(e.detail);
+            // Wait for the shared Rust core (WASM) before rendering, so the
+            // sync math wrappers are ready when page code calls them.
+            _wasmReady.then(function () { init(e.detail); });
         });
     }
 
@@ -1065,6 +1081,7 @@ window.lwContent = (function () {
         skillList: skillList,
         abilityMod: abilityMod,
         proficiencyBonus: proficiencyBonus,
+        deriveStats: deriveStats,
         formatBonus: formatBonus,
     };
 })();
