@@ -37,3 +37,6 @@ argon2 = "0.5"
 
 [dev-dependencies]
 tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "macros"] }
+
+[lints]
+workspace = true
