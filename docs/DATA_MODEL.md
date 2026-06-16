@@ -7,8 +7,9 @@ document previously described was retired at `SCHEMA_VERSION = 2` before any dat
 was persisted.
 
 **Source of truth:** the Rust crate at `shared/types/src/`. Every persisted type
-is a `#[typeshare]`-annotated struct there; this document explains the model's
-shape and the decisions behind it rather than duplicating field lists.
+is a Serde-derived Rust struct there, consumed natively by the server/web, via
+WASM, and over FFI by mobile (see `docs/ARCHITECTURE.md`); this document explains
+the model's shape and the decisions behind it rather than duplicating field lists.
 
 ---
 
