@@ -166,8 +166,21 @@ impl ApiServer {
                 "/api/modules",
                 get(modules::list_modules).post(modules::publish_module),
             )
+            .route("/api/modules/custom", post(modules::create_custom_module))
             .route("/api/modules/editable", get(modules::list_editable_modules))
-            .route("/api/modules/{uuid}", get(modules::get_module))
+            .route(
+                "/api/modules/import",
+                post(modules::import_module)
+                    // The body is a whole ContentBundle package.
+                    .layer(axum::extract::DefaultBodyLimit::max(64 * 1024 * 1024)),
+            )
+            .route(
+                "/api/modules/{uuid}",
+                get(modules::get_module)
+                    .patch(modules::update_custom_module)
+                    .delete(modules::delete_custom_module),
+            )
+            .route("/api/modules/{uuid}/export", get(modules::export_module))
             .with_state(api_state);
 
         let style_version = crate::web::StyleVersion::from_asset_mtime("assets/style.css");

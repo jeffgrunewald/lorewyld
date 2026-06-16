@@ -18,10 +18,13 @@ pub fn ModulesPage() -> impl IntoView {
             <Breadcrumbs trail=vec![Crumb::link("Home", "/"), Crumb::here("Modules")]/>
             <header class="lw-page-header">
                 <h1 class="lw-page-title">"Content modules"</h1>
-                <div id="lw-modules-admin-toolbar" class="lw-toolbar" hidden=true>
-                    <input id="lw-module-file" type="file" accept="application/json,.json" hidden=true/>
-                    <button id="lw-module-install" class="lw-btn lw-btn-filled" type="button">
-                        "Install module…"
+                <div id="lw-modules-member-toolbar" class="lw-toolbar" hidden=true>
+                    <input id="lw-module-import-file" type="file" accept="application/json,.json,.lorebundle" hidden=true/>
+                    <button id="lw-module-new" class="lw-btn lw-btn-filled" type="button">
+                        "New module"
+                    </button>
+                    <button id="lw-module-import" class="lw-btn lw-btn-tonal" type="button">
+                        "Import bundle…"
                     </button>
                 </div>
             </header>
@@ -60,6 +63,7 @@ pub fn ModuleDetailPage() -> impl IntoView {
             <header class="lw-module-detail-header">
                 <h1 id="lw-module-name" class="lw-page-title">"Loading…"</h1>
                 <div id="lw-module-meta" class="lw-module-detail-meta"></div>
+                <div id="lw-module-member-actions" class="lw-toolbar" hidden=true></div>
             </header>
             <div id="lw-module-description" class="lw-module-detail-description"></div>
             <div id="lw-module-facts" class="lw-card" hidden=true></div>
@@ -96,21 +100,23 @@ const MODULES_LIST_SCRIPT: &str = r#"
 (function () {
     const C = window.lwContent;
     const list = document.getElementById('lw-modules-list');
-    const toolbar = document.getElementById('lw-modules-admin-toolbar');
-    const fileInput = document.getElementById('lw-module-file');
-    const installBtn = document.getElementById('lw-module-install');
+    const toolbar = document.getElementById('lw-modules-member-toolbar');
+    const importFile = document.getElementById('lw-module-import-file');
+    const newBtn = document.getElementById('lw-module-new');
+    const importBtn = document.getElementById('lw-module-import');
     const progress = document.getElementById('lw-module-install-progress');
     const installError = document.getElementById('lw-module-install-error');
 
     document.addEventListener('lw-auth-ready', function (e) {
-        if (e.detail && e.detail.admin) {
-            toolbar.hidden = false;
-            installBtn.addEventListener('click', function () { fileInput.click(); });
-            fileInput.addEventListener('change', onFilePicked);
-            loadAdmin();
-        } else {
-            loadPublic();
-        }
+        if (!e.detail) { loadPublic(); return; }
+        // Any authenticated member can create homebrew modules + import bundles.
+        toolbar.hidden = false;
+        newBtn.addEventListener('click', function () {
+            window.lwAuthoring.openCreateModule({ onSaved: function () { location.reload(); } });
+        });
+        importBtn.addEventListener('click', function () { importFile.click(); });
+        importFile.addEventListener('change', onImportPicked);
+        if (e.detail.admin) loadAdmin(); else loadPublic();
     });
 
     function loadPublic() {
@@ -192,43 +198,22 @@ const MODULES_LIST_SCRIPT: &str = r#"
         return card;
     }
 
-    function onFilePicked() {
-        const file = fileInput.files && fileInput.files[0];
-        fileInput.value = '';
+    function onImportPicked() {
+        const file = importFile.files && importFile.files[0];
+        importFile.value = '';
         if (!file) return;
         installError.hidden = true;
-        file.text().then(function (text) {
-            let bundle;
-            try {
-                bundle = JSON.parse(text);
-            } catch (e) {
-                throw new Error('not valid JSON');
-            }
-            if (!bundle.schema || !Array.isArray(bundle.modules)) {
-                throw new Error('not a Lorewyld content bundle (missing schema/modules)');
-            }
-            progress.hidden = false;
-            installBtn.disabled = true;
-            return fetch('/api/admin/modules/install', {
-                method: 'POST',
-                headers: Object.assign({ 'Content-Type': 'application/json' }, window.lw.authHeaders()),
-                body: text,
-            }).then(function (r) {
-                return r.json().catch(function () { return {}; }).then(function (body) {
-                    if (!r.ok) throw new Error(body.message || ('HTTP ' + r.status));
-                    return body;
-                });
-            });
-        }).then(function (response) {
-            if (!response) return;
+        progress.hidden = false;
+        importBtn.disabled = true;
+        window.lwAuthoring.importBundleFile(file).then(function () {
             progress.hidden = true;
-            installBtn.disabled = false;
-            loadAdmin();
+            importBtn.disabled = false;
+            location.reload();
         }).catch(function (err) {
             progress.hidden = true;
-            installBtn.disabled = false;
+            importBtn.disabled = false;
             installError.hidden = false;
-            installError.textContent = 'Install failed: ' + (err.message || err);
+            installError.textContent = 'Import failed: ' + (err.message || err);
         });
     }
 })();
@@ -257,6 +242,44 @@ const MODULE_DETAIL_SCRIPT: &str = r#"
         return;
     }
 
+    // Member actions (export / edit / delete) need both the module record
+    // and the auth state, which arrive independently — render once both land.
+    let meDetail; // undefined=unknown, null=logged out, object=member
+    let currentModule = null;
+    function maybeRenderMemberActions() {
+        if (meDetail === undefined || !currentModule) return;
+        const el = document.getElementById('lw-module-member-actions');
+        if (!el || !meDetail) return;
+        el.replaceChildren();
+        const exp = C.el('button', 'lw-btn lw-btn-tonal', 'Export');
+        exp.type = 'button';
+        exp.addEventListener('click', function () {
+            exp.disabled = true;
+            window.lwAuthoring.exportModule(currentModule.uuid, currentModule.slug)
+                .catch(function (err) { window.alert('Export failed: ' + err); })
+                .then(function () { exp.disabled = false; });
+        });
+        el.appendChild(exp);
+        el.hidden = false;
+        // Edit/Delete only for editable (local) modules; server enforces
+        // creator-or-admin on the actual call.
+        window.lwAuthoring.editableModules().then(function (mods) {
+            if (!mods.some(function (m) { return m.uuid === currentModule.uuid; })) return;
+            const edit = C.el('button', 'lw-btn lw-btn-tonal', 'Edit');
+            edit.type = 'button';
+            edit.addEventListener('click', function () {
+                window.lwAuthoring.openEditModule(currentModule, { onSaved: function () { location.reload(); } });
+            });
+            const del = C.el('button', 'lw-btn lw-btn-danger', 'Delete');
+            del.type = 'button';
+            del.addEventListener('click', function () {
+                window.lwAuthoring.deleteModule(currentModule.uuid, function () { location.href = '/modules'; });
+            });
+            el.appendChild(edit);
+            el.appendChild(del);
+        });
+    }
+
     // Public metadata + notes render for everyone; the admin summary
     // (origin, counts, lifecycle actions) layers on top.
     fetch('/api/modules/' + encodeURIComponent(uuid))
@@ -271,11 +294,15 @@ const MODULE_DETAIL_SCRIPT: &str = r#"
         });
 
     document.addEventListener('lw-auth-ready', function (e) {
+        meDetail = e.detail || null;
+        maybeRenderMemberActions();
         if (e.detail && e.detail.admin) loadAdminSummary();
     });
 
     function renderPublic(m, notes) {
         document.title = m.name + ' — Lorewyld';
+        currentModule = m;
+        maybeRenderMemberActions();
         nameEl.textContent = m.name;
         const crumb = document.getElementById('lw-crumb-leaf');
         if (crumb) crumb.textContent = m.name;

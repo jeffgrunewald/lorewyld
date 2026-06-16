@@ -9,3 +9,4 @@ ALTER TABLE species    DROP COLUMN created_by_user_uuid;
 ALTER TABLE class      DROP COLUMN created_by_user_uuid;
 ALTER TABLE creature   DROP COLUMN created_by_user_uuid;
 ALTER TABLE spell      DROP COLUMN created_by_user_uuid;
+ALTER TABLE content_module DROP COLUMN created_by_user_uuid;

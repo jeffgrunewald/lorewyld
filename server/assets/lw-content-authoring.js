@@ -446,6 +446,197 @@ window.lwAuthoring = (function () {
         });
     }
 
+    /* ── custom content modules ─────────────────────────────────── */
+
+    const LICENSE_OPTIONS = [
+        { value: 'unlicensed', label: 'Unlicensed (homebrew)' },
+        { value: 'cc-by-4.0', label: 'CC-BY-4.0' },
+        { value: 'ogl-1.0a', label: 'OGL 1.0a' },
+    ];
+
+    function slugify(name) {
+        return String(name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    }
+
+    /* Create/edit a custom module. `module` null → create. */
+    function openModuleForm(module, onSaved) {
+        const mode = module ? 'edit' : 'create';
+        const modal = C.openModal('lw-authoring-modal');
+        const panel = modal.panel;
+        panel.appendChild(C.el('h2', 'lw-modal-title', mode === 'create' ? 'New module' : 'Edit module'));
+        const form = C.el('div', 'lw-authoring-form');
+        panel.appendChild(form);
+
+        function field(label, control) {
+            const w = C.el('label', 'lw-field', label);
+            w.appendChild(control);
+            form.appendChild(w);
+            return control;
+        }
+        const name = field('Name', C.el('input', 'lw-input'));
+        name.type = 'text';
+        if (module) name.value = module.name || '';
+        const slug = field('Slug', C.el('input', 'lw-input'));
+        slug.type = 'text';
+        slug.value = module ? module.slug || '' : '';
+        // Auto-fill the slug from the name until the user edits it directly.
+        let slugTouched = mode === 'edit';
+        slug.addEventListener('input', function () { slugTouched = true; });
+        name.addEventListener('input', function () {
+            if (!slugTouched) slug.value = slugify(name.value);
+        });
+        if (mode === 'edit') slug.disabled = true; // slug is identity; not editable
+        const license = field('License', C.el('select', 'lw-input'));
+        LICENSE_OPTIONS.forEach(function (opt) {
+            const o = C.el('option', null, opt.label);
+            o.value = opt.value;
+            license.appendChild(o);
+        });
+        if (module && module.license) license.value = module.license;
+        const desc = field('Description', C.el('textarea', 'lw-input lw-authoring-area'));
+        desc.rows = 3;
+        if (module && module.description) desc.value = module.description;
+        const authors = field('Authors (comma-separated)', C.el('input', 'lw-input'));
+        authors.type = 'text';
+        if (module && Array.isArray(module.authors)) authors.value = module.authors.join(', ');
+        const website = field('Website URL', C.el('input', 'lw-input'));
+        website.type = 'url';
+        if (module && module.website_url) website.value = module.website_url;
+
+        const generalError = C.el('p', 'lw-form-error');
+        generalError.hidden = true;
+        form.appendChild(generalError);
+
+        const actions = C.el('div', 'lw-modal-actions');
+        const cancel = C.el('button', 'lw-btn lw-btn-text', 'Cancel');
+        cancel.type = 'button';
+        cancel.addEventListener('click', modal.close);
+        const save = C.el('button', 'lw-btn lw-btn-filled', mode === 'create' ? 'Create' : 'Save');
+        save.type = 'button';
+        actions.appendChild(cancel);
+        actions.appendChild(save);
+        form.appendChild(actions);
+
+        save.addEventListener('click', function () {
+            generalError.hidden = true;
+            const authorList = authors.value.split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+            if (!name.value.trim()) {
+                generalError.textContent = 'Name is required.';
+                generalError.hidden = false;
+                return;
+            }
+            save.disabled = true;
+            const body = mode === 'create'
+                ? {
+                    name: name.value.trim(),
+                    slug: slug.value.trim() || slugify(name.value),
+                    license: license.value,
+                    description: desc.value.trim() || null,
+                    authors: authorList,
+                    website_url: website.value.trim() || null,
+                }
+                : {
+                    name: name.value.trim(),
+                    license: license.value,
+                    description: desc.value.trim() || null,
+                    authors: authorList,
+                    website_url: website.value.trim() || null,
+                };
+            const url = mode === 'create' ? '/api/modules/custom' : '/api/modules/' + encodeURIComponent(module.uuid);
+            const method = mode === 'create' ? 'POST' : 'PATCH';
+            submit(method, url, body).then(function (resp) {
+                if (resp.ok) { editableModules(true); modal.close(); onSaved(resp.data); return; }
+                save.disabled = false;
+                generalError.textContent = (resp.data && resp.data.message) || ('Save failed (' + resp.status + ')');
+                generalError.hidden = false;
+            }).catch(function (e) {
+                save.disabled = false;
+                generalError.textContent = 'Save failed: ' + e;
+                generalError.hidden = false;
+            });
+        });
+    }
+
+    function deleteModule(uuid, onDeleted) {
+        const modal = C.openModal('lw-authoring-modal');
+        const panel = modal.panel;
+        panel.appendChild(C.el('h2', 'lw-modal-title', 'Delete module'));
+        panel.appendChild(C.el('p', 'lw-confirm-text',
+            'This permanently removes the module and all its content records. This cannot be undone.'));
+        const err = C.el('p', 'lw-form-error');
+        err.hidden = true;
+        panel.appendChild(err);
+        const actions = C.el('div', 'lw-modal-actions');
+        const cancel = C.el('button', 'lw-btn lw-btn-text', 'Cancel');
+        cancel.type = 'button';
+        cancel.addEventListener('click', modal.close);
+        const del = C.el('button', 'lw-btn lw-btn-danger', 'Delete');
+        del.type = 'button';
+        actions.appendChild(cancel);
+        actions.appendChild(del);
+        panel.appendChild(actions);
+        del.addEventListener('click', function () {
+            del.disabled = true;
+            fetch('/api/modules/' + encodeURIComponent(uuid), { method: 'DELETE', headers: authHeaders() })
+                .then(function (r) {
+                    if (r.ok) { editableModules(true); modal.close(); onDeleted(); }
+                    else {
+                        del.disabled = false;
+                        return r.json().catch(function () { return {}; }).then(function (b) {
+                            err.textContent = (b && b.message) || ('Delete failed (' + r.status + ')');
+                            err.hidden = false;
+                        });
+                    }
+                }).catch(function (e) {
+                    del.disabled = false;
+                    err.textContent = 'Delete failed: ' + e;
+                    err.hidden = false;
+                });
+        });
+    }
+
+    /* Downloads a module as a .lorebundle file (fetch + blob so the
+     * Authorization header rides along, unlike a plain link). */
+    function exportModule(uuid, slug) {
+        return fetch('/api/modules/' + encodeURIComponent(uuid) + '/export', { headers: authHeaders() })
+            .then(function (r) {
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.blob();
+            })
+            .then(function (blob) {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = (slug || 'module') + '.lorebundle';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+            });
+    }
+
+    /* Imports a .lorebundle file as an uploaded module. Returns a promise
+     * resolving to the install response (or rejecting with a message). */
+    function importBundleFile(file) {
+        return file.text().then(function (text) {
+            let bundle;
+            try { bundle = JSON.parse(text); } catch (e) { throw new Error('not valid JSON'); }
+            if (!bundle.schema || !Array.isArray(bundle.modules)) {
+                throw new Error('not a Lorewyld content bundle');
+            }
+            return fetch('/api/modules/import', {
+                method: 'POST',
+                headers: jsonHeaders(),
+                body: text,
+            }).then(function (r) {
+                return r.json().catch(function () { return {}; }).then(function (b) {
+                    if (!r.ok) throw new Error((b && b.message) || ('HTTP ' + r.status));
+                    return b;
+                });
+            });
+        });
+    }
+
     return {
         openCreate: function (category, opts) {
             openForm(category, null, (opts && opts.onSaved) || function () {});
@@ -457,5 +648,14 @@ window.lwAuthoring = (function () {
         deleteRecord: deleteRecord,
         editableModules: editableModules,
         recordIsEditable: recordIsEditable,
+        openCreateModule: function (opts) {
+            openModuleForm(null, (opts && opts.onSaved) || function () {});
+        },
+        openEditModule: function (module, opts) {
+            openModuleForm(module, (opts && opts.onSaved) || function () {});
+        },
+        deleteModule: deleteModule,
+        exportModule: exportModule,
+        importBundleFile: importBundleFile,
     };
 })();

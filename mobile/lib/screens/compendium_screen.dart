@@ -13,6 +13,7 @@ import '../compendium/categories.dart';
 import '../compendium/filters.dart';
 import '../services/content_store.dart';
 import '../services/server_connection.dart';
+import '../widgets/content_form.dart';
 import '../widgets/filter_sheet.dart';
 import '../widgets/source_badge.dart';
 import 'modules_browse_screen.dart';
@@ -174,6 +175,7 @@ class _CompendiumScreenState extends State<CompendiumScreen> {
               record: record,
               category: categoryFor(entry.key),
               lookups: _lookups,
+              content: widget.content,
             ),
         ],
       ],
@@ -205,11 +207,20 @@ class _EntryTile extends StatelessWidget {
     required this.record,
     required this.category,
     required this.lookups,
+    this.content,
+    this.onChanged,
   });
 
   final Map<String, dynamic> record;
   final CompendiumCategory category;
   final ContentLookups lookups;
+
+  /// When provided, the entry screen can offer edit/delete for homebrew.
+  final ContentStore? content;
+
+  /// Invoked when the entry screen reports a homebrew edit/delete, so the
+  /// list can refresh.
+  final VoidCallback? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -219,15 +230,19 @@ class _EntryTile extends StatelessWidget {
       title: Text(category.displayName(record)),
       subtitle: (subtitle == null || subtitle.isEmpty) ? null : Text(subtitle),
       trailing: source == null ? null : SourceBadge(source),
-      onTap: () => Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (_) => CompendiumEntryScreen(
-            record: record,
-            category: category,
-            lookups: lookups,
+      onTap: () async {
+        final changed = await Navigator.of(context).push<bool>(
+          MaterialPageRoute(
+            builder: (_) => CompendiumEntryScreen(
+              record: record,
+              category: category,
+              lookups: lookups,
+              content: content,
+            ),
           ),
-        ),
-      ),
+        );
+        if (changed == true) onChanged?.call();
+      },
     );
   }
 }
@@ -274,6 +289,23 @@ class _CompendiumCategoryScreenState extends State<CompendiumCategoryScreen> {
     super.dispose();
   }
 
+  Future<void> _reload() async {
+    final rows = await widget.content.listNamed(widget.category.table);
+    if (mounted) setState(() => _all = rows);
+  }
+
+  Future<void> _createEntry() async {
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => ContentFormScreen(
+          content: widget.content,
+          category: widget.category.table,
+        ),
+      ),
+    );
+    if (saved == true) await _reload();
+  }
+
   List<Map<String, dynamic>> get _visible {
     final all = _all;
     if (all == null) return const [];
@@ -293,6 +325,11 @@ class _CompendiumCategoryScreenState extends State<CompendiumCategoryScreen> {
     final rows = _visible;
     return Scaffold(
       appBar: AppBar(title: Text(widget.category.label)),
+      floatingActionButton: FloatingActionButton.extended(
+        icon: const Icon(Icons.add),
+        label: const Text('New'),
+        onPressed: _createEntry,
+      ),
       body: Column(
         children: [
           Padding(
@@ -347,6 +384,8 @@ class _CompendiumCategoryScreenState extends State<CompendiumCategoryScreen> {
                       record: rows[i],
                       category: widget.category,
                       lookups: widget.lookups,
+                      content: widget.content,
+                      onChanged: _reload,
                     ),
                   ),
           ),
@@ -362,19 +401,84 @@ class CompendiumEntryScreen extends StatelessWidget {
     required this.record,
     required this.category,
     required this.lookups,
+    this.content,
   });
 
   final Map<String, dynamic> record;
   final CompendiumCategory category;
   final ContentLookups lookups;
 
+  /// When set, homebrew (local-module) records gain edit/delete actions.
+  final ContentStore? content;
+
+  Future<void> _edit(BuildContext context) async {
+    final saved = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => ContentFormScreen(
+          content: content!,
+          category: category.table,
+          existing: record,
+        ),
+      ),
+    );
+    // The edited record isn't re-fetched here; pop so the list reloads and
+    // shows the updated entry.
+    if (saved == true && context.mounted) Navigator.of(context).pop(true);
+  }
+
+  Future<void> _delete(BuildContext context) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete entry?'),
+        content: const Text('This permanently deletes the entry.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await content!.deleteRecord(category.table, record['uuid'] as String);
+    if (context.mounted) Navigator.of(context).pop(true);
+  }
+
   @override
   Widget build(BuildContext context) {
     final facts = _facts();
     final sections = _sections();
     final description = _description();
+    final store = content;
+    final moduleUuid = record['content_module_uuid'] as String?;
     return Scaffold(
-      appBar: AppBar(title: Text(category.displayName(record))),
+      appBar: AppBar(
+        title: Text(category.displayName(record)),
+        actions: [
+          if (store != null && moduleUuid != null)
+            FutureBuilder<bool>(
+              future: store.isLocalModule(moduleUuid),
+              builder: (context, snap) {
+                if (snap.data != true) return const SizedBox.shrink();
+                return PopupMenuButton<String>(
+                  onSelected: (v) {
+                    if (v == 'edit') _edit(context);
+                    if (v == 'delete') _delete(context);
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'edit', child: Text('Edit')),
+                    PopupMenuItem(value: 'delete', child: Text('Delete')),
+                  ],
+                );
+              },
+            ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [

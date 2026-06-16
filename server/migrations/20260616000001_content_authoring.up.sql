@@ -10,6 +10,11 @@
 -- user-authored, except condition and language which ARE display
 -- categories users may author.
 
+-- User-created (origin='local') modules carry their author so custom-
+-- module edit/delete can be gated to the creator or an admin. Bundled,
+-- published, and uploaded modules leave this NULL.
+ALTER TABLE content_module ADD COLUMN created_by_user_uuid TEXT REFERENCES users(id);
+
 ALTER TABLE spell      ADD COLUMN created_by_user_uuid TEXT REFERENCES users(id);
 ALTER TABLE creature   ADD COLUMN created_by_user_uuid TEXT REFERENCES users(id);
 ALTER TABLE class      ADD COLUMN created_by_user_uuid TEXT REFERENCES users(id);

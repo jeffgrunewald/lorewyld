@@ -10,11 +10,14 @@
 use anyhow::{Context, Result, bail};
 use chrono::Utc;
 use lorewyld_types::{
-    Armor, Background, Class, Condition, ContentBundle, ContentModule, Creature, Document, Feat,
-    Item, Language, LicenseKind, MIN_SUPPORTED_SCHEMA_VERSION, ModuleOrigin, SCHEMA_VERSION,
-    Species, Spell, Weapon,
+    AbilityScoreEntry, Alignment, Armor, Background, Class, Condition, ContentBundle,
+    ContentModule, Creature, CreatureType, DamageType, Document, Environment, Feat, Item,
+    ItemCategory, Language, License, LicenseKind, MIN_SUPPORTED_SCHEMA_VERSION, ModuleOrigin,
+    Publisher, SCHEMA_VERSION, SchemaVersion, Size, Skill, Species, Spell, SpellSchool, Weapon,
+    WeaponPropertyDef,
 };
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use serde_json::Value;
 use sqlx::{Sqlite, SqlitePool, Transaction};
 use std::collections::HashSet;
@@ -987,6 +990,140 @@ pub async fn module_origin(db: &SqlitePool, module_uuid: &str) -> Result<Option<
         .fetch_optional(db)
         .await?;
     Ok(row.and_then(|(o,)| module_origin_from_str(&o)))
+}
+
+/// Fields needed to author a new custom (`local`) content module.
+pub struct NewCustomModule {
+    pub name: String,
+    pub slug: String,
+    pub license: LicenseKind,
+    pub license_url: Option<String>,
+    pub description: Option<String>,
+    pub authors: Vec<String>,
+    pub website_url: Option<String>,
+    /// The creating user's uuid (gates later edit/delete).
+    pub created_by: String,
+}
+
+/// Creates a user-authored `local` module (plus its attribution document)
+/// that homebrew content can be assigned to. The slug is normalized and
+/// must be unique.
+pub async fn create_custom_module(
+    db: &SqlitePool,
+    req: NewCustomModule,
+) -> Result<ContentModule, RecordError> {
+    let slug = slugify(&req.slug);
+    if slug.is_empty() {
+        return Err(RecordError::Invalid("module slug cannot be empty".into()));
+    }
+    let clash: Option<(i64,)> = sqlx::query_as("SELECT 1 FROM content_module WHERE slug = ?")
+        .bind(&slug)
+        .fetch_optional(db)
+        .await
+        .map_err(db_err)?;
+    if clash.is_some() {
+        return Err(RecordError::Invalid(format!(
+            "a module with slug '{slug}' already exists"
+        )));
+    }
+
+    let now = Utc::now();
+    let module = ContentModule {
+        uuid: Uuid::new_v4(),
+        name: req.name,
+        slug,
+        license: req.license,
+        license_url: req.license_url,
+        schema_version: SCHEMA_VERSION,
+        release_date: None,
+        authors: req.authors,
+        publisher: None,
+        description: req.description,
+        website_url: req.website_url,
+        is_active: true,
+        ordering: 1000,
+        version_string: "1.0.0".to_string(),
+        previous_version_uuid: None,
+        published_at: None,
+        created_at: now,
+        updated_at: now,
+    };
+    let mut tx = db.begin().await.map_err(db_err)?;
+    insert_module(&mut tx, &module, ModuleOrigin::Local)
+        .await
+        .map_err(|e| RecordError::Db(anyhow::anyhow!("{e}")))?;
+    tx.commit().await.map_err(db_err)?;
+
+    let module_uuid = module.uuid.to_string();
+    sqlx::query("UPDATE content_module SET created_by_user_uuid = ? WHERE uuid = ?")
+        .bind(&req.created_by)
+        .bind(&module_uuid)
+        .execute(db)
+        .await
+        .map_err(db_err)?;
+    ensure_module_document(db, &module_uuid, &module.name)
+        .await
+        .map_err(db_err)?;
+    Ok(module)
+}
+
+/// Loads every record of one table belonging to a module, decoded from the
+/// stored `data` JSON into its typed form.
+async fn load_module_table<T: DeserializeOwned>(
+    db: &SqlitePool,
+    table: &str,
+    module_uuid: &str,
+) -> Result<Vec<T>> {
+    let rows: Vec<(String,)> = sqlx::query_as(&format!(
+        "SELECT data FROM {table} WHERE content_module_uuid = ?"
+    ))
+    .bind(module_uuid)
+    .fetch_all(db)
+    .await?;
+    rows.into_iter()
+        .map(|(data,)| serde_json::from_str::<T>(&data).map_err(Into::into))
+        .collect()
+}
+
+/// Assembles a self-contained [`ContentBundle`] for one module: the module
+/// row plus every record it owns, decoded from storage. The inverse of
+/// [`import_bundle`] — the same artifact re-imports on another instance or
+/// re-seeds this one. Records load by table so the result is dependency-
+/// ordered for re-import.
+pub async fn export_module(db: &SqlitePool, module: ContentModule) -> Result<ContentBundle> {
+    let u = module.uuid.to_string();
+    Ok(ContentBundle {
+        schema: SchemaVersion {
+            version: SCHEMA_VERSION,
+            min_supported: MIN_SUPPORTED_SCHEMA_VERSION,
+        },
+        modules: vec![module],
+        licenses: load_module_table::<License>(db, "license", &u).await?,
+        publishers: load_module_table::<Publisher>(db, "publisher", &u).await?,
+        documents: load_module_table::<Document>(db, "document", &u).await?,
+        ability_scores: load_module_table::<AbilityScoreEntry>(db, "ability_score", &u).await?,
+        skills: load_module_table::<Skill>(db, "skill", &u).await?,
+        alignments: load_module_table::<Alignment>(db, "alignment", &u).await?,
+        damage_types: load_module_table::<DamageType>(db, "damage_type", &u).await?,
+        conditions: load_module_table::<Condition>(db, "condition", &u).await?,
+        languages: load_module_table::<Language>(db, "language", &u).await?,
+        sizes: load_module_table::<Size>(db, "size", &u).await?,
+        environments: load_module_table::<Environment>(db, "environment", &u).await?,
+        spell_schools: load_module_table::<SpellSchool>(db, "spell_school", &u).await?,
+        creature_types: load_module_table::<CreatureType>(db, "creature_type", &u).await?,
+        item_categories: load_module_table::<ItemCategory>(db, "item_category", &u).await?,
+        weapon_properties: load_module_table::<WeaponPropertyDef>(db, "weapon_property", &u)
+            .await?,
+        spells: load_module_table::<Spell>(db, "spell", &u).await?,
+        creatures: load_module_table::<Creature>(db, "creature", &u).await?,
+        classes: load_module_table::<Class>(db, "class", &u).await?,
+        species: load_module_table::<Species>(db, "species", &u).await?,
+        feats: load_module_table::<Feat>(db, "feat", &u).await?,
+        backgrounds: load_module_table::<Background>(db, "background", &u).await?,
+        weapons: load_module_table::<Weapon>(db, "weapon", &u).await?,
+        armors: load_module_table::<Armor>(db, "armor", &u).await?,
+        items: load_module_table::<Item>(db, "item", &u).await?,
+    })
 }
 
 /// Inserts (or replaces, for the edit path) one user-authored content
