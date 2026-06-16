@@ -8,13 +8,18 @@
 --                 fully uninstallable.
 --   'published' — created via the Promote-to-Module wizard from a
 --                 Setting's lore notes; fully uninstallable.
+--   'local'     — homebrew authored on this server. The ONLY editable
+--                 origin: users create content records in, and reassign
+--                 records between, 'local' modules; never into or out of
+--                 the read-only origins above. The reserved 'homebrew'
+--                 slug is the default catch-all 'local' module.
 --
 -- The migration cannot know the embedded bundle's slugs, so existing
 -- bundled rows are corrected by the seeder's idempotent origin stamp on
 -- the next boot; 'published' rows are recoverable from the setting link.
 
 ALTER TABLE content_module ADD COLUMN origin TEXT NOT NULL DEFAULT 'uploaded'
-    CHECK (origin IN ('bundled', 'uploaded', 'published'));
+    CHECK (origin IN ('bundled', 'uploaded', 'published', 'local'));
 
 UPDATE content_module SET origin = 'published'
  WHERE uuid IN (SELECT published_as_module_uuid FROM setting

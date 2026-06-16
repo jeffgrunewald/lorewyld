@@ -1,6 +1,7 @@
 pub mod admin;
 pub mod admin_modules;
 pub mod auth;
+pub mod authoring;
 pub mod characters;
 pub mod compendium;
 pub mod error;
@@ -107,8 +108,16 @@ impl ApiServer {
             )
             .route("/api/content/counts", get(compendium::content_counts))
             .route("/api/content/recent", get(compendium::recent_content))
-            .route("/api/content/{category}", get(compendium::list_category))
-            .route("/api/content/{category}/{uuid}", get(compendium::get_entry))
+            .route(
+                "/api/content/{category}",
+                get(compendium::list_category).post(authoring::create_content),
+            )
+            .route(
+                "/api/content/{category}/{uuid}",
+                get(compendium::get_entry)
+                    .patch(authoring::update_content)
+                    .delete(authoring::delete_content),
+            )
             .route(
                 "/api/characters",
                 get(characters::list_characters).post(characters::create_character),

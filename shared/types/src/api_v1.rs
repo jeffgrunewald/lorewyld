@@ -5,6 +5,7 @@
 //! the catalog types use.
 
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 use crate::{
     common::EntityId,
@@ -289,6 +290,11 @@ pub struct PublishModuleResponse {
 ///
 /// `Bundled` modules can only be disabled (the boot seeder would
 /// re-add a deleted bundled module); the rest are fully uninstallable.
+///
+/// Only `Local` modules are *editable*: homebrew authored on this
+/// instance. Content records may be created in, and reassigned between,
+/// `Local` modules only — never into or out of `Bundled` / `Uploaded` /
+/// `Published` modules, which are read-only reference content.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
 #[serde(rename_all = "lowercase")]
@@ -296,6 +302,46 @@ pub enum ModuleOrigin {
     Bundled,
     Uploaded,
     Published,
+    Local,
+}
+
+impl ModuleOrigin {
+    /// Whether users may author into this module: create records in it
+    /// or reassign records to/from it. Only homebrew (`Local`) modules
+    /// are editable.
+    pub fn is_editable(self) -> bool {
+        matches!(self, Self::Local)
+    }
+}
+
+/// `POST /api/content/{category}` request body — author a homebrew
+/// content record. `fields` carries the authorable field values keyed by
+/// the category's [`FieldSchema`](../../lorewyld_domain/authoring) field
+/// keys; the server fills identity/provenance/timestamp fields and
+/// assembles the full typed record. `module_uuid` targets a specific
+/// `local` module — omit it to land in the default Homebrew module.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct CreateContentRequest {
+    #[cfg_attr(feature = "openapi", schema(value_type = Object))]
+    pub fields: Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "openapi", schema(value_type = Option<String>))]
+    pub module_uuid: Option<EntityId>,
+}
+
+/// `PATCH /api/content/{category}/{uuid}` request body. Omitted parts are
+/// left unchanged. `fields` (when present) overlays the authorable field
+/// values; `module_uuid` reassigns the record to another `local` module.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, Default)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct UpdateContentRequest {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "openapi", schema(value_type = Option<Object>))]
+    pub fields: Option<Value>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[cfg_attr(feature = "openapi", schema(value_type = Option<String>))]
+    pub module_uuid: Option<EntityId>,
 }
 
 /// Record count for one content category (e.g. `spells: 319`).

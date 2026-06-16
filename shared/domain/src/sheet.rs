@@ -107,7 +107,12 @@ pub fn saving_throw_bonus(sheet: &CharacterSheet, ability: &str) -> i32 {
         .saving_throw_proficiencies
         .iter()
         .any(|a| a == ability);
-    modifier + if proficient { proficiency_bonus(sheet.level) } else { 0 }
+    modifier
+        + if proficient {
+            proficiency_bonus(sheet.level)
+        } else {
+            0
+        }
 }
 
 /// Skill bonus = governing-ability modifier, plus proficiency if the
@@ -115,7 +120,12 @@ pub fn saving_throw_bonus(sheet: &CharacterSheet, ability: &str) -> i32 {
 pub fn skill_bonus(sheet: &CharacterSheet, skill: &str) -> i32 {
     let modifier = ability_modifier_of(&sheet.abilities, skill_ability(skill));
     let proficient = sheet.skill_proficiencies.iter().any(|s| s == skill);
-    modifier + if proficient { proficiency_bonus(sheet.level) } else { 0 }
+    modifier
+        + if proficient {
+            proficiency_bonus(sheet.level)
+        } else {
+            0
+        }
 }
 
 /// Initiative = dexterity modifier.
@@ -289,7 +299,11 @@ mod tests {
         assert_eq!(d.ability_modifiers[1].name, "dexterity");
         assert_eq!(d.ability_modifiers[1].bonus, 3);
         assert_eq!(d.skill_bonuses.len(), 18);
-        let stealth = d.skill_bonuses.iter().find(|b| b.name == "stealth").unwrap();
+        let stealth = d
+            .skill_bonuses
+            .iter()
+            .find(|b| b.name == "stealth")
+            .unwrap();
         assert_eq!(stealth.bonus, 6);
         assert_eq!(d.initiative, 3);
     }
@@ -333,7 +347,11 @@ mod tests {
             .unwrap();
         assert_eq!(dex_save.bonus, 6);
         // Stealth (DEX), proficient -> +6.
-        let stealth = d.skill_bonuses.iter().find(|b| b.name == "stealth").unwrap();
+        let stealth = d
+            .skill_bonuses
+            .iter()
+            .find(|b| b.name == "stealth")
+            .unwrap();
         assert_eq!(stealth.bonus, 6);
         // Perception (WIS 12 -> +1), proficient -> +4; passive = 10 + 4.
         assert_eq!(d.passive_perception, 14);
