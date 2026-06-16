@@ -1018,6 +1018,27 @@ window.lwContent = (function () {
         return JSON.parse(_wasm.derive_stats(JSON.stringify(sheet)));
     }
 
+    /* ── authoring metadata (shared with mobile FFI) ────────────── */
+
+    /* The authoring FieldSchema for a content category (or null). Single-
+     * sourced in lorewyld-domain; the server's /schema endpoint is the
+     * pre-WASM fallback. */
+    function fieldSchema(category) {
+        return JSON.parse(_wasm.field_schema(category));
+    }
+
+    /* A skeleton record for seeding a new authoring form (or null). */
+    function defaultRecord(category) {
+        return JSON.parse(_wasm.default_record(category));
+    }
+
+    /* Validate authoring input (a plain object of field values) against the
+     * category schema. Returns an array of {field, message} — empty = valid.
+     * The server re-runs the same lorewyld-domain check authoritatively. */
+    function validateRecord(category, input) {
+        return JSON.parse(_wasm.validate_record(category, JSON.stringify(input)));
+    }
+
     function formatBonus(n) {
         return n >= 0 ? '+' + n : String(n);
     }
@@ -1083,5 +1104,8 @@ window.lwContent = (function () {
         proficiencyBonus: proficiencyBonus,
         deriveStats: deriveStats,
         formatBonus: formatBonus,
+        fieldSchema: fieldSchema,
+        defaultRecord: defaultRecord,
+        validateRecord: validateRecord,
     };
 })();

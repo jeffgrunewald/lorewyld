@@ -113,6 +113,10 @@ impl ApiServer {
                 get(compendium::list_category).post(authoring::create_content),
             )
             .route(
+                "/api/content/{category}/schema",
+                get(authoring::content_schema),
+            )
+            .route(
                 "/api/content/{category}/{uuid}",
                 get(compendium::get_entry)
                     .patch(authoring::update_content)
@@ -162,11 +166,14 @@ impl ApiServer {
                 "/api/modules",
                 get(modules::list_modules).post(modules::publish_module),
             )
+            .route("/api/modules/editable", get(modules::list_editable_modules))
             .route("/api/modules/{uuid}", get(modules::get_module))
             .with_state(api_state);
 
         let style_version = crate::web::StyleVersion::from_asset_mtime("assets/style.css");
         let script_version = crate::web::StyleVersion::from_asset_mtime("assets/lw-content.js");
+        let authoring_script_version =
+            crate::web::StyleVersion::from_asset_mtime("assets/lw-content-authoring.js");
         let leptos_router: Router<()> = Router::new()
             .nest_service("/assets", ServeDir::new("assets"))
             .leptos_routes(&leptos, routes, {
@@ -178,6 +185,7 @@ impl ApiServer {
                         instance_name.clone(),
                         style_version.clone(),
                         script_version.clone(),
+                        authoring_script_version.clone(),
                     )
                 }
             })

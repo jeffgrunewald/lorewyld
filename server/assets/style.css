@@ -1450,3 +1450,46 @@ input[type="checkbox"] {
 .lw-toolbar[hidden] {
     display: none;
 }
+
+/* ── content authoring forms (lw-content-authoring.js) ──────────────── */
+
+.lw-authoring-modal {
+    max-width: 560px;
+    width: 100%;
+    max-height: 85vh;
+    overflow-y: auto;
+}
+
+.lw-authoring-form {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Helper text under a field control. */
+.lw-field-help {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--lw-on-surface-muted);
+}
+
+/* Checkbox fields lay the box beside its label rather than above. */
+.lw-field-check {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+
+.lw-authoring-area {
+    font: inherit;
+    resize: vertical;
+}
+
+.lw-authoring-json {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.85rem;
+}
+
+.lw-confirm-text {
+    margin: 0 0 12px;
+    color: var(--lw-on-surface-muted);
+}

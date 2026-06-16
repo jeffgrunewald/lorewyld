@@ -11,6 +11,27 @@ export function ability_modifier(score) {
 }
 
 /**
+ * The skeleton record for a category, as a JSON string used to seed a new
+ * authoring form. `"null"` for an unknown category.
+ * @param {string} category
+ * @returns {string}
+ */
+export function default_record(category) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const ptr0 = passStringToWasm0(category, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.default_record(ptr0, len0);
+        deferred2_0 = ret[0];
+        deferred2_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
  * Derive every sheet stat from a JSON-serialized `CharacterSheet`, returned
  * as a JSON string for the caller to parse. Returns `"null"` on malformed
  * input rather than throwing, matching the mobile FFI's defensive contract.
@@ -33,6 +54,28 @@ export function derive_stats(sheet_json) {
 }
 
 /**
+ * The authoring [`FieldSchema`](lorewyld_domain::FieldSchema) for a content
+ * category, as a JSON string the form builder renders from. `"null"` for an
+ * unknown/unauthorable category.
+ * @param {string} category
+ * @returns {string}
+ */
+export function field_schema(category) {
+    let deferred2_0;
+    let deferred2_1;
+    try {
+        const ptr0 = passStringToWasm0(category, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ret = wasm.field_schema(ptr0, len0);
+        deferred2_0 = ret[0];
+        deferred2_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred2_0, deferred2_1, 1);
+    }
+}
+
+/**
  * Proficiency bonus for a level (clamped 1..=20).
  * @param {number} level
  * @returns {number}
@@ -41,17 +84,43 @@ export function proficiency_bonus(level) {
     const ret = wasm.proficiency_bonus(level);
     return ret;
 }
+
+/**
+ * Validate authoring input (a JSON object of field values) against the
+ * category's schema. Returns a JSON array of `{field, message}` errors —
+ * `"[]"` means valid. The web form runs this pre-submit; the server runs
+ * the same `lorewyld_domain::validate_record` authoritatively.
+ * @param {string} category
+ * @param {string} input_json
+ * @returns {string}
+ */
+export function validate_record(category, input_json) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(category, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(input_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ret = wasm.validate_record(ptr0, len0, ptr1, len1);
+        deferred3_0 = ret[0];
+        deferred3_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
 function __wbg_get_imports() {
     const import0 = {
         __proto__: null,
-        __wbg___wbindgen_throw_1506f2235d1bdba0: function(arg0, arg1) {
+        __wbg___wbindgen_throw_ea4887a5f8f9a9db: function(arg0, arg1) {
             throw new Error(getStringFromWasm0(arg0, arg1));
         },
-        __wbg_getTime_00b3f7db575e4ef5: function(arg0) {
+        __wbg_getTime_7a770f8a2ec8d634: function(arg0) {
             const ret = arg0.getTime();
             return ret;
         },
-        __wbg_new_0_445c13a750296eb6: function() {
+        __wbg_new_0_1b32bedde98fef4b: function() {
             const ret = new Date();
             return ret;
         },

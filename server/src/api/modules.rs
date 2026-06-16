@@ -6,6 +6,7 @@ use axum::{
     http::StatusCode,
 };
 use lorewyld_types::{
+    ModuleOrigin,
     api_v1::{LoreNoteWithTags, PublishModuleRequest, PublishModuleResponse},
     content_module::ContentModule,
 };
@@ -44,6 +45,33 @@ pub async fn list_modules(
         .fetch_all(&state.db)
         .await?;
     rows.into_iter()
+        .map(ContentModuleRow::into_dto)
+        .collect::<Result<_, _>>()
+        .map(Json)
+}
+
+/// `GET /api/modules/editable` — the `local` (homebrew) modules content
+/// can be authored into or reassigned between. Any authenticated member
+/// sees them (local content is server-shared); the compendium uses this
+/// to decide which records show Edit/Delete and to populate the
+/// "move to module" picker.
+#[utoipa::path(
+    get,
+    path = "/api/modules/editable",
+    tag = "modules",
+    operation_id = "list_editable_modules",
+    security(("bearer" = [])),
+    responses((status = 200, description = "Active homebrew (local) modules", body = [ContentModule]))
+)]
+pub async fn list_editable_modules(
+    State(state): State<ApiState>,
+    _user: CurrentUser,
+) -> Result<Json<Vec<ContentModule>>, ApiError> {
+    let rows: Vec<ContentModuleRow> = sqlx::query_as(MODULE_SELECT_ACTIVE)
+        .fetch_all(&state.db)
+        .await?;
+    rows.into_iter()
+        .filter(|r| r.origin_kind() == ModuleOrigin::Local)
         .map(ContentModuleRow::into_dto)
         .collect::<Result<_, _>>()
         .map(Json)

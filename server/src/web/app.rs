@@ -21,6 +21,7 @@ pub fn shell(
     instance_name: InstanceName,
     style_version: StyleVersion,
     script_version: StyleVersion,
+    authoring_script_version: StyleVersion,
 ) -> impl IntoView {
     provide_meta_context();
     let title = instance_name.0.clone();
@@ -29,6 +30,12 @@ pub fn shell(
     // Loaded synchronously (no defer): inline page scripts reference
     // window.lwContent at top level.
     let content_js_src = format!("/assets/lw-content.js?v={}", script_version.0);
+    // The authoring form builder depends on window.lwContent, so it loads
+    // after lw-content.js (both blocking, in order).
+    let authoring_js_src = format!(
+        "/assets/lw-content-authoring.js?v={}",
+        authoring_script_version.0
+    );
     let _ = options;
 
     view! {
@@ -41,6 +48,7 @@ pub fn shell(
                 <Title text=title/>
                 <Stylesheet id="lw-style" href=stylesheet_href/>
                 <script src=content_js_src></script>
+                <script src=authoring_js_src></script>
             </head>
             <body>
                 <App/>

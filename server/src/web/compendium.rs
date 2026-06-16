@@ -56,6 +56,9 @@ pub fn CompendiumCategoryPage() -> impl IntoView {
             <div id="lw-page-root" hidden=true>
                 <header class="lw-page-header">
                     <h1 id="lw-cat-title" class="lw-page-title">"…"</h1>
+                    <button id="lw-cat-new" class="lw-btn lw-btn-filled" type="button" hidden=true>
+                        "New"
+                    </button>
                 </header>
                 <div class="lw-search-row">
                     <input id="lw-cat-search" class="lw-input" type="search" placeholder="Search…"/>
@@ -96,6 +99,7 @@ pub fn CompendiumEntryPage() -> impl IntoView {
                         <h1 id="lw-entry-title" class="lw-page-title">"…"</h1>
                         <p id="lw-entry-subtitle" class="lw-page-subtitle"></p>
                     </div>
+                    <div id="lw-entry-actions" class="lw-toolbar" hidden=true></div>
                 </header>
                 <div id="lw-entry-facts" class="lw-card" hidden=true></div>
                 <div id="lw-entry-body" class="lw-md"></div>
@@ -220,6 +224,19 @@ const CATEGORY_SCRIPT: &str = r#"
     });
 
     function init(lookups, records) {
+        // Authoring is open to any authenticated member; the entry lands in
+        // the Homebrew module by default.
+        const newBtn = document.getElementById('lw-cat-new');
+        if (newBtn && window.lwAuthoring) {
+            newBtn.textContent = 'New ' + C.humanizeSlug(table);
+            newBtn.hidden = false;
+            newBtn.addEventListener('click', function () {
+                window.lwAuthoring.openCreate(table, {
+                    onSaved: function () { window.location.reload(); },
+                });
+            });
+        }
+
         function render() {
             const visible = C.visibleRecords(records, category, search.value, dimensions, state, lookups);
             list.replaceChildren();
@@ -458,6 +475,35 @@ const ENTRY_SCRIPT: &str = r#"
         if (source) {
             sourceEl.hidden = false;
             sourceEl.textContent = 'Source: ' + source;
+        }
+
+        // Editing affordances appear only for homebrew (local-module)
+        // records; the server enforces creator-or-admin on the actual edit.
+        const actionsEl = document.getElementById('lw-entry-actions');
+        if (actionsEl && window.lwAuthoring) {
+            window.lwAuthoring.recordIsEditable(record).then(function (editable) {
+                if (!editable) return;
+                const reload = function () { window.location.reload(); };
+                const edit = C.el('button', 'lw-btn lw-btn-tonal', 'Edit');
+                edit.type = 'button';
+                edit.addEventListener('click', function () {
+                    window.lwAuthoring.openEdit(table, record, { onSaved: reload });
+                });
+                const move = C.el('button', 'lw-btn lw-btn-text', 'Move');
+                move.type = 'button';
+                move.addEventListener('click', function () {
+                    window.lwAuthoring.moveModule(table, record, { onSaved: reload });
+                });
+                const del = C.el('button', 'lw-btn lw-btn-danger', 'Delete');
+                del.type = 'button';
+                del.addEventListener('click', function () {
+                    window.lwAuthoring.deleteRecord(table, uuid, {
+                        onDeleted: function () { window.location.href = '/compendium/' + table; },
+                    });
+                });
+                actionsEl.replaceChildren(edit, move, del);
+                actionsEl.hidden = false;
+            });
         }
     }
 })();

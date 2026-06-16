@@ -28,6 +28,33 @@ use crate::{
     content::{self, RecordError, slugify},
 };
 
+/// `GET /api/content/{category}/schema` — the authoring field schema for a
+/// category. SSR/no-WASM fallback for the same `FieldSchema` the web (WASM)
+/// and mobile (FFI) clients read; lets a form render before the WASM module
+/// has loaded.
+#[utoipa::path(
+    get,
+    path = "/api/content/{category}/schema",
+    tag = "content",
+    operation_id = "content_schema",
+    security(("bearer" = [])),
+    params(("category" = String, Path, description = "Content category, e.g. spell, creature, item")),
+    responses(
+        (status = 200, description = "The category's authoring FieldSchema (see lorewyld-domain)"),
+        (status = 404, description = "Category is not user-authorable"),
+    )
+)]
+pub async fn content_schema(
+    State(_state): State<ApiState>,
+    _user: CurrentUser,
+    Path(category): Path<String>,
+) -> Result<Json<Value>, ApiError> {
+    let schema = lorewyld_domain::field_schema(&category).ok_or(ApiError::NotFound)?;
+    serde_json::to_value(schema)
+        .map(Json)
+        .map_err(|e| ApiError::Internal(e.into()))
+}
+
 /// `POST /api/content/{category}` — author a homebrew content record.
 #[utoipa::path(
     post,
