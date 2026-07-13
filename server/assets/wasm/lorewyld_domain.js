@@ -76,6 +76,50 @@ export function field_schema(category) {
 }
 
 /**
+ * The fixed new-player guidance questionnaire, as a JSON string the quiz
+ * UI renders from.
+ * @returns {string}
+ */
+export function guidance_questionnaire() {
+    let deferred1_0;
+    let deferred1_1;
+    try {
+        const ret = wasm.guidance_questionnaire();
+        deferred1_0 = ret[0];
+        deferred1_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred1_0, deferred1_1, 1);
+    }
+}
+
+/**
+ * Rank candidate records against quiz answers. `answers_json` is a JSON
+ * array of `{question, value}`; `candidates_json` is a JSON object of
+ * `{classes, species, backgrounds}` record arrays (summaries suffice).
+ * Returns a JSON `RecommendationSet`, or `"null"` on malformed input.
+ * @param {string} answers_json
+ * @param {string} candidates_json
+ * @returns {string}
+ */
+export function guidance_recommend(answers_json, candidates_json) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(answers_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(candidates_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ret = wasm.guidance_recommend(ptr0, len0, ptr1, len1);
+        deferred3_0 = ret[0];
+        deferred3_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * Proficiency bonus for a level (clamped 1..=20).
  * @param {number} level
  * @returns {number}

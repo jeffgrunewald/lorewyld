@@ -7,6 +7,7 @@
 // ignore_for_file: argument_type_not_assignable
 
 import 'api/authoring.dart';
+import 'api/guidance.dart';
 import 'api/sheet.dart';
 import 'dart:async';
 import 'dart:convert';

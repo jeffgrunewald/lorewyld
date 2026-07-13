@@ -187,6 +187,8 @@ impl ApiServer {
         let script_version = crate::web::StyleVersion::from_asset_mtime("assets/lw-content.js");
         let authoring_script_version =
             crate::web::StyleVersion::from_asset_mtime("assets/lw-content-authoring.js");
+        let guidance_script_version =
+            crate::web::StyleVersion::from_asset_mtime("assets/lw-guidance.js");
         let leptos_router: Router<()> = Router::new()
             .nest_service("/assets", ServeDir::new("assets"))
             .leptos_routes(&leptos, routes, {
@@ -199,6 +201,7 @@ impl ApiServer {
                         style_version.clone(),
                         script_version.clone(),
                         authoring_script_version.clone(),
+                        guidance_script_version.clone(),
                     )
                 }
             })

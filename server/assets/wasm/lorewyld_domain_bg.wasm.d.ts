@@ -4,6 +4,8 @@ export const memory: WebAssembly.Memory;
 export const default_record: (a: number, b: number) => [number, number];
 export const derive_stats: (a: number, b: number) => [number, number];
 export const field_schema: (a: number, b: number) => [number, number];
+export const guidance_questionnaire: () => [number, number];
+export const guidance_recommend: (a: number, b: number, c: number, d: number) => [number, number];
 export const validate_record: (a: number, b: number, c: number, d: number) => [number, number];
 export const ability_modifier: (a: number) => number;
 export const proficiency_bonus: (a: number) => number;

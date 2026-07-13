@@ -4,7 +4,9 @@ use leptos_router::components::{FlatRoutes, Route, Router};
 use leptos_router::{ParamSegment, StaticSegment};
 
 use crate::web::auth_ui::{AUTH_SCRIPT, AuthModals, HeaderAuth};
-use crate::web::characters::{CharacterNewPage, CharacterSheetPage, CharactersPage};
+use crate::web::characters::{
+    CharacterGuidedPage, CharacterNewPage, CharacterSheetPage, CharactersPage,
+};
 use crate::web::compendium::{CompendiumCategoryPage, CompendiumEntryPage, CompendiumPage};
 use crate::web::home::Home;
 use crate::web::lore::{LoreSettingDetailPage, LoreSettingsPage};
@@ -22,6 +24,7 @@ pub fn shell(
     style_version: StyleVersion,
     script_version: StyleVersion,
     authoring_script_version: StyleVersion,
+    guidance_script_version: StyleVersion,
 ) -> impl IntoView {
     provide_meta_context();
     let title = instance_name.0.clone();
@@ -30,12 +33,14 @@ pub fn shell(
     // Loaded synchronously (no defer): inline page scripts reference
     // window.lwContent at top level.
     let content_js_src = format!("/assets/lw-content.js?v={}", script_version.0);
-    // The authoring form builder depends on window.lwContent, so it loads
-    // after lw-content.js (both blocking, in order).
+    // The authoring form builder and guidance quiz depend on
+    // window.lwContent, so they load after lw-content.js (all blocking,
+    // in order).
     let authoring_js_src = format!(
         "/assets/lw-content-authoring.js?v={}",
         authoring_script_version.0
     );
+    let guidance_js_src = format!("/assets/lw-guidance.js?v={}", guidance_script_version.0);
     let _ = options;
 
     view! {
@@ -49,6 +54,7 @@ pub fn shell(
                 <Stylesheet id="lw-style" href=stylesheet_href/>
                 <script src=content_js_src></script>
                 <script src=authoring_js_src></script>
+                <script src=guidance_js_src></script>
             </head>
             <body>
                 <App/>
@@ -128,6 +134,14 @@ fn AppRoutes() -> impl IntoView {
                             <Route
                                 path=(StaticSegment("characters"), StaticSegment("new"))
                                 view=|| CharacterNewPage().into_any()
+                            />
+                            <Route
+                                path=(
+                                    StaticSegment("characters"),
+                                    StaticSegment("new"),
+                                    StaticSegment("guided"),
+                                )
+                                view=|| CharacterGuidedPage().into_any()
                             />
                             <Route
                                 path=(StaticSegment("characters"), ParamSegment("uuid"))

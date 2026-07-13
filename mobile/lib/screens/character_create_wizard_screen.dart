@@ -18,9 +18,26 @@ import '../types/character.dart';
 import '../widgets/content_picker.dart';
 
 class CharacterCreateWizardScreen extends StatefulWidget {
-  const CharacterCreateWizardScreen({super.key, required this.store});
+  const CharacterCreateWizardScreen({
+    super.key,
+    required this.store,
+    this.initialSpecies,
+    this.initialClass,
+    this.initialBackground,
+    this.initialAlignment,
+    this.initialAbilities,
+  });
 
   final LocalStore store;
+
+  /// Prefills from the guided quiz — full content records for the
+  /// pickers, a humanized alignment matching the dropdown values, and
+  /// suggested ability scores. All stay editable; prefill, never enforce.
+  final Map<String, dynamic>? initialSpecies;
+  final Map<String, dynamic>? initialClass;
+  final Map<String, dynamic>? initialBackground;
+  final String? initialAlignment;
+  final Map<Ability, int>? initialAbilities;
 
   @override
   State<CharacterCreateWizardScreen> createState() =>
@@ -44,6 +61,10 @@ class _CharacterCreateWizardScreenState
   @override
   void initState() {
     super.initState();
+    _species = widget.initialSpecies;
+    _characterClass = widget.initialClass;
+    _background = widget.initialBackground;
+    _alignment = widget.initialAlignment ?? '';
     _content.listAlignments().then((rows) {
       if (mounted) setState(() => _alignments = rows);
     });
@@ -78,19 +99,24 @@ class _CharacterCreateWizardScreenState
     final created = await widget.store.createCharacter(name);
 
     // Class grants: saving throw proficiencies, and 1st-level max HP =
-    // hit die maximum + Con modifier (5e rule). Con starts at 10 here,
-    // so the modifier is 0 — editing scores later won't re-derive HP;
-    // prefilled, never enforced.
+    // hit die maximum + Con modifier (5e rule). Con is 10 unless the
+    // guided quiz suggested scores — editing scores later won't
+    // re-derive HP; prefilled, never enforced.
     final classHitDie = _characterClass?['hit_dice'];
     final classSaves = _characterClass?['prof_saving_throws'];
+    final conScore =
+        widget.initialAbilities?[Ability.constitution] ??
+        created.abilityScore(Ability.constitution);
     final startingHp = classHitDie is num
-        ? (classHitDie.truncate() +
-                  abilityModifier(score: created.abilityScore(Ability.constitution)))
-              .clamp(1, 999)
+        ? (classHitDie.truncate() + abilityModifier(score: conScore)).clamp(
+            1,
+            999,
+          )
         : created.maxHp;
 
     final sheet = await widget.store.saveCharacter(
       created.copyWith(
+        abilities: widget.initialAbilities,
         race: _species?['name'] as String? ?? '',
         className: _characterClass?['name'] as String? ?? '',
         background: _background?['name'] as String? ?? '',

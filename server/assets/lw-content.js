@@ -1039,6 +1039,23 @@ window.lwContent = (function () {
         return JSON.parse(_wasm.validate_record(category, JSON.stringify(input)));
     }
 
+    /* ── new-player guidance quiz (shared with mobile FFI) ──────── */
+
+    /* The fixed guidance questionnaire ({version, questions}). */
+    function guidanceQuestionnaire() {
+        return JSON.parse(_wasm.guidance_questionnaire());
+    }
+
+    /* Rank candidate records against quiz answers. `answers` is an array
+     * of {question, value}; `candidates` is {classes, species, backgrounds}
+     * record arrays (list summaries suffice). Returns a RecommendationSet
+     * or null on malformed input. */
+    function guidanceRecommend(answers, candidates) {
+        return JSON.parse(_wasm.guidance_recommend(
+            JSON.stringify(answers), JSON.stringify(candidates)
+        ));
+    }
+
     function formatBonus(n) {
         return n >= 0 ? '+' + n : String(n);
     }
@@ -1107,5 +1124,7 @@ window.lwContent = (function () {
         fieldSchema: fieldSchema,
         defaultRecord: defaultRecord,
         validateRecord: validateRecord,
+        guidanceQuestionnaire: guidanceQuestionnaire,
+        guidanceRecommend: guidanceRecommend,
     };
 })();

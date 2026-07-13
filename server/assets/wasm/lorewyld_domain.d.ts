@@ -27,6 +27,20 @@ export function derive_stats(sheet_json: string): string;
 export function field_schema(category: string): string;
 
 /**
+ * The fixed new-player guidance questionnaire, as a JSON string the quiz
+ * UI renders from.
+ */
+export function guidance_questionnaire(): string;
+
+/**
+ * Rank candidate records against quiz answers. `answers_json` is a JSON
+ * array of `{question, value}`; `candidates_json` is a JSON object of
+ * `{classes, species, backgrounds}` record arrays (summaries suffice).
+ * Returns a JSON `RecommendationSet`, or `"null"` on malformed input.
+ */
+export function guidance_recommend(answers_json: string, candidates_json: string): string;
+
+/**
  * Proficiency bonus for a level (clamped 1..=20).
  */
 export function proficiency_bonus(level: number): number;
@@ -46,6 +60,8 @@ export interface InitOutput {
     readonly default_record: (a: number, b: number) => [number, number];
     readonly derive_stats: (a: number, b: number) => [number, number];
     readonly field_schema: (a: number, b: number) => [number, number];
+    readonly guidance_questionnaire: () => [number, number];
+    readonly guidance_recommend: (a: number, b: number, c: number, d: number) => [number, number];
     readonly validate_record: (a: number, b: number, c: number, d: number) => [number, number];
     readonly ability_modifier: (a: number) => number;
     readonly proficiency_bonus: (a: number) => number;
