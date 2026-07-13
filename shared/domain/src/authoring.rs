@@ -71,6 +71,9 @@ pub enum FieldKind {
     /// Foreign-key reference picked from a lookup table (value is a UUID
     /// string). `table` names the compendium lookup the picker queries.
     SelectLookup { table: String },
+    /// Zero or more foreign-key references from a lookup table (value is
+    /// an array of UUID strings). `table` names the compendium lookup.
+    MultiLookup { table: String },
     /// Structured-but-variable data edited as raw JSON in the first cut
     /// (creature actions, class features, equipment tables, …). The
     /// `template` seeds the editor with a well-formed default.
@@ -302,6 +305,18 @@ fn lookup(key: &str, label: &str, required: bool, table: &str) -> FieldDef {
     }
 }
 
+fn multi_lookup(key: &str, label: &str, table: &str) -> FieldDef {
+    FieldDef {
+        key: key.into(),
+        label: label.into(),
+        kind: FieldKind::MultiLookup {
+            table: table.into(),
+        },
+        required: false,
+        help: None,
+    }
+}
+
 fn json_field(key: &str, label: &str, template: Value, help: &str) -> FieldDef {
     FieldDef {
         key: key.into(),
@@ -424,7 +439,7 @@ fn creature_fields() -> Vec<FieldDef> {
             serde_json::json!({ "passive_perception": 10 }),
             "Passive perception plus darkvision/blindsight/etc.",
         ),
-        text("languages", "Languages", false),
+        multi_lookup("languages_list", "Languages", "language"),
         enum_list(
             "damage_immunities",
             "Damage immunities",
@@ -730,6 +745,16 @@ fn validate_field(field: &FieldDef, v: &Value, errors: &mut Vec<FieldError>) {
             }
             None => err(format!("{} must be a list.", field.label)),
         },
+        FieldKind::MultiLookup { .. } => match v.as_array() {
+            // Referential integrity (each UUID exists) is deferred to the
+            // server's typed deserialization, as with SelectLookup.
+            Some(items) => {
+                if items.iter().any(|item| !item.is_string()) {
+                    err(format!("{} contains an invalid selection.", field.label));
+                }
+            }
+            None => err(format!("{} must be a list.", field.label)),
+        },
         FieldKind::Json { .. } => {
             // Shape is validated authoritatively when the server
             // deserializes the assembled record into its typed struct.
@@ -900,6 +925,41 @@ mod tests {
         )
         .unwrap_err();
         assert!(errs.iter().any(|e| e.field == "damage_types"));
+    }
+
+    #[test]
+    fn creature_languages_is_a_multi_lookup_over_the_language_table() {
+        let schema = field_schema("creature").unwrap();
+        let field = schema
+            .fields
+            .iter()
+            .find(|f| f.key == "languages_list")
+            .expect("languages_list field");
+        assert!(matches!(
+            &field.kind,
+            FieldKind::MultiLookup { table } if table == "language"
+        ));
+    }
+
+    #[test]
+    fn multi_lookup_accepts_a_uuid_array_and_rejects_a_non_array() {
+        let field_errs = |input: &str| match validate_record("creature", input) {
+            Ok(()) => Vec::new(),
+            Err(errs) => errs,
+        };
+        // An array of UUID strings yields no error on the languages field
+        // (other required-field errors are irrelevant here).
+        assert!(
+            !field_errs(r#"{"name":"Wyrmling","languages_list":["a1b2","c3d4"]}"#)
+                .iter()
+                .any(|e| e.field == "languages_list")
+        );
+        // A non-array value is rejected against the languages field.
+        assert!(
+            field_errs(r#"{"name":"Wyrmling","languages_list":"Common"}"#)
+                .iter()
+                .any(|e| e.field == "languages_list")
+        );
     }
 
     #[test]

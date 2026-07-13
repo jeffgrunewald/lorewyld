@@ -332,6 +332,18 @@ const ENTRY_SCRIPT: &str = r#"
             .join(', ');
     }
 
+    // Prefer the structured languages_list (FK UUIDs → names); fall back to
+    // the SRD free-text `languages` string for imported creatures.
+    function creatureLanguages(r, lookups) {
+        if (Array.isArray(r.languages_list) && r.languages_list.length) {
+            const names = r.languages_list
+                .map(function (id) { return lookups.languages[id]; })
+                .filter(Boolean);
+            if (names.length) return names.sort().join(', ');
+        }
+        return typeof r.languages === 'string' ? r.languages : '';
+    }
+
     function facts(r, lookups) {
         const out = [];
         const push = function (label, value) {
@@ -360,7 +372,7 @@ const ENTRY_SCRIPT: &str = r#"
                     push('Abilities', abilityLine(r.ability_scores));
                 }
                 if (typeof r.experience_points === 'number') push('XP', Math.trunc(r.experience_points));
-                if (typeof r.languages === 'string') push('Languages', r.languages);
+                push('Languages', creatureLanguages(r, lookups));
                 break;
             case 'class':
                 if (r.hit_dice != null) push('Hit die', 'd' + r.hit_dice);

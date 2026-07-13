@@ -100,6 +100,7 @@ window.lwContent = (function () {
             fetchTable('weapon_property'),
             fetchTable('document'),
             fetchJson('/api/modules'),
+            fetchTable('language'),
         ]).then(function (results) {
             function nameMap(records, mapName) {
                 const out = {};
@@ -119,6 +120,7 @@ window.lwContent = (function () {
                 weaponProperties: nameMap(results[6]),
                 documents: nameMap(documents),
                 contentModules: nameMap(modules),
+                languages: nameMap(results[9]),
                 sizeRanks: {},
                 documentKeys: {},
                 moduleSlugs: {},
@@ -601,6 +603,154 @@ window.lwContent = (function () {
             close: close,
             setOnClose: function (fn) { onClose = fn; },
         };
+    }
+
+    /* ── dice expression builder (mirror of dice_expression_builder.dart) ── */
+
+    const DICE_BUILDER_SIDES = [4, 6, 8, 10, 12, 20];
+    const MAX_DIE_COUNT = 99;
+    const MAX_DICE_MODIFIER = 9999;
+
+    // terms: insertion-ordered Map of sides -> count.
+    function formatDiceExpression(terms, modifier) {
+        const parts = [];
+        terms.forEach(function (count, sides) {
+            if (count > 0) parts.push(count + 'd' + sides);
+        });
+        if (modifier > 0) parts.push(String(modifier));
+        return parts.join(' + ');
+    }
+
+    // Tolerates "18d10+72", "D8"; null when not a plain sum of allowed
+    // dice plus at most one flat bonus.
+    function parseDiceExpression(input) {
+        const terms = new Map();
+        const trimmed = String(input || '').trim();
+        if (trimmed === '') return { terms: terms, modifier: 0 };
+        if (/[^0-9dD+\s]/.test(trimmed)) return null;
+
+        let modifier = 0;
+        let sawModifier = false;
+        const pieces = trimmed.split('+');
+        for (let i = 0; i < pieces.length; i++) {
+            const part = pieces[i].trim();
+            if (part === '') return null;
+            const die = /^(\d*)\s*[dD]\s*(\d+)$/.exec(part);
+            if (die) {
+                const count = die[1] === '' ? 1 : parseInt(die[1], 10);
+                const sides = parseInt(die[2], 10);
+                if (count < 1 || DICE_BUILDER_SIDES.indexOf(sides) === -1) return null;
+                const total = (terms.get(sides) || 0) + count;
+                if (total > MAX_DIE_COUNT) return null;
+                terms.set(sides, total);
+            } else if (/^\d+$/.test(part)) {
+                const value = parseInt(part, 10);
+                if (sawModifier || value > MAX_DICE_MODIFIER) return null;
+                modifier = value;
+                sawModifier = true;
+            } else {
+                return null;
+            }
+        }
+        return { terms: terms, modifier: modifier };
+    }
+
+    // Resolves to the composed expression on Select (possibly ''), or
+    // null when dismissed via scrim/Escape.
+    function openDiceBuilder(opts) {
+        return new Promise(function (resolve) {
+            const parsed = parseDiceExpression(opts && opts.initial) ||
+                { terms: new Map(), modifier: 0 };
+            const terms = parsed.terms;
+
+            const modal = openModal('lw-dice-builder-modal');
+            let result = null;
+            modal.setOnClose(function () {
+                document.removeEventListener('keydown', onEscape, true);
+                resolve(result);
+            });
+            // Capture-phase Escape so a builder stacked on the authoring
+            // modal closes alone instead of both.
+            function onEscape(e) {
+                if (e.key !== 'Escape') return;
+                e.stopPropagation();
+                modal.close();
+            }
+            document.addEventListener('keydown', onEscape, true);
+
+            const panel = modal.panel;
+            panel.appendChild(el('h2', 'lw-modal-title', 'Build dice expression'));
+
+            const counts = [];
+            const col = el('div', 'lw-dice-builder-col');
+            DICE_BUILDER_SIDES.forEach(function (sides) {
+                const row = el('div', 'lw-dice-builder-row');
+                const btn = el('button', 'lw-roll-die-btn lw-dice-builder-btn');
+                btn.type = 'button';
+                const img = document.createElement('img');
+                img.src = '/assets/dice/d' + sides + '.png';
+                img.alt = 'd' + sides;
+                btn.appendChild(img);
+                const badge = el('span', 'lw-dice-count');
+                counts.push({ sides: sides, badge: badge });
+                btn.addEventListener('click', function () {
+                    const count = terms.get(sides) || 0;
+                    if (count < MAX_DIE_COUNT) terms.set(sides, count + 1);
+                    render();
+                });
+                row.appendChild(btn);
+                row.appendChild(badge);
+                col.appendChild(row);
+            });
+            panel.appendChild(col);
+
+            const modInput = el('input', 'lw-input lw-dice-builder-mod');
+            modInput.type = 'text';
+            modInput.inputMode = 'numeric';
+            modInput.maxLength = 4;
+            modInput.placeholder = 'Modifier';
+            modInput.setAttribute('aria-label', 'Modifier');
+            if (parsed.modifier > 0) modInput.value = String(parsed.modifier);
+            modInput.addEventListener('input', function () {
+                modInput.value = modInput.value.replace(/\D/g, '');
+                render();
+            });
+            panel.appendChild(modInput);
+
+            const resultBox = el('div', 'lw-dice-builder-result');
+            panel.appendChild(resultBox);
+
+            function render() {
+                counts.forEach(function (c) {
+                    const n = terms.get(c.sides) || 0;
+                    c.badge.textContent = n > 0 ? '×' + n : '';
+                });
+                const expr = formatDiceExpression(
+                    terms, parseInt(modInput.value, 10) || 0);
+                resultBox.textContent = expr;
+                resultBox.classList.toggle('lw-dice-builder-empty', expr === '');
+            }
+            render();
+
+            const actions = el('div', 'lw-modal-actions');
+            const clearBtn = el('button', 'lw-btn lw-btn-text', 'Clear');
+            clearBtn.type = 'button';
+            clearBtn.addEventListener('click', function () {
+                terms.clear();
+                modInput.value = '';
+                render();
+            });
+            const selectBtn = el('button', 'lw-btn lw-btn-filled', 'Select');
+            selectBtn.type = 'button';
+            selectBtn.addEventListener('click', function () {
+                result = formatDiceExpression(
+                    terms, parseInt(modInput.value, 10) || 0);
+                modal.close();
+            });
+            actions.appendChild(clearBtn);
+            actions.appendChild(selectBtn);
+            panel.appendChild(actions);
+        });
     }
 
     /* ── filter & sort panel (port of filter_sheet.dart) ────────── */
@@ -1110,6 +1260,7 @@ window.lwContent = (function () {
         matchesFilters: matchesFilters,
         visibleRecords: visibleRecords,
         openModal: openModal,
+        openDiceBuilder: openDiceBuilder,
         openFilterPanel: openFilterPanel,
         decorateFilterButton: decorateFilterButton,
         buildEntryRow: buildEntryRow,

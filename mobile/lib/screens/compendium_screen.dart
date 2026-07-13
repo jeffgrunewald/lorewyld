@@ -570,6 +570,19 @@ class CompendiumEntryScreen extends StatelessWidget {
     _ => record['desc'] as String?,
   };
 
+  // Prefer the structured languages_list (FK UUIDs → names); fall back to
+  // the SRD free-text `languages` string for imported creatures.
+  String _creatureLanguages(Map<String, dynamic> r) {
+    if (r['languages_list'] case final List<dynamic> ids when ids.isNotEmpty) {
+      final names = [
+        for (final id in ids)
+          if (lookups.nameOf(lookups.languages, id) case final String n) n,
+      ];
+      if (names.isNotEmpty) return (names..sort()).join(', ');
+    }
+    return r['languages'] as String? ?? '';
+  }
+
   List<(String, String)> _facts() {
     final r = record;
     switch (category.table) {
@@ -600,7 +613,7 @@ class CompendiumEntryScreen extends StatelessWidget {
             ('Abilities', _abilityLine(scores)),
           if (r['experience_points'] case final num v)
             ('XP', '${v.truncate()}'),
-          if (r['languages'] case final String v when v.isNotEmpty)
+          if (_creatureLanguages(r) case final String v when v.isNotEmpty)
             ('Languages', v),
         ];
       case 'class':

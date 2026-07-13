@@ -56,6 +56,11 @@ pub struct CharacterSheet {
     pub class_name: String,
     #[serde(default = "default_level")]
     pub level: i32,
+    /// Accumulated XP for campaigns that advance by experience points.
+    /// `None` = campaign doesn't track XP (e.g. milestone advancement).
+    /// Advisory only — never auto-advances `level`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub experience_points: Option<i32>,
     #[serde(default)]
     pub background: String,
     #[serde(default)]
@@ -66,6 +71,10 @@ pub struct CharacterSheet {
     pub saving_throw_proficiencies: Vec<String>,
     #[serde(default)]
     pub skill_proficiencies: Vec<String>,
+    /// Known languages by display name — permissive strings, like the
+    /// proficiency lists, so a sheet survives content-module changes.
+    #[serde(default)]
+    pub languages: Vec<String>,
     #[serde(default)]
     pub armor_class: i32,
     #[serde(default)]
@@ -103,4 +112,47 @@ fn default_quantity() -> i32 {
 
 fn default_level() -> i32 {
     1
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn experience_points_is_optional_and_round_trips() {
+        // Absent in JSON deserializes to None.
+        let sheet: CharacterSheet =
+            serde_json::from_value(serde_json::json!({ "name": "Thistle" })).unwrap();
+        assert_eq!(sheet.experience_points, None);
+
+        // None is omitted on serialize (skip_serializing_if).
+        let json = serde_json::to_value(&sheet).unwrap();
+        assert!(json.get("experience_points").is_none());
+
+        // A tracked value round-trips.
+        let tracked = CharacterSheet {
+            experience_points: Some(1500),
+            ..sheet
+        };
+        let back: CharacterSheet =
+            serde_json::from_value(serde_json::to_value(&tracked).unwrap()).unwrap();
+        assert_eq!(back.experience_points, Some(1500));
+    }
+
+    #[test]
+    fn languages_default_to_empty_and_round_trip() {
+        // Absent in JSON deserializes to an empty list.
+        let sheet: CharacterSheet =
+            serde_json::from_value(serde_json::json!({ "name": "Thistle" })).unwrap();
+        assert!(sheet.languages.is_empty());
+
+        // A populated list round-trips.
+        let known = CharacterSheet {
+            languages: vec!["Common".to_string(), "Draconic".to_string()],
+            ..sheet
+        };
+        let back: CharacterSheet =
+            serde_json::from_value(serde_json::to_value(&known).unwrap()).unwrap();
+        assert_eq!(back.languages, vec!["Common", "Draconic"]);
+    }
 }

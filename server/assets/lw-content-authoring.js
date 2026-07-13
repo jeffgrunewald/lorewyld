@@ -56,6 +56,9 @@ window.lwAuthoring = (function () {
 
     /* select_lookup fields reference one of the lookup tables already loaded
      * by C.loadLookups — map the table name to that uuid→name dict. */
+    /* Text fields holding dice expressions; edited via C.openDiceBuilder. */
+    const DICE_KEYS = { hit_dice: 1, damage_roll: 1, damage_dice: 1 };
+
     const LOOKUP_MAP = {
         spell_school: 'spellSchools',
         size: 'sizes',
@@ -63,6 +66,7 @@ window.lwAuthoring = (function () {
         item_category: 'itemCategories',
         class: 'classes',
         species: 'species',
+        language: 'languages',
     };
 
     function lookupEntries(table, lookups) {
@@ -175,6 +179,30 @@ window.lwAuthoring = (function () {
                 collect = function () { return { value: Array.from(selected) }; };
                 break;
             }
+            case 'multi_lookup': {
+                control = C.el('div', 'lw-chip-row');
+                const selected = new Set(Array.isArray(initial) ? initial : []);
+                lookupEntries(field.table, lookups).forEach(function (opt) {
+                    const chip = C.el(
+                        'button',
+                        'lw-chip' + (selected.has(opt.value) ? ' lw-chip-selected' : ''),
+                        opt.label
+                    );
+                    chip.type = 'button';
+                    chip.addEventListener('click', function () {
+                        if (selected.has(opt.value)) {
+                            selected.delete(opt.value);
+                            chip.classList.remove('lw-chip-selected');
+                        } else {
+                            selected.add(opt.value);
+                            chip.classList.add('lw-chip-selected');
+                        }
+                    });
+                    control.appendChild(chip);
+                });
+                collect = function () { return { value: Array.from(selected) }; };
+                break;
+            }
             case 'json': {
                 control = C.el('textarea', 'lw-input lw-authoring-area lw-authoring-json');
                 control.rows = 5;
@@ -198,6 +226,15 @@ window.lwAuthoring = (function () {
                 control = C.el('input', 'lw-input');
                 control.type = 'text';
                 if (typeof initial === 'string') control.value = initial;
+                if (field.kind === 'text' && DICE_KEYS[field.key]) {
+                    control.readOnly = true;
+                    control.classList.add('lw-input-dice');
+                    control.addEventListener('click', function () {
+                        C.openDiceBuilder({ initial: control.value }).then(function (expr) {
+                            if (expr != null) control.value = expr;
+                        });
+                    });
+                }
                 collect = function () { return { value: control.value }; };
                 break;
             }

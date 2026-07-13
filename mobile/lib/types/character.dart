@@ -104,11 +104,16 @@ class CharacterSheet {
   final String race;
   final String className;
   final int level;
+  // Accumulated XP; null = campaign doesn't track XP (milestone play).
+  // Advisory only — never auto-advances level.
+  final int? experiencePoints;
   final String background;
   final String alignment;
   final Map<Ability, int> abilities;
   final Set<Ability> savingThrowProficiencies;
   final Set<Skill> skillProficiencies;
+  // Known languages by display name, chosen from installed content.
+  final Set<String> languages;
   final int armorClass;
   final int speed;
   final int maxHp;
@@ -125,11 +130,13 @@ class CharacterSheet {
     this.race = '',
     this.className = '',
     this.level = 1,
+    this.experiencePoints,
     this.background = '',
     this.alignment = '',
     required this.abilities,
     this.savingThrowProficiencies = const {},
     this.skillProficiencies = const {},
+    this.languages = const {},
     this.armorClass = 10,
     this.speed = 30,
     this.maxHp = 1,
@@ -164,6 +171,7 @@ class CharacterSheet {
     race: json['race'] as String? ?? '',
     className: json['class_name'] as String? ?? '',
     level: json['level'] as int? ?? 1,
+    experiencePoints: json['experience_points'] as int?,
     background: json['background'] as String? ?? '',
     alignment: json['alignment'] as String? ?? '',
     abilities: {
@@ -179,6 +187,9 @@ class CharacterSheet {
     skillProficiencies: {
       for (final s in json['skill_proficiencies'] as List<dynamic>? ?? [])
         Skill.fromWire(s as String),
+    },
+    languages: {
+      for (final l in json['languages'] as List<dynamic>? ?? []) l as String,
     },
     armorClass: json['armor_class'] as int? ?? 10,
     speed: json['speed'] as int? ?? 30,
@@ -201,6 +212,8 @@ class CharacterSheet {
     'race': race,
     'class_name': className,
     'level': level,
+    // Emit only when tracked, mirroring Rust's skip_serializing_if.
+    if (experiencePoints != null) 'experience_points': experiencePoints,
     'background': background,
     'alignment': alignment,
     'abilities': {for (final e in abilities.entries) e.key.name: e.value},
@@ -208,6 +221,7 @@ class CharacterSheet {
         .map((a) => a.name)
         .toList(),
     'skill_proficiencies': skillProficiencies.map((s) => s.name).toList(),
+    'languages': languages.toList(),
     'armor_class': armorClass,
     'speed': speed,
     'max_hp': maxHp,
@@ -224,11 +238,14 @@ class CharacterSheet {
     String? race,
     String? className,
     int? level,
+    int? experiencePoints,
+    bool clearExperiencePoints = false,
     String? background,
     String? alignment,
     Map<Ability, int>? abilities,
     Set<Ability>? savingThrowProficiencies,
     Set<Skill>? skillProficiencies,
+    Set<String>? languages,
     int? armorClass,
     int? speed,
     int? maxHp,
@@ -243,12 +260,17 @@ class CharacterSheet {
     race: race ?? this.race,
     className: className ?? this.className,
     level: level ?? this.level,
+    // `?? this` can't reset a nullable field, so clearing is explicit.
+    experiencePoints: clearExperiencePoints
+        ? null
+        : (experiencePoints ?? this.experiencePoints),
     background: background ?? this.background,
     alignment: alignment ?? this.alignment,
     abilities: abilities ?? this.abilities,
     savingThrowProficiencies:
         savingThrowProficiencies ?? this.savingThrowProficiencies,
     skillProficiencies: skillProficiencies ?? this.skillProficiencies,
+    languages: languages ?? this.languages,
     armorClass: armorClass ?? this.armorClass,
     speed: speed ?? this.speed,
     maxHp: maxHp ?? this.maxHp,

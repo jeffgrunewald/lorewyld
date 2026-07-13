@@ -33,6 +33,7 @@ class ContentLookups {
   final Map<String, String> classes;
   final Map<String, String> species;
   final Map<String, String> weaponProperties;
+  final Map<String, String> languages;
   final Map<String, String> documents;
   final Map<String, String> contentModules;
 
@@ -54,6 +55,7 @@ class ContentLookups {
     this.classes = const {},
     this.species = const {},
     this.weaponProperties = const {},
+    this.languages = const {},
     this.documents = const {},
     this.contentModules = const {},
     this.sizeRanks = const {},
@@ -85,6 +87,7 @@ class ContentLookups {
       content.lookupNames('content_module'),
       content.lookupColumn('document', 'key'),
       content.lookupColumn('content_module', 'slug'),
+      content.lookupNames('language'),
     ]);
     final sizeRecords = await content.listNamed('size');
     // Schools and creature types carry lowercase wire names
@@ -100,6 +103,7 @@ class ContentLookups {
       classes: maps[4],
       species: maps[5],
       weaponProperties: maps[6],
+      languages: maps[11],
       documents: maps[7],
       contentModules: maps[8],
       documentKeys: maps[9],

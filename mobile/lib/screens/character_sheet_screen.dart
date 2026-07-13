@@ -14,6 +14,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../compendium/categories.dart';
+import '../dice/dice_expression_builder.dart';
 import '../ffi/api/sheet.dart';
 import '../services/content_store.dart';
 import '../services/local_store.dart';
@@ -48,9 +49,11 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
 
   late final ContentStore _content = ContentStore(widget.store);
   List<Map<String, dynamic>> _alignments = const [];
+  List<Map<String, dynamic>> _languages = const [];
 
   late final TextEditingController _nameCtl;
   late final TextEditingController _hitDiceCtl;
+  late final TextEditingController _xpCtl;
 
   @override
   void initState() {
@@ -59,8 +62,14 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
     _recompute();
     _nameCtl = TextEditingController(text: _sheet.name);
     _hitDiceCtl = TextEditingController(text: _sheet.hitDice);
+    _xpCtl = TextEditingController(
+      text: _sheet.experiencePoints?.toString() ?? '',
+    );
     _content.listAlignments().then((rows) {
       if (mounted) setState(() => _alignments = rows);
+    });
+    _content.listNamed('language').then((rows) {
+      if (mounted) setState(() => _languages = rows);
     });
   }
 
@@ -68,6 +77,7 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
   void dispose() {
     _nameCtl.dispose();
     _hitDiceCtl.dispose();
+    _xpCtl.dispose();
     super.dispose();
   }
 
@@ -93,6 +103,11 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
   CharacterSheet _withTextFields() => _sheet.copyWith(
     name: _nameCtl.text.trim().isEmpty ? _sheet.name : _nameCtl.text.trim(),
     hitDice: _hitDiceCtl.text.trim(),
+    // Only commit typed XP while tracking is enabled; an unparseable
+    // entry falls back to the last good value rather than clearing it.
+    experiencePoints: _sheet.experiencePoints == null
+        ? null
+        : (int.tryParse(_xpCtl.text.trim()) ?? _sheet.experiencePoints),
   );
 
   Future<void> _save() async {
@@ -193,6 +208,8 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
             const SizedBox(height: 16),
             _skillsSection(),
             const SizedBox(height: 16),
+            _languagesSection(),
+            const SizedBox(height: 16),
             _equipmentSection(),
             const SizedBox(height: 16),
             _spellsSection(),
@@ -205,7 +222,9 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
 
   bool _textFieldsChanged() =>
       _nameCtl.text.trim() != _sheet.name ||
-      _hitDiceCtl.text.trim() != _sheet.hitDice;
+      _hitDiceCtl.text.trim() != _sheet.hitDice ||
+      (_sheet.experiencePoints != null &&
+          _xpCtl.text.trim() != _sheet.experiencePoints.toString());
 
   // ── sections ────────────────────────────────────────────────────────
 
@@ -279,6 +298,8 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
         ],
       ),
       const SizedBox(height: 12),
+      _experienceField(),
+      const SizedBox(height: 12),
       Row(
         children: [
           Expanded(
@@ -294,6 +315,42 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
         ],
       ),
     ]);
+  }
+
+  // Optional XP tracking. The toggle enables the field (seeding 0) and
+  // clears it back to null when turned off, mirroring the nullable model.
+  Widget _experienceField() {
+    final tracking = _sheet.experiencePoints != null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SwitchListTile(
+          title: const Text('Track experience points'),
+          subtitle: const Text('For campaigns that advance by XP'),
+          contentPadding: EdgeInsets.zero,
+          value: tracking,
+          onChanged: (on) {
+            if (on) {
+              _xpCtl.text = '0';
+              _mutate(_sheet.copyWith(experiencePoints: 0));
+            } else {
+              _xpCtl.clear();
+              _mutate(_sheet.copyWith(clearExperiencePoints: true));
+            }
+          },
+        ),
+        if (tracking)
+          TextField(
+            controller: _xpCtl,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Experience Points',
+              border: OutlineInputBorder(),
+            ),
+            onChanged: (_) => _dirty = true,
+          ),
+      ],
+    );
   }
 
   Widget _alignmentDropdown() {
@@ -490,12 +547,23 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
       const SizedBox(height: 12),
       TextField(
         controller: _hitDiceCtl,
+        readOnly: true,
         decoration: const InputDecoration(
           labelText: 'Hit dice',
           hintText: 'e.g. 3d8',
           border: OutlineInputBorder(),
         ),
-        onChanged: (_) => _dirty = true,
+        onTap: () async {
+          final expr = await showDiceExpressionBuilder(
+            context,
+            initial: _hitDiceCtl.text,
+          );
+          if (expr == null) return;
+          setState(() {
+            _hitDiceCtl.text = expr;
+            _dirty = true;
+          });
+        },
       ),
     ]);
   }
@@ -540,6 +608,35 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
             checked == true ? next.add(s) : next.remove(s);
             _mutate(_sheet.copyWith(skillProficiencies: next));
           },
+        ),
+    ]);
+  }
+
+  Widget _languagesSection() {
+    // Installed language names, unioned with any already on the sheet that
+    // are no longer installed — so a stored language is never silently lost.
+    final installed = [for (final r in _languages) r['name'] as String];
+    final names = {...installed, ..._sheet.languages}.toList()..sort();
+    return _sectionCard('Languages', [
+      if (names.isEmpty)
+        Text('No languages installed.',
+            style: Theme.of(context).textTheme.bodyMedium)
+      else
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: [
+            for (final name in names)
+              FilterChip(
+                label: Text(name),
+                selected: _sheet.languages.contains(name),
+                onSelected: (on) {
+                  final next = {..._sheet.languages};
+                  on ? next.add(name) : next.remove(name);
+                  _mutate(_sheet.copyWith(languages: next));
+                },
+              ),
+          ],
         ),
     ]);
   }

@@ -376,6 +376,7 @@ const WIZARD_SCRIPT: &str = r#"
             abilities: abilities,
             saving_throw_proficiencies: saves,
             skill_proficiencies: [],
+            languages: [],
             armor_class: 10,
             speed: state.species && typeof state.species.speed === 'number'
                 ? Math.trunc(state.species.speed) : 30,
@@ -421,6 +422,8 @@ const SHEET_SCRIPT: &str = r#"
     let sheet = null;
     let dirty = false;
     let canEdit = false;
+    // Installed languages (name records) for the multi-select, loaded once.
+    let languages = [];
     // Derived 5e stats from the shared Rust core (WASM), recomputed once
     // per render; sub-renders read from it instead of re-deriving in JS.
     let derived = null;
@@ -456,7 +459,10 @@ const SHEET_SCRIPT: &str = r#"
                     'Read-only — owned by ' + (sheet.owner_username || 'another user');
             }
             noteNewBtn.hidden = !canEdit;
-            render();
+            C.fetchTable('language').then(function (rows) {
+                languages = rows || [];
+                render();
+            }).catch(function () { render(); });
         }).catch(function (err) {
             titleEl.textContent = 'Character not found';
             statusEl.textContent = String(err);
@@ -616,6 +622,7 @@ const SHEET_SCRIPT: &str = r#"
         renderCombat();
         renderSaves();
         renderSkills();
+        renderLanguages();
         renderEquipment();
         renderSpells();
         applyReadOnly();
@@ -777,13 +784,18 @@ const SHEET_SCRIPT: &str = r#"
         }));
 
         const hitDice = C.el('div', 'lw-combat-item', 'Hit dice');
-        const hdInput = C.el('input', 'lw-input');
+        const hdInput = C.el('input', 'lw-input lw-input-dice');
         hdInput.type = 'text';
+        hdInput.readOnly = true;
         hdInput.value = sheet.hit_dice || '';
         hdInput.style.width = '90px';
-        hdInput.addEventListener('input', function () {
-            sheet.hit_dice = hdInput.value;
-            markDirty();
+        hdInput.addEventListener('click', function () {
+            C.openDiceBuilder({ initial: sheet.hit_dice || '' }).then(function (expr) {
+                if (expr == null) return;
+                sheet.hit_dice = expr;
+                hdInput.value = expr;
+                markDirty();
+            });
         });
         hitDice.appendChild(hdInput);
         grid.appendChild(hitDice);
@@ -833,6 +845,29 @@ const SHEET_SCRIPT: &str = r#"
                 markDirty();
                 render();
             }));
+        }
+        sheetEl.appendChild(c);
+    }
+
+    function renderLanguages() {
+        const c = card('Languages');
+        // Installed names unioned with any already on the sheet, so a stored
+        // language is never dropped if it is no longer installed.
+        const installed = languages.map(function (r) { return String(r.name); });
+        const known = sheet.languages || [];
+        const names = Array.from(new Set(installed.concat(known))).sort();
+        if (names.length === 0) {
+            c.appendChild(C.el('div', 'lw-empty', 'No languages installed.'));
+        } else {
+            for (const name of names) {
+                c.appendChild(checkRow(name, null, known.includes(name), '', function (on) {
+                    sheet.languages = on
+                        ? (sheet.languages || []).concat([name])
+                        : (sheet.languages || []).filter(function (k) { return k !== name; });
+                    markDirty();
+                    render();
+                }));
+            }
         }
         sheetEl.appendChild(c);
     }

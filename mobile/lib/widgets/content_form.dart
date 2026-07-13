@@ -11,6 +11,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
+import '../dice/dice_expression_builder.dart';
 import '../ffi/api/authoring.dart' as authoring;
 import '../services/content_store.dart';
 import '../util/uuid.dart';
@@ -88,7 +89,7 @@ class _ContentFormScreenState extends State<ContentFormScreen> {
           text: _controllerText(kind, initial),
         );
       }
-      if (kind == 'select_lookup') {
+      if (kind == 'select_lookup' || kind == 'multi_lookup') {
         final table = field['table'] as String;
         _lookups[table] = await widget.content.lookupNames(table);
       }
@@ -164,6 +165,17 @@ class _ContentFormScreenState extends State<ContentFormScreen> {
     );
   }
 
+  // Text fields holding dice expressions; edited via the builder modal.
+  static const _diceKeys = {'hit_dice', 'damage_roll', 'damage_dice'};
+
+  Future<void> _editDiceField(String key) async {
+    final ctl = _controllers[key];
+    if (ctl == null) return;
+    final expr = await showDiceExpressionBuilder(context, initial: ctl.text);
+    if (expr == null || !mounted) return;
+    setState(() => ctl.text = expr);
+  }
+
   Widget _buildField(Map<String, dynamic> field) {
     final key = field['key'] as String;
     final kind = field['kind'] as String;
@@ -208,9 +220,22 @@ class _ContentFormScreenState extends State<ContentFormScreen> {
           (field['options'] as List<dynamic>).cast<Map<String, dynamic>>(),
         );
         break;
+      case 'multi_lookup':
+        final table = field['table'] as String;
+        final entries = (_lookups[table] ?? const {}).entries.toList()
+          ..sort((a, b) => a.value.compareTo(b.value));
+        control = _enumChips(
+          field,
+          label,
+          [for (final e in entries) {'value': e.key, 'label': e.value}],
+        );
+        break;
       default:
+        final isDice = kind == 'text' && _diceKeys.contains(key);
         control = TextField(
           controller: _controllers[key],
+          readOnly: isDice,
+          onTap: isDice ? () => _editDiceField(key) : null,
           decoration: InputDecoration(
             labelText: label + (required ? ' *' : ''),
             border: const OutlineInputBorder(),
@@ -391,6 +416,7 @@ class _ContentFormScreenState extends State<ContentFormScreen> {
           input[key] = _values[key]; // String? (null when unselected)
           break;
         case 'enum_list':
+        case 'multi_lookup':
           input[key] = ((_values[key] as List<dynamic>?) ?? const []).toList();
           break;
       }

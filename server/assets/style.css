@@ -1635,3 +1635,66 @@ input[type="checkbox"] {
     letter-spacing: 0.04em;
     color: var(--lw-outline);
 }
+
+/* ── dice expression builder (lw-content.js openDiceBuilder) ────────── */
+
+.lw-dice-builder-modal {
+    max-width: 320px;
+    width: 100%;
+    max-height: 85vh;
+    overflow-y: auto;
+}
+
+.lw-dice-builder-col {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 14px;
+}
+
+.lw-dice-builder-row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.lw-dice-builder-btn {
+    width: 56px;
+    height: 56px;
+    padding: 4px;
+}
+
+.lw-dice-builder-btn img {
+    width: 44px;
+    height: 44px;
+}
+
+.lw-dice-count {
+    font-size: 1.05rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--lw-on-surface);
+    min-width: 2.5em;
+}
+
+.lw-dice-builder-mod {
+    width: 100%;
+    margin-bottom: 12px;
+}
+
+.lw-dice-builder-result {
+    border: 1px solid var(--lw-divider);
+    border-radius: 8px;
+    padding: 10px 12px;
+    min-height: 1.4em;
+    font-variant-numeric: tabular-nums;
+}
+
+.lw-dice-builder-result.lw-dice-builder-empty::before {
+    content: "Tap dice to build\2026";
+    color: var(--lw-on-surface-muted);
+}
+
+.lw-input-dice[readonly] {
+    cursor: pointer;
+    background: var(--lw-surface);
+}
