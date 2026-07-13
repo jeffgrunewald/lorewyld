@@ -1698,3 +1698,49 @@ input[type="checkbox"] {
     cursor: pointer;
     background: var(--lw-surface);
 }
+
+/* ── toasts (lw-content.js showToast) ───────────────────────────────── */
+
+.lw-toast-host {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    z-index: 300;
+    pointer-events: none;
+}
+
+.lw-toast {
+    background: var(--lw-dark);
+    color: #fff;
+    padding: 10px 16px;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    font-size: 0.9rem;
+    max-width: min(480px, calc(100vw - 32px));
+    opacity: 0;
+    transform: translateY(8px);
+    transition: opacity 0.25s, transform 0.25s;
+}
+
+.lw-toast-visible {
+    opacity: 1;
+    transform: none;
+}
+
+/* ── attunement toggle on the character sheet ───────────────────────── */
+
+.lw-attune-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.85rem;
+    color: var(--lw-on-surface-muted);
+    flex-shrink: 0;
+    margin-right: 8px;
+    cursor: pointer;
+}

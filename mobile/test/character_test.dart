@@ -51,6 +51,7 @@ void main() {
       hitDice: '7d6',
       equipment: const [
         EquipmentItem(name: 'Dagger', quantity: 2, notes: 'silvered'),
+        EquipmentItem(name: 'Ring of Protection', attuned: true),
       ],
       spells: const [
         SpellEntry(name: 'Fireball', level: 3, notes: '8d6'),
@@ -61,7 +62,9 @@ void main() {
     final restored = CharacterSheet.fromJson(original.toJson());
 
     expect(restored.toJson(), original.toJson());
-    expect(restored.equipment.single.notes, 'silvered');
+    expect(restored.equipment.first.notes, 'silvered');
+    expect(restored.equipment.first.attuned, false);
+    expect(restored.equipment.last.attuned, true);
     expect(restored.spells.first.level, 3);
   });
 

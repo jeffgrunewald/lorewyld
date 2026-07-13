@@ -19,6 +19,10 @@ pub struct CharacterEquipmentItem {
     pub quantity: i32,
     #[serde(default)]
     pub notes: String,
+    /// Attuned to this character; only meaningful when the item's
+    /// content record has `requires_attunement`. Clients cap at 3.
+    #[serde(default)]
+    pub attuned: bool,
 }
 
 /// One known/prepared spell line on the sheet. `level` 0 = cantrip.

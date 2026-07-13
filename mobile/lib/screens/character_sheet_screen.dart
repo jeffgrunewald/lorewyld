@@ -6,8 +6,8 @@
 // the installed content modules; alignment from the seeded alignment
 // table.
 //
-// Edits autosave when the screen is popped; the save icon persists
-// immediately.
+// Leaving with unsaved edits prompts to save or discard; the save icon
+// persists immediately. Removing an item or spell asks for confirmation.
 
 import 'dart:convert';
 
@@ -51,6 +51,9 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
   List<Map<String, dynamic>> _alignments = const [];
   List<Map<String, dynamic>> _languages = const [];
 
+  // Names of items whose content record requires attunement.
+  Set<String> _attunableItems = const {};
+
   late final TextEditingController _nameCtl;
   late final TextEditingController _hitDiceCtl;
   late final TextEditingController _xpCtl;
@@ -70,6 +73,16 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
     });
     _content.listNamed('language').then((rows) {
       if (mounted) setState(() => _languages = rows);
+    });
+    _content.listNamed('item').then((rows) {
+      if (!mounted) return;
+      setState(() {
+        _attunableItems = {
+          for (final r in rows)
+            if (r['requires_attunement'] == true && r['name'] is String)
+              r['name'] as String,
+        };
+      });
     });
   }
 
@@ -123,6 +136,66 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
     );
   }
 
+  bool get _hasUnsavedChanges => _dirty || _textFieldsChanged();
+
+  Future<void> _confirmLeave() async {
+    if (!_hasUnsavedChanges) {
+      Navigator.of(context).pop();
+      return;
+    }
+    final action = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Unsaved changes'),
+        content: Text('Save changes to "${_sheet.name}" before leaving?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, 'discard'),
+            child: const Text('Discard'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, 'save'),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (!mounted || action == null) return;
+    if (action == 'save') {
+      await widget.store.saveCharacter(_withTextFields());
+      if (!mounted) return;
+    }
+    Navigator.of(context).pop();
+  }
+
+  Future<bool> _confirmRemove(String kind, String name) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Remove $kind?'),
+        content: Text('"$name" will be removed from this character.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+            child: const Text('Remove'),
+          ),
+        ],
+      ),
+    );
+    return confirm == true;
+  }
+
   Future<void> _delete() async {
     final confirm = await showDialog<bool>(
       context: context,
@@ -164,12 +237,11 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
   @override
   Widget build(BuildContext context) {
     return PopScope(
-      // Autosave on back: text fields are committed first so nothing
-      // typed is lost.
+      // Back is always intercepted so unsaved edits can prompt to save
+      // or discard; _confirmLeave pops directly when clean.
+      canPop: false,
       onPopInvokedWithResult: (didPop, _) {
-        if (didPop && (_dirty || _textFieldsChanged())) {
-          widget.store.saveCharacter(_withTextFields());
-        }
+        if (!didPop) _confirmLeave();
       },
       child: Scaffold(
         appBar: AppBar(
@@ -653,13 +725,29 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
             item.quantity > 1 ? '${item.name} ×${item.quantity}' : item.name,
           ),
           subtitle: item.notes.isEmpty ? null : Text(item.notes),
-          trailing: IconButton(
-            icon: const Icon(Icons.remove_circle_outline),
-            tooltip: 'Remove',
-            onPressed: () {
-              final next = [..._sheet.equipment]..removeAt(i);
-              _mutate(_sheet.copyWith(equipment: next));
-            },
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (_attunableItems.contains(item.name))
+                Tooltip(
+                  message: 'Attuned (max 3)',
+                  child: Checkbox(
+                    value: item.attuned,
+                    onChanged: (v) => _setAttuned(i, v == true),
+                  ),
+                ),
+              IconButton(
+                icon: const Icon(Icons.remove_circle_outline),
+                tooltip: 'Remove',
+                onPressed: () async {
+                  if (!await _confirmRemove('item', item.name) || !mounted) {
+                    return;
+                  }
+                  final next = [..._sheet.equipment]..removeAt(i);
+                  _mutate(_sheet.copyWith(equipment: next));
+                },
+              ),
+            ],
           ),
         ),
       Align(
@@ -699,7 +787,10 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
           trailing: IconButton(
             icon: const Icon(Icons.remove_circle_outline),
             tooltip: 'Remove',
-            onPressed: () {
+            onPressed: () async {
+              if (!await _confirmRemove('spell', spell.name) || !mounted) {
+                return;
+              }
               final next = [..._sheet.spells]..remove(spell);
               _mutate(_sheet.copyWith(spells: next));
             },
@@ -714,6 +805,21 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
         ),
       ),
     ]);
+  }
+
+  void _setAttuned(int index, bool attuned) {
+    if (attuned &&
+        _sheet.equipment.where((e) => e.attuned).length >= 3) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Too many items selected for attunement — limit is 3.'),
+        ),
+      );
+      return;
+    }
+    final next = [..._sheet.equipment];
+    next[index] = next[index].copyWith(attuned: attuned);
+    _mutate(_sheet.copyWith(equipment: next));
   }
 
   Future<void> _addEquipment() async {

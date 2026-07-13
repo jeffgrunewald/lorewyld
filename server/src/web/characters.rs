@@ -424,6 +424,8 @@ const SHEET_SCRIPT: &str = r#"
     let canEdit = false;
     // Installed languages (name records) for the multi-select, loaded once.
     let languages = [];
+    // Names of items whose content record requires attunement.
+    let attunable = new Set();
     // Derived 5e stats from the shared Rust core (WASM), recomputed once
     // per render; sub-renders read from it instead of re-deriving in JS.
     let derived = null;
@@ -440,9 +442,74 @@ const SHEET_SCRIPT: &str = r#"
         statusEl.textContent = 'Unsaved changes';
     }
 
+    function attunedCount() {
+        return sheet.equipment.filter(function (e) { return e.attuned === true; }).length;
+    }
+
     window.addEventListener('beforeunload', function (e) {
         if (dirty) e.preventDefault();
     });
+
+    // In-app link navigation with unsaved edits prompts to save or
+    // discard; beforeunload above still backstops reload/tab close.
+    document.addEventListener('click', function (e) {
+        if (!dirty || e.defaultPrevented || e.button !== 0) return;
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        const target = e.target instanceof Element ? e.target : null;
+        const link = target && target.closest('a[href]');
+        if (!link || link.target === '_blank' || link.hasAttribute('download')) return;
+        e.preventDefault();
+        confirmLeave(link.href);
+    });
+
+    function confirmLeave(href) {
+        const modal = C.openModal('');
+        modal.panel.appendChild(C.el('h2', 'lw-modal-title', 'Unsaved changes'));
+        modal.panel.appendChild(C.el('p', null,
+            'Save changes to "' + sheet.name + '" before leaving?'));
+        const actions = C.el('div', 'lw-modal-actions');
+        const cancel = C.el('button', 'lw-btn lw-btn-text', 'Cancel');
+        cancel.type = 'button';
+        cancel.addEventListener('click', modal.close);
+        const discard = C.el('button', 'lw-btn lw-btn-text', 'Discard');
+        discard.type = 'button';
+        discard.addEventListener('click', function () {
+            dirty = false;
+            location.href = href;
+        });
+        const save = C.el('button', 'lw-btn lw-btn-filled', 'Save');
+        save.type = 'button';
+        save.addEventListener('click', function () {
+            modal.close();
+            saveSheet().then(function (ok) {
+                if (ok) location.href = href;
+            });
+        });
+        actions.appendChild(cancel);
+        actions.appendChild(discard);
+        actions.appendChild(save);
+        modal.panel.appendChild(actions);
+    }
+
+    function confirmRemove(kind, name, onConfirm) {
+        const modal = C.openModal('');
+        modal.panel.appendChild(C.el('h2', 'lw-modal-title', 'Remove ' + kind + '?'));
+        modal.panel.appendChild(C.el('p', null,
+            '"' + name + '" will be removed from this character.'));
+        const actions = C.el('div', 'lw-modal-actions');
+        const cancel = C.el('button', 'lw-btn lw-btn-text', 'Cancel');
+        cancel.type = 'button';
+        cancel.addEventListener('click', modal.close);
+        const confirm = C.el('button', 'lw-btn lw-btn-danger', 'Remove');
+        confirm.type = 'button';
+        confirm.addEventListener('click', function () {
+            modal.close();
+            onConfirm();
+        });
+        actions.appendChild(cancel);
+        actions.appendChild(confirm);
+        modal.panel.appendChild(actions);
+    }
 
     C.requireAuth(function (me) {
         C.fetchJson('/api/characters/' + encodeURIComponent(uuid)).then(function (loaded) {
@@ -463,6 +530,12 @@ const SHEET_SCRIPT: &str = r#"
                 languages = rows || [];
                 render();
             }).catch(function () { render(); });
+            C.fetchTable('item').then(function (rows) {
+                (rows || []).forEach(function (r) {
+                    if (r.requires_attunement === true) attunable.add(String(r.name));
+                });
+                render();
+            }).catch(function () {});
         }).catch(function (err) {
             titleEl.textContent = 'Character not found';
             statusEl.textContent = String(err);
@@ -510,10 +583,11 @@ const SHEET_SCRIPT: &str = r#"
         return li;
     }
 
-    saveBtn.addEventListener('click', function () {
+    // Resolves true on success, false on failure (status line updated).
+    function saveSheet() {
         saveBtn.disabled = true;
         statusEl.textContent = 'Saving…';
-        fetch('/api/characters/' + encodeURIComponent(uuid), {
+        return fetch('/api/characters/' + encodeURIComponent(uuid), {
             method: 'PUT',
             headers: Object.assign({ 'Content-Type': 'application/json' }, window.lw.authHeaders()),
             body: JSON.stringify(sheet),
@@ -526,11 +600,15 @@ const SHEET_SCRIPT: &str = r#"
             statusEl.textContent = 'Saved';
             titleEl.textContent = sheet.name;
             render();
+            return true;
         }).catch(function (err) {
             saveBtn.disabled = false;
             statusEl.textContent = 'Save failed: ' + err;
+            return false;
         });
-    });
+    }
+
+    saveBtn.addEventListener('click', function () { saveSheet(); });
 
     deleteBtn.addEventListener('click', function () {
         const modal = C.openModal('');
@@ -883,13 +961,34 @@ const SHEET_SCRIPT: &str = r#"
                 item.name + (item.quantity > 1 ? ' ×' + item.quantity : '')));
             if (item.notes) text.appendChild(C.el('div', 'lw-list-item-subtitle', item.notes));
             row.appendChild(text);
+            if (attunable.has(item.name)) {
+                const toggle = C.el('label', 'lw-attune-toggle');
+                const box = C.el('input');
+                box.type = 'checkbox';
+                box.checked = item.attuned === true;
+                box.disabled = !canEdit;
+                box.addEventListener('change', function () {
+                    if (box.checked && attunedCount() >= 3) {
+                        box.checked = false;
+                        C.showToast('Too many items selected for attunement — limit is 3.');
+                        return;
+                    }
+                    item.attuned = box.checked;
+                    markDirty();
+                });
+                toggle.appendChild(box);
+                toggle.appendChild(C.el('span', null, 'Attuned'));
+                row.appendChild(toggle);
+            }
             const remove = C.el('button', 'lw-picker-field-clear', '✕');
             remove.type = 'button';
             remove.setAttribute('aria-label', 'Remove ' + item.name);
             remove.addEventListener('click', function () {
-                sheet.equipment.splice(index, 1);
-                markDirty();
-                render();
+                confirmRemove('item', item.name, function () {
+                    sheet.equipment.splice(index, 1);
+                    markDirty();
+                    render();
+                });
             });
             row.appendChild(remove);
             li.appendChild(row);
@@ -959,10 +1058,12 @@ const SHEET_SCRIPT: &str = r#"
             remove.type = 'button';
             remove.setAttribute('aria-label', 'Remove ' + spell.name);
             remove.addEventListener('click', function () {
-                const index = sheet.spells.indexOf(spell);
-                if (index >= 0) sheet.spells.splice(index, 1);
-                markDirty();
-                render();
+                confirmRemove('spell', spell.name, function () {
+                    const index = sheet.spells.indexOf(spell);
+                    if (index >= 0) sheet.spells.splice(index, 1);
+                    markDirty();
+                    render();
+                });
             });
             row.appendChild(remove);
             li.appendChild(row);

@@ -605,6 +605,23 @@ window.lwContent = (function () {
         };
     }
 
+    /* ── toast notifications ────────────────────────────────────── */
+
+    function showToast(message) {
+        let host = document.querySelector('.lw-toast-host');
+        if (!host) {
+            host = el('div', 'lw-toast-host');
+            document.body.appendChild(host);
+        }
+        const toast = el('div', 'lw-toast', message);
+        host.appendChild(toast);
+        setTimeout(function () { toast.classList.add('lw-toast-visible'); }, 10);
+        setTimeout(function () {
+            toast.classList.remove('lw-toast-visible');
+            setTimeout(function () { toast.remove(); }, 300);
+        }, 3500);
+    }
+
     /* ── dice expression builder (mirror of dice_expression_builder.dart) ── */
 
     const DICE_BUILDER_SIDES = [4, 6, 8, 10, 12, 20];
@@ -1260,6 +1277,7 @@ window.lwContent = (function () {
         matchesFilters: matchesFilters,
         visibleRecords: visibleRecords,
         openModal: openModal,
+        showToast: showToast,
         openDiceBuilder: openDiceBuilder,
         openFilterPanel: openFilterPanel,
         decorateFilterButton: decorateFilterButton,

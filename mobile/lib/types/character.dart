@@ -61,19 +61,37 @@ class EquipmentItem {
   final int quantity;
   final String notes;
 
-  const EquipmentItem({required this.name, this.quantity = 1, this.notes = ''});
+  // Only meaningful when the item's content record requires attunement.
+  final bool attuned;
+
+  const EquipmentItem({
+    required this.name,
+    this.quantity = 1,
+    this.notes = '',
+    this.attuned = false,
+  });
 
   factory EquipmentItem.fromJson(Map<String, dynamic> json) => EquipmentItem(
     name: json['name'] as String,
     quantity: json['quantity'] as int? ?? 1,
     notes: json['notes'] as String? ?? '',
+    attuned: json['attuned'] as bool? ?? false,
   );
 
   Map<String, dynamic> toJson() => {
     'name': name,
     'quantity': quantity,
     'notes': notes,
+    'attuned': attuned,
   };
+
+  EquipmentItem copyWith({int? quantity, String? notes, bool? attuned}) =>
+      EquipmentItem(
+        name: name,
+        quantity: quantity ?? this.quantity,
+        notes: notes ?? this.notes,
+        attuned: attuned ?? this.attuned,
+      );
 }
 
 class SpellEntry {
