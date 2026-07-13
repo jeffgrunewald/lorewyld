@@ -106,8 +106,12 @@ void main() {
     );
     await tester.pump();
 
-    // The + button opens the creation wizard.
+    // The + button offers quick vs guided creation; quick create opens
+    // the wizard.
     await tester.tap(find.byType(FloatingActionButton));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.text('Quick create'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     await tester.enterText(find.byType(TextField), 'Thistle Quickfoot');

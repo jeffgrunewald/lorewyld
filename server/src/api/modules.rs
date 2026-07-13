@@ -3,22 +3,34 @@ use std::collections::HashMap;
 use axum::{
     Json,
     extract::{Path, State},
-    http::StatusCode,
+    http::{StatusCode, header},
+    response::{IntoResponse, Response},
 };
 use lorewyld_types::{
-    api_v1::{LoreNoteWithTags, PublishModuleRequest, PublishModuleResponse},
+    ModuleOrigin,
+    api_v1::{
+        CreateModuleRequest, InstallModuleResponse, LoreNoteWithTags, PublishModuleRequest,
+        PublishModuleResponse, UpdateModuleRequest,
+    },
     content_module::ContentModule,
 };
 use uuid::Uuid;
 
-use crate::api::{
-    ApiState,
-    auth::CurrentUser,
-    error::{ApiError, is_unique_violation},
-    rows::{
-        ContentModuleRow, LORE_NOTE_SELECT, LoreNoteRow, MODULE_SELECT_ACTIVE, MODULE_SELECT_ONE,
+use crate::{
+    api::{
+        ApiState,
+        auth::CurrentUser,
+        error::{ApiError, is_unique_violation},
+        rows::{
+            ContentModuleRow, LORE_NOTE_SELECT, LoreNoteRow, MODULE_SELECT_ACTIVE,
+            MODULE_SELECT_ONE,
+        },
+        tags::load_tags_for_notes,
     },
-    tags::load_tags_for_notes,
+    content::{
+        self, HOMEBREW_MODULE_SLUG, ImportError, ImportOptions, NewCustomModule,
+        PINNED_MODULE_SLUG, RecordError, SlugConflict, import_bundle,
+    },
 };
 
 /// Filter loose notes against viewer's visibility expectations. For
@@ -47,6 +59,325 @@ pub async fn list_modules(
         .map(ContentModuleRow::into_dto)
         .collect::<Result<_, _>>()
         .map(Json)
+}
+
+/// `GET /api/modules/editable` — the `local` (homebrew) modules content
+/// can be authored into or reassigned between. Any authenticated member
+/// sees them (local content is server-shared); the compendium uses this
+/// to decide which records show Edit/Delete and to populate the
+/// "move to module" picker.
+#[utoipa::path(
+    get,
+    path = "/api/modules/editable",
+    tag = "modules",
+    operation_id = "list_editable_modules",
+    security(("bearer" = [])),
+    responses((status = 200, description = "Active homebrew (local) modules", body = [ContentModule]))
+)]
+pub async fn list_editable_modules(
+    State(state): State<ApiState>,
+    _user: CurrentUser,
+) -> Result<Json<Vec<ContentModule>>, ApiError> {
+    let rows: Vec<ContentModuleRow> = sqlx::query_as(MODULE_SELECT_ACTIVE)
+        .fetch_all(&state.db)
+        .await?;
+    rows.into_iter()
+        .filter(|r| r.origin_kind() == ModuleOrigin::Local)
+        .map(ContentModuleRow::into_dto)
+        .collect::<Result<_, _>>()
+        .map(Json)
+}
+
+/// `POST /api/modules/custom` — create a homebrew (`local`) module any
+/// authenticated member can author content into.
+#[utoipa::path(
+    post,
+    path = "/api/modules/custom",
+    tag = "modules",
+    operation_id = "create_custom_module",
+    security(("bearer" = [])),
+    request_body = CreateModuleRequest,
+    responses(
+        (status = 201, description = "The created local module", body = ContentModule),
+        (status = 400, description = "Empty/duplicate slug"),
+    )
+)]
+pub async fn create_custom_module(
+    State(state): State<ApiState>,
+    user: CurrentUser,
+    Json(req): Json<CreateModuleRequest>,
+) -> Result<(StatusCode, Json<ContentModule>), ApiError> {
+    if req.name.trim().is_empty() {
+        return Err(ApiError::BadRequest("module name is required".into()));
+    }
+    let module = content::create_custom_module(
+        &state.db,
+        NewCustomModule {
+            name: req.name.trim().to_string(),
+            slug: req.slug,
+            license: req.license,
+            license_url: req.license_url,
+            description: req.description,
+            authors: req.authors,
+            website_url: req.website_url,
+            created_by: user.uuid.to_string(),
+        },
+    )
+    .await
+    .map_err(record_error)?;
+    Ok((StatusCode::CREATED, Json(module)))
+}
+
+/// `PATCH /api/modules/{uuid}` — edit a `local` module's metadata or
+/// toggle its active state. Creator-or-admin only; only `local` modules
+/// are user-editable (bundled/uploaded/published metadata is fixed; use
+/// the admin status endpoint to disable those).
+#[utoipa::path(
+    patch,
+    path = "/api/modules/{uuid}",
+    tag = "modules",
+    operation_id = "update_custom_module",
+    security(("bearer" = [])),
+    params(("uuid" = String, Path, description = "Module UUID")),
+    request_body = UpdateModuleRequest,
+    responses(
+        (status = 200, description = "Updated module", body = ContentModule),
+        (status = 403, description = "Not the creator/admin, or not a local module"),
+        (status = 404, description = "No such module"),
+    )
+)]
+pub async fn update_custom_module(
+    State(state): State<ApiState>,
+    user: CurrentUser,
+    Path(uuid): Path<Uuid>,
+    Json(req): Json<UpdateModuleRequest>,
+) -> Result<Json<ContentModule>, ApiError> {
+    let meta = load_module_meta(&state.db, &uuid.to_string())
+        .await?
+        .ok_or(ApiError::NotFound)?;
+    if meta.origin != ModuleOrigin::Local {
+        return Err(ApiError::Forbidden);
+    }
+    if !meta.is_creator(&user) {
+        return Err(ApiError::Forbidden);
+    }
+
+    let authors_json = match &req.authors {
+        Some(a) => Some(serde_json::to_string(a).map_err(|e| ApiError::Internal(e.into()))?),
+        None => None,
+    };
+    sqlx::query(
+        "UPDATE content_module SET \
+            name        = COALESCE(?, name), \
+            license     = COALESCE(?, license), \
+            license_url = COALESCE(?, license_url), \
+            description = COALESCE(?, description), \
+            authors     = COALESCE(?, authors), \
+            website_url = COALESCE(?, website_url), \
+            is_active   = COALESCE(?, is_active), \
+            updated_at  = datetime('now') \
+          WHERE uuid = ?",
+    )
+    .bind(req.name.as_deref().map(str::trim))
+    .bind(req.license.map(|l| l.wire_value()))
+    .bind(req.license_url.as_deref())
+    .bind(req.description.as_deref())
+    .bind(authors_json)
+    .bind(req.website_url.as_deref())
+    .bind(req.is_active)
+    .bind(uuid.to_string())
+    .execute(&state.db)
+    .await?;
+
+    let row: ContentModuleRow = sqlx::query_as(MODULE_SELECT_ONE)
+        .bind(uuid.to_string())
+        .fetch_one(&state.db)
+        .await?;
+    row.into_dto().map(Json)
+}
+
+/// `DELETE /api/modules/{uuid}` — uninstall a `local` module (creator or
+/// admin) or an `uploaded`/`published` module (admin). Bundled modules and
+/// the pinned SRD/Homebrew modules cannot be deleted.
+#[utoipa::path(
+    delete,
+    path = "/api/modules/{uuid}",
+    tag = "modules",
+    operation_id = "delete_custom_module",
+    security(("bearer" = [])),
+    params(("uuid" = String, Path, description = "Module UUID")),
+    responses(
+        (status = 204, description = "Deleted"),
+        (status = 403, description = "Not permitted (or a protected module)"),
+        (status = 404, description = "No such module"),
+    )
+)]
+pub async fn delete_custom_module(
+    State(state): State<ApiState>,
+    user: CurrentUser,
+    Path(uuid): Path<Uuid>,
+) -> Result<StatusCode, ApiError> {
+    let uuid_str = uuid.to_string();
+    let meta = load_module_meta(&state.db, &uuid_str)
+        .await?
+        .ok_or(ApiError::NotFound)?;
+    if meta.slug == PINNED_MODULE_SLUG || meta.slug == HOMEBREW_MODULE_SLUG {
+        return Err(ApiError::BadRequest(
+            "this module is pinned and cannot be uninstalled".into(),
+        ));
+    }
+    let permitted = match meta.origin {
+        ModuleOrigin::Local => meta.is_creator(&user),
+        ModuleOrigin::Uploaded | ModuleOrigin::Published => user.admin,
+        ModuleOrigin::Bundled => {
+            return Err(ApiError::BadRequest(
+                "bundled modules cannot be uninstalled; disable the module instead".into(),
+            ));
+        }
+    };
+    if !permitted {
+        return Err(ApiError::Forbidden);
+    }
+    content::remove_module(&state.db, &uuid_str)
+        .await
+        .map_err(map_fk_conflict)?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+/// `GET /api/modules/{uuid}/export` — download a module as a self-contained
+/// `.lorebundle` (a `ContentBundle` JSON) that re-imports on any instance.
+#[utoipa::path(
+    get,
+    path = "/api/modules/{uuid}/export",
+    tag = "modules",
+    operation_id = "export_module",
+    security(("bearer" = [])),
+    params(("uuid" = String, Path, description = "Module UUID")),
+    responses(
+        (status = 200, description = "A ContentBundle JSON download"),
+        (status = 404, description = "No such module"),
+    )
+)]
+pub async fn export_module(
+    State(state): State<ApiState>,
+    _user: CurrentUser,
+    Path(uuid): Path<Uuid>,
+) -> Result<Response, ApiError> {
+    let row: Option<ContentModuleRow> = sqlx::query_as(MODULE_SELECT_ONE)
+        .bind(uuid.to_string())
+        .fetch_optional(&state.db)
+        .await?;
+    let module = row.ok_or(ApiError::NotFound)?.into_dto()?;
+    let slug = module.slug.clone();
+    let bundle = content::export_module(&state.db, module).await?;
+    let body = serde_json::to_string(&bundle).map_err(|e| ApiError::Internal(e.into()))?;
+    Ok((
+        StatusCode::OK,
+        [
+            (header::CONTENT_TYPE, "application/json".to_string()),
+            (
+                header::CONTENT_DISPOSITION,
+                format!("attachment; filename=\"{slug}.lorebundle\""),
+            ),
+        ],
+        body,
+    )
+        .into_response())
+}
+
+/// `POST /api/modules/import` — install a `.lorebundle` (ContentBundle) as
+/// an `uploaded` module. Available to any authenticated member; slug
+/// collisions reject the whole package.
+#[utoipa::path(
+    post,
+    path = "/api/modules/import",
+    tag = "modules",
+    operation_id = "import_module",
+    security(("bearer" = [])),
+    request_body(content = String, description = "A complete ContentBundle JSON package"),
+    responses(
+        (status = 201, description = "Modules installed", body = InstallModuleResponse),
+        (status = 400, description = "Schema/slug/license problem"),
+    )
+)]
+pub async fn import_module(
+    State(state): State<ApiState>,
+    _user: CurrentUser,
+    Json(bundle): Json<lorewyld_types::ContentBundle>,
+) -> Result<(StatusCode, Json<InstallModuleResponse>), ApiError> {
+    if bundle.modules.is_empty() {
+        return Err(ApiError::BadRequest("bundle contains no modules".into()));
+    }
+    let outcome = import_bundle(
+        &state.db,
+        &bundle,
+        &ImportOptions {
+            origin: ModuleOrigin::Uploaded,
+            on_slug_conflict: SlugConflict::Reject,
+            require_bundling_license: false,
+        },
+    )
+    .await
+    .map_err(|e| match e {
+        ImportError::Db(err) => ApiError::Internal(err),
+        other => ApiError::BadRequest(other.to_string()),
+    })?;
+    Ok((
+        StatusCode::CREATED,
+        Json(InstallModuleResponse {
+            installed: outcome.installed,
+            record_count: outcome.record_count as u32,
+        }),
+    ))
+}
+
+/// Gate-relevant module columns.
+struct ModuleMeta {
+    origin: ModuleOrigin,
+    created_by: Option<String>,
+    slug: String,
+}
+
+impl ModuleMeta {
+    fn is_creator(&self, user: &CurrentUser) -> bool {
+        user.admin || self.created_by.as_deref() == Some(user.uuid.to_string().as_str())
+    }
+}
+
+async fn load_module_meta(
+    db: &sqlx::SqlitePool,
+    uuid: &str,
+) -> Result<Option<ModuleMeta>, ApiError> {
+    let row: Option<(String, Option<String>, String)> = sqlx::query_as(
+        "SELECT origin, created_by_user_uuid, slug FROM content_module WHERE uuid = ?",
+    )
+    .bind(uuid)
+    .fetch_optional(db)
+    .await?;
+    Ok(row.map(|(origin, created_by, slug)| ModuleMeta {
+        origin: crate::content::module_origin_from_str(&origin).unwrap_or(ModuleOrigin::Uploaded),
+        created_by,
+        slug,
+    }))
+}
+
+/// Cross-module references surface as FK violations on uninstall — a
+/// client problem, not a server bug.
+fn map_fk_conflict(err: sqlx::Error) -> ApiError {
+    if matches!(&err, sqlx::Error::Database(db) if db.is_foreign_key_violation()) {
+        ApiError::BadRequest(
+            "module content is referenced by other installed modules; uninstall those first".into(),
+        )
+    } else {
+        err.into()
+    }
+}
+
+fn record_error(e: RecordError) -> ApiError {
+    match e {
+        RecordError::Invalid(m) => ApiError::BadRequest(m),
+        RecordError::Db(err) => ApiError::Internal(err),
+    }
 }
 
 /// `GET /api/modules/:uuid` — read a single module with its notes.

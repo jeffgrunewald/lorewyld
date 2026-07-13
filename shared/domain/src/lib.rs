@@ -7,8 +7,19 @@
 //! web), to WASM (web), and over FFI (Flutter mobile via
 //! `lorewyld-mobile-ffi`).
 
+pub mod authoring;
+pub mod guidance;
+pub mod guidance_profiles;
 pub mod sheet;
 
+pub use authoring::{
+    AUTHORABLE_CATEGORIES, EnumOption, FieldDef, FieldError, FieldKind, FieldSchema,
+    default_record, field_schema, validate_record, validate_value,
+};
+pub use guidance::{
+    Answer, AnswerOption, Axis, CandidateSets, GUIDANCE_VERSION, Question, Questionnaire,
+    Recommendation, RecommendationSet, Theme, guidance_questionnaire, recommend,
+};
 pub use sheet::{
     DerivedStats, NamedBonus, ability_modifier, derive_stats, initiative, passive_perception,
     proficiency_bonus, saving_throw_bonus, skill_bonus,

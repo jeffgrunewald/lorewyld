@@ -23,7 +23,10 @@ pub fn CharactersPage() -> impl IntoView {
             <div id="lw-page-root" hidden=true>
                 <header class="lw-page-header">
                     <h1 class="lw-page-title">"Characters"</h1>
-                    <a href="/characters/new" class="lw-btn lw-btn-filled lw-btn-link">"New character"</a>
+                    <div class="lw-toolbar">
+                        <a href="/characters/new/guided" class="lw-btn lw-btn-tonal lw-btn-link">"Guided"</a>
+                        <a href="/characters/new" class="lw-btn lw-btn-filled lw-btn-link">"New character"</a>
+                    </div>
                 </header>
                 <ul id="lw-char-list" class="lw-list"></ul>
                 <p id="lw-char-status" class="lw-picker-status">"Loading…"</p>
@@ -34,7 +37,8 @@ pub fn CharactersPage() -> impl IntoView {
 }
 
 /// `/characters/new` — vertical stepper: name → species → class →
-/// background & alignment. Only the name is required.
+/// background & alignment. Only the name is required. Arriving from the
+/// guided quiz pre-selects species/class/background/alignment/abilities.
 #[component]
 pub fn CharacterNewPage() -> impl IntoView {
     view! {
@@ -49,9 +53,38 @@ pub fn CharacterNewPage() -> impl IntoView {
                 <header class="lw-page-header">
                     <h1 class="lw-page-title">"New character"</h1>
                 </header>
+                <p class="lw-page-subtitle">
+                    "New to D&D? "
+                    <a href="/characters/new/guided">"Let the guided quiz suggest a build."</a>
+                </p>
                 <div id="lw-wizard" class="lw-stepper"></div>
             </div>
             <script inner_html=WIZARD_SCRIPT></script>
+        </section>
+    }
+}
+
+/// `/characters/new/guided` — the new-player quiz: nine questions about
+/// interests and play style, then ranked class/species/background
+/// suggestions that hand off to the create wizard as prefills.
+#[component]
+pub fn CharacterGuidedPage() -> impl IntoView {
+    view! {
+        <section class="lw-page">
+            <Breadcrumbs trail=vec![
+                Crumb::link("Home", "/"),
+                Crumb::link("Characters", "/characters"),
+                Crumb::link("New character", "/characters/new"),
+                Crumb::here("Guided"),
+            ]/>
+            <LoginRequired/>
+            <div id="lw-page-root" hidden=true>
+                <header class="lw-page-header">
+                    <h1 class="lw-page-title">"Find your character"</h1>
+                </header>
+                <div id="lw-guidance" class="lw-guidance"></div>
+            </div>
+            <script inner_html=GUIDED_SCRIPT></script>
         </section>
     }
 }
@@ -134,6 +167,14 @@ const LIST_SCRIPT: &str = r#"
 })();
 "#;
 
+const GUIDED_SCRIPT: &str = r#"
+(function () {
+    window.lwContent.requireAuth(function () {
+        window.lwGuidance.mount(document.getElementById('lw-guidance'));
+    });
+})();
+"#;
+
 const WIZARD_SCRIPT: &str = r#"
 (function () {
     const C = window.lwContent;
@@ -146,15 +187,34 @@ const WIZARD_SCRIPT: &str = r#"
         characterClass: null, // FULL record (grants need prof_saving_throws)
         background: null,
         alignment: '',
+        abilities: null,      // guided-quiz suggestion; null = all 10s
         creating: false,
     };
     let alignments = [];
 
+    /* Prefill from the guided quiz, when one just finished. takePicks
+     * clears the stash so a plain reload starts blank. */
+    function applyGuidedPicks() {
+        const picks = window.lwGuidance && window.lwGuidance.takePicks();
+        if (!picks) return Promise.resolve();
+        if (picks.species) state.species = picks.species;
+        if (picks.background) state.background = picks.background;
+        if (picks.alignment) state.alignment = picks.alignment;
+        if (picks.abilities) state.abilities = picks.abilities;
+        if (!picks.class_uuid) return Promise.resolve();
+        // Summaries omit prof_saving_throws; grants need the full record.
+        return C.fetchEntry('class', picks.class_uuid).then(function (full) {
+            state.characterClass = full;
+        }).catch(function () {});
+    }
+
     C.requireAuth(function () {
-        C.fetchTable('alignment').then(function (records) {
-            alignments = records.map(function (r) { return C.humanizeSlug(String(r.name)); });
-            render();
-        }).catch(function () { render(); });
+        Promise.all([
+            C.fetchTable('alignment').then(function (records) {
+                alignments = records.map(function (r) { return C.humanizeSlug(String(r.name)); });
+            }).catch(function () {}),
+            applyGuidedPicks(),
+        ]).then(render);
     });
 
     function pickerField(label, current, onPick, onClear) {
@@ -292,11 +352,15 @@ const WIZARD_SCRIPT: &str = r#"
         render();
 
         // Class grants: saving throws, and 1st-level max HP = hit die
-        // maximum + Con modifier (Con starts at 10 → modifier 0).
-        // Prefilled, never enforced.
+        // maximum + Con modifier (Con is 10 unless the guided quiz
+        // suggested scores). Prefilled, never enforced.
         const cls = state.characterClass;
+        const abilities = state.abilities || {
+            strength: 10, dexterity: 10, constitution: 10,
+            intelligence: 10, wisdom: 10, charisma: 10,
+        };
         const hitDie = cls && typeof cls.hit_dice === 'number' ? Math.trunc(cls.hit_dice) : null;
-        const conMod = C.abilityMod(10);
+        const conMod = C.abilityMod(abilities.constitution);
         const startingHp = hitDie != null ? Math.max(1, hitDie + conMod) : 1;
         const saves = cls && Array.isArray(cls.prof_saving_throws)
             ? cls.prof_saving_throws.filter(function (s) { return ABILITY_KEYS.includes(s); })
@@ -309,10 +373,7 @@ const WIZARD_SCRIPT: &str = r#"
             level: 1,
             background: state.background ? String(state.background.name) : '',
             alignment: state.alignment,
-            abilities: {
-                strength: 10, dexterity: 10, constitution: 10,
-                intelligence: 10, wisdom: 10, charisma: 10,
-            },
+            abilities: abilities,
             saving_throw_proficiencies: saves,
             skill_proficiencies: [],
             armor_class: 10,

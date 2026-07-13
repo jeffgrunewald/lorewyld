@@ -1,6 +1,7 @@
 pub mod admin;
 pub mod admin_modules;
 pub mod auth;
+pub mod authoring;
 pub mod characters;
 pub mod compendium;
 pub mod error;
@@ -107,8 +108,20 @@ impl ApiServer {
             )
             .route("/api/content/counts", get(compendium::content_counts))
             .route("/api/content/recent", get(compendium::recent_content))
-            .route("/api/content/{category}", get(compendium::list_category))
-            .route("/api/content/{category}/{uuid}", get(compendium::get_entry))
+            .route(
+                "/api/content/{category}",
+                get(compendium::list_category).post(authoring::create_content),
+            )
+            .route(
+                "/api/content/{category}/schema",
+                get(authoring::content_schema),
+            )
+            .route(
+                "/api/content/{category}/{uuid}",
+                get(compendium::get_entry)
+                    .patch(authoring::update_content)
+                    .delete(authoring::delete_content),
+            )
             .route(
                 "/api/characters",
                 get(characters::list_characters).post(characters::create_character),
@@ -153,11 +166,29 @@ impl ApiServer {
                 "/api/modules",
                 get(modules::list_modules).post(modules::publish_module),
             )
-            .route("/api/modules/{uuid}", get(modules::get_module))
+            .route("/api/modules/custom", post(modules::create_custom_module))
+            .route("/api/modules/editable", get(modules::list_editable_modules))
+            .route(
+                "/api/modules/import",
+                post(modules::import_module)
+                    // The body is a whole ContentBundle package.
+                    .layer(axum::extract::DefaultBodyLimit::max(64 * 1024 * 1024)),
+            )
+            .route(
+                "/api/modules/{uuid}",
+                get(modules::get_module)
+                    .patch(modules::update_custom_module)
+                    .delete(modules::delete_custom_module),
+            )
+            .route("/api/modules/{uuid}/export", get(modules::export_module))
             .with_state(api_state);
 
         let style_version = crate::web::StyleVersion::from_asset_mtime("assets/style.css");
         let script_version = crate::web::StyleVersion::from_asset_mtime("assets/lw-content.js");
+        let authoring_script_version =
+            crate::web::StyleVersion::from_asset_mtime("assets/lw-content-authoring.js");
+        let guidance_script_version =
+            crate::web::StyleVersion::from_asset_mtime("assets/lw-guidance.js");
         let leptos_router: Router<()> = Router::new()
             .nest_service("/assets", ServeDir::new("assets"))
             .leptos_routes(&leptos, routes, {
@@ -169,6 +200,8 @@ impl ApiServer {
                         instance_name.clone(),
                         style_version.clone(),
                         script_version.clone(),
+                        authoring_script_version.clone(),
+                        guidance_script_version.clone(),
                     )
                 }
             })

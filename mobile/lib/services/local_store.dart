@@ -58,7 +58,7 @@ class LocalStore {
 
   LocalStore._(this._db);
 
-  static const _schemaVersion = 3;
+  static const _schemaVersion = 4;
 
   /// SRD/content reference tables, mirroring the server's doc-style
   /// layout: identity + a few indexed filter columns, full record JSON
@@ -112,12 +112,19 @@ class LocalStore {
       final moduleRef = table == 'content_module'
           ? ''
           : 'content_module_uuid TEXT,';
+      // `origin` (content_module only) distinguishes bundled/uploaded
+      // reference modules from `local` homebrew the user authors into —
+      // the only editable origin. Mirrors the server's column.
+      final originCol = table == 'content_module'
+          ? "origin TEXT NOT NULL DEFAULT 'bundled',"
+          : '';
       await db.execute('''
         CREATE TABLE IF NOT EXISTS "$table" (
           uuid TEXT PRIMARY KEY NOT NULL,
           key  TEXT NOT NULL UNIQUE,
           slug TEXT NOT NULL,
           name TEXT NOT NULL,
+          $originCol
           $moduleRef
           $extras
           data TEXT NOT NULL
@@ -172,6 +179,14 @@ class LocalStore {
     }
   }
 
+  /// v3 → v4: content_module gains `origin` (existing rows are all
+  /// bundled SRD content; user-authored `local` modules come later).
+  static Future<void> _upgradeToV4(Database db) async {
+    await db.execute(
+      "ALTER TABLE content_module ADD COLUMN origin TEXT NOT NULL DEFAULT 'bundled'",
+    );
+  }
+
   static Future<LocalStore> open({String? path}) async {
     final dbPath = path ?? '${await getDatabasesPath()}/lorewyld_local.db';
     final db = await openDatabase(
@@ -223,6 +238,11 @@ class LocalStore {
           // Fresh v2→v3 only: the v1→v2 path above already created the
           // tables in their v3 shape.
           await _upgradeToV3(db);
+        }
+        if (oldVersion >= 2 && oldVersion < 4) {
+          // v1→v2 created content_module in its current shape (with
+          // origin); only pre-existing v2/v3 tables need the ALTER.
+          await _upgradeToV4(db);
         }
       },
     );

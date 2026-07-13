@@ -3,6 +3,8 @@
 
 // ignore_for_file: unused_import, unused_element, unnecessary_import, duplicate_ignore, invalid_use_of_internal_member, annotate_overrides, non_constant_identifier_names, curly_braces_in_flow_control_structures, prefer_const_literals_to_create_immutables, unused_field
 
+import 'api/authoring.dart';
+import 'api/guidance.dart';
 import 'api/sheet.dart';
 import 'dart:async';
 import 'dart:convert';
@@ -64,7 +66,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => -1991219191;
+  int get rustContentHash => 335873899;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -78,9 +80,25 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 abstract class RustLibApi extends BaseApi {
   int crateApiSheetAbilityModifier({required int score});
 
+  String crateApiAuthoringDefaultRecord({required String category});
+
   DerivedStats crateApiSheetDeriveStats({required String sheetJson});
 
+  String crateApiAuthoringFieldSchema({required String category});
+
+  String crateApiGuidanceGuidanceQuestionnaire();
+
+  String crateApiGuidanceGuidanceRecommend({
+    required String answersJson,
+    required String candidatesJson,
+  });
+
   int crateApiSheetProficiencyBonus({required int level});
+
+  String crateApiAuthoringValidateRecord({
+    required String category,
+    required String inputJson,
+  });
 }
 
 class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
@@ -115,13 +133,36 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "ability_modifier", argNames: ["score"]);
 
   @override
+  String crateApiAuthoringDefaultRecord({required String category}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(category, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 2)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiAuthoringDefaultRecordConstMeta,
+        argValues: [category],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAuthoringDefaultRecordConstMeta =>
+      const TaskConstMeta(debugName: "default_record", argNames: ["category"]);
+
+  @override
   DerivedStats crateApiSheetDeriveStats({required String sheetJson}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(sheetJson, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 2)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 3)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_derived_stats,
@@ -138,13 +179,88 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "derive_stats", argNames: ["sheetJson"]);
 
   @override
+  String crateApiAuthoringFieldSchema({required String category}) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(category, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 4)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiAuthoringFieldSchemaConstMeta,
+        argValues: [category],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAuthoringFieldSchemaConstMeta =>
+      const TaskConstMeta(debugName: "field_schema", argNames: ["category"]);
+
+  @override
+  String crateApiGuidanceGuidanceQuestionnaire() {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiGuidanceGuidanceQuestionnaireConstMeta,
+        argValues: [],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiGuidanceGuidanceQuestionnaireConstMeta =>
+      const TaskConstMeta(debugName: "guidance_questionnaire", argNames: []);
+
+  @override
+  String crateApiGuidanceGuidanceRecommend({
+    required String answersJson,
+    required String candidatesJson,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(answersJson, serializer);
+          sse_encode_String(candidatesJson, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiGuidanceGuidanceRecommendConstMeta,
+        argValues: [answersJson, candidatesJson],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiGuidanceGuidanceRecommendConstMeta =>
+      const TaskConstMeta(
+        debugName: "guidance_recommend",
+        argNames: ["answersJson", "candidatesJson"],
+      );
+
+  @override
   int crateApiSheetProficiencyBonus({required int level}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_i_32(level, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 3)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_i_32,
@@ -159,6 +275,36 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
 
   TaskConstMeta get kCrateApiSheetProficiencyBonusConstMeta =>
       const TaskConstMeta(debugName: "proficiency_bonus", argNames: ["level"]);
+
+  @override
+  String crateApiAuthoringValidateRecord({
+    required String category,
+    required String inputJson,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(category, serializer);
+          sse_encode_String(inputJson, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiAuthoringValidateRecordConstMeta,
+        argValues: [category, inputJson],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiAuthoringValidateRecordConstMeta =>
+      const TaskConstMeta(
+        debugName: "validate_record",
+        argNames: ["category", "inputJson"],
+      );
 
   @protected
   String dco_decode_String(dynamic raw) {

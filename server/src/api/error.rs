@@ -30,6 +30,9 @@ pub enum ApiError {
     /// Request body or path parameters were malformed beyond what serde
     /// caught.
     BadRequest(String),
+    /// Content-authoring input failed field-level validation. Carries the
+    /// per-field errors so clients can highlight the offending inputs.
+    Validation(Vec<lorewyld_domain::FieldError>),
     /// Catch-all for unexpected failures (database errors, etc.).
     Internal(anyhow::Error),
 }
@@ -59,8 +62,28 @@ struct ErrorBody<'a> {
     message: &'a str,
 }
 
+#[derive(Serialize)]
+struct ValidationBody<'a> {
+    code: &'a str,
+    message: &'a str,
+    errors: &'a [lorewyld_domain::FieldError],
+}
+
 impl IntoResponse for ApiError {
     fn into_response(self) -> Response {
+        // Validation errors carry a per-field list, so they render with a
+        // richer body than the shared code/message shape.
+        if let Self::Validation(errors) = &self {
+            return (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                Json(ValidationBody {
+                    code: "validation_error",
+                    message: "one or more fields are invalid",
+                    errors,
+                }),
+            )
+                .into_response();
+        }
         let (status, code, message) = match &self {
             Self::InvalidJoinCode => (
                 StatusCode::FORBIDDEN,
@@ -98,6 +121,8 @@ impl IntoResponse for ApiError {
                 "resource not found".to_string(),
             ),
             Self::BadRequest(detail) => (StatusCode::BAD_REQUEST, "bad_request", detail.clone()),
+            // Rendered with its richer body in the early return above.
+            Self::Validation(_) => unreachable!("validation errors handled before this match"),
             Self::Internal(err) => {
                 error!(error = ?err, "internal server error");
                 (

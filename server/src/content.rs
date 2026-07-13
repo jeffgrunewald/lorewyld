@@ -8,13 +8,20 @@
 //! and record counts all derive from it.
 
 use anyhow::{Context, Result, bail};
+use chrono::Utc;
 use lorewyld_types::{
-    Armor, Background, Class, ContentBundle, ContentModule, Creature, Feat, Item,
-    MIN_SUPPORTED_SCHEMA_VERSION, ModuleOrigin, SCHEMA_VERSION, Species, Spell, Weapon,
+    AbilityScoreEntry, Alignment, Armor, Background, Class, Condition, ContentBundle,
+    ContentModule, Creature, CreatureType, DamageType, Document, Environment, Feat, Item,
+    ItemCategory, Language, License, LicenseKind, MIN_SUPPORTED_SCHEMA_VERSION, ModuleOrigin,
+    Publisher, SCHEMA_VERSION, SchemaVersion, Size, Skill, Species, Spell, SpellSchool, Weapon,
+    WeaponPropertyDef,
 };
 use serde::Serialize;
+use serde::de::DeserializeOwned;
 use serde_json::Value;
 use sqlx::{Sqlite, SqlitePool, Transaction};
+use std::collections::HashSet;
+use uuid::Uuid;
 
 const SRD_BUNDLE_JSON: &str = include_str!("../../content/srd-bundle.json");
 
@@ -23,6 +30,12 @@ const SRD_BUNDLE_JSON: &str = include_str!("../../content/srd-bundle.json");
 /// references — it can never be disabled or removed. Mirrors the
 /// mobile app's `ContentStore.pinnedModuleSlug`.
 pub const PINNED_MODULE_SLUG: &str = "srd";
+
+/// Reserved slug of the per-server default homebrew module. Authored
+/// content lands here unless reassigned to another `local` module. Like
+/// [`PINNED_MODULE_SLUG`] it is created lazily, on the first authoring
+/// action, by [`ensure_homebrew_module`].
+pub const HOMEBREW_MODULE_SLUG: &str = "homebrew";
 
 /// One content table's shape, as far as the importer and the
 /// compendium API need to know it.
@@ -229,7 +242,15 @@ pub fn category_spec(table: &str) -> Option<&'static CategorySpec> {
 /// each type's `summary()` (e.g. `Spell::summary` → `SpellSummary`).
 /// Inc 3b extends this to the remaining display categories.
 pub const SUMMARY_TABLES: &[&str] = &[
-    "spell", "creature", "class", "species", "feat", "background", "weapon", "armor", "item",
+    "spell",
+    "creature",
+    "class",
+    "species",
+    "feat",
+    "background",
+    "weapon",
+    "armor",
+    "item",
 ];
 
 pub fn has_summary(table: &str) -> bool {
@@ -306,6 +327,7 @@ pub fn module_origin_to_str(origin: ModuleOrigin) -> &'static str {
         ModuleOrigin::Bundled => "bundled",
         ModuleOrigin::Uploaded => "uploaded",
         ModuleOrigin::Published => "published",
+        ModuleOrigin::Local => "local",
     }
 }
 
@@ -314,6 +336,7 @@ pub fn module_origin_from_str(s: &str) -> Option<ModuleOrigin> {
         "bundled" => Some(ModuleOrigin::Bundled),
         "uploaded" => Some(ModuleOrigin::Uploaded),
         "published" => Some(ModuleOrigin::Published),
+        "local" => Some(ModuleOrigin::Local),
         _ => None,
     }
 }
@@ -820,6 +843,419 @@ where
     Ok(inserted)
 }
 
+// ─── Homebrew authoring ─────────────────────────────────────────────────
+
+/// Outcome of persisting one user-authored content record.
+#[derive(Debug)]
+pub enum RecordError {
+    /// The record failed structural validation (didn't deserialize into
+    /// its typed struct) or named an unknown category — a 4xx.
+    Invalid(String),
+    /// An unexpected database failure — a 5xx.
+    Db(anyhow::Error),
+}
+
+impl std::fmt::Display for RecordError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Invalid(m) => write!(f, "{m}"),
+            Self::Db(e) => write!(f, "{e}"),
+        }
+    }
+}
+
+fn db_err(e: impl Into<anyhow::Error>) -> RecordError {
+    RecordError::Db(e.into())
+}
+
+/// The reserved-slug default homebrew module, plus its attribution
+/// document, both created on first use.
+pub struct HomebrewModule {
+    pub module_uuid: String,
+    pub document_uuid: String,
+}
+
+/// Returns the per-server homebrew module, creating it (and its
+/// attribution `Document`) if it doesn't exist yet. Mirrors how the SRD
+/// module is the pinned shared-vocabulary module: `homebrew` is the
+/// pinned default authoring target.
+pub async fn ensure_homebrew_module(db: &SqlitePool) -> Result<HomebrewModule> {
+    if let Some((module_uuid,)) =
+        sqlx::query_as::<_, (String,)>("SELECT uuid FROM content_module WHERE slug = ?")
+            .bind(HOMEBREW_MODULE_SLUG)
+            .fetch_optional(db)
+            .await?
+    {
+        let document_uuid = ensure_module_document(db, &module_uuid, "Homebrew").await?;
+        return Ok(HomebrewModule {
+            module_uuid,
+            document_uuid,
+        });
+    }
+
+    let now = Utc::now();
+    let module = ContentModule {
+        uuid: Uuid::new_v4(),
+        name: "Homebrew".to_string(),
+        slug: HOMEBREW_MODULE_SLUG.to_string(),
+        license: LicenseKind::Unlicensed,
+        license_url: None,
+        schema_version: SCHEMA_VERSION,
+        release_date: None,
+        authors: Vec::new(),
+        publisher: None,
+        description: Some("Content you author on this server.".to_string()),
+        website_url: None,
+        is_active: true,
+        // Sorts after the bundled modules in management lists.
+        ordering: 1000,
+        version_string: "1.0.0".to_string(),
+        previous_version_uuid: None,
+        published_at: None,
+        created_at: now,
+        updated_at: now,
+    };
+    let mut tx = db.begin().await?;
+    insert_module(&mut tx, &module, ModuleOrigin::Local)
+        .await
+        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    tx.commit().await?;
+
+    let module_uuid = module.uuid.to_string();
+    let document_uuid = ensure_module_document(db, &module_uuid, "Homebrew").await?;
+    Ok(HomebrewModule {
+        module_uuid,
+        document_uuid,
+    })
+}
+
+/// Returns the (single) attribution document uuid for a local module,
+/// creating one if absent. Records authored under the module reference
+/// it via `document_uuid` so the compendium renders a source label.
+pub async fn ensure_module_document(
+    db: &SqlitePool,
+    module_uuid: &str,
+    module_name: &str,
+) -> Result<String> {
+    if let Some((uuid,)) = sqlx::query_as::<_, (String,)>(
+        "SELECT uuid FROM document WHERE content_module_uuid = ? LIMIT 1",
+    )
+    .bind(module_uuid)
+    .fetch_optional(db)
+    .await?
+    {
+        return Ok(uuid);
+    }
+    let now = Utc::now();
+    let doc_uuid = Uuid::new_v4();
+    let module_uuid_parsed = Uuid::parse_str(module_uuid)?;
+    let document = Document {
+        uuid: doc_uuid,
+        content_module_uuid: module_uuid_parsed,
+        name: module_name.to_string(),
+        slug: slugify(module_name),
+        // Document keys are globally UNIQUE; scope to the module.
+        key: format!("doc-{module_uuid}"),
+        desc: None,
+        license_uuid: Uuid::nil(),
+        publisher_uuid: Uuid::nil(),
+        gamesystem_key: "5e-2014".to_string(),
+        permalink: None,
+        author: None,
+        published_on: None,
+        is_restricted: false,
+        created_at: now,
+        updated_at: now,
+    };
+    let data = serde_json::to_string(&document)?;
+    sqlx::query(
+        "INSERT INTO document (uuid, content_module_uuid, key, slug, name, data) \
+         VALUES (?, ?, ?, ?, ?, ?)",
+    )
+    .bind(doc_uuid.to_string())
+    .bind(module_uuid)
+    .bind(&document.key)
+    .bind(&document.slug)
+    .bind(&document.name)
+    .bind(data)
+    .execute(db)
+    .await?;
+    Ok(doc_uuid.to_string())
+}
+
+/// The provenance of a module by uuid, or `None` if no such module.
+pub async fn module_origin(db: &SqlitePool, module_uuid: &str) -> Result<Option<ModuleOrigin>> {
+    let row: Option<(String,)> = sqlx::query_as("SELECT origin FROM content_module WHERE uuid = ?")
+        .bind(module_uuid)
+        .fetch_optional(db)
+        .await?;
+    Ok(row.and_then(|(o,)| module_origin_from_str(&o)))
+}
+
+/// Fields needed to author a new custom (`local`) content module.
+pub struct NewCustomModule {
+    pub name: String,
+    pub slug: String,
+    pub license: LicenseKind,
+    pub license_url: Option<String>,
+    pub description: Option<String>,
+    pub authors: Vec<String>,
+    pub website_url: Option<String>,
+    /// The creating user's uuid (gates later edit/delete).
+    pub created_by: String,
+}
+
+/// Creates a user-authored `local` module (plus its attribution document)
+/// that homebrew content can be assigned to. The slug is normalized and
+/// must be unique.
+pub async fn create_custom_module(
+    db: &SqlitePool,
+    req: NewCustomModule,
+) -> Result<ContentModule, RecordError> {
+    let slug = slugify(&req.slug);
+    if slug.is_empty() {
+        return Err(RecordError::Invalid("module slug cannot be empty".into()));
+    }
+    let clash: Option<(i64,)> = sqlx::query_as("SELECT 1 FROM content_module WHERE slug = ?")
+        .bind(&slug)
+        .fetch_optional(db)
+        .await
+        .map_err(db_err)?;
+    if clash.is_some() {
+        return Err(RecordError::Invalid(format!(
+            "a module with slug '{slug}' already exists"
+        )));
+    }
+
+    let now = Utc::now();
+    let module = ContentModule {
+        uuid: Uuid::new_v4(),
+        name: req.name,
+        slug,
+        license: req.license,
+        license_url: req.license_url,
+        schema_version: SCHEMA_VERSION,
+        release_date: None,
+        authors: req.authors,
+        publisher: None,
+        description: req.description,
+        website_url: req.website_url,
+        is_active: true,
+        ordering: 1000,
+        version_string: "1.0.0".to_string(),
+        previous_version_uuid: None,
+        published_at: None,
+        created_at: now,
+        updated_at: now,
+    };
+    let mut tx = db.begin().await.map_err(db_err)?;
+    insert_module(&mut tx, &module, ModuleOrigin::Local)
+        .await
+        .map_err(|e| RecordError::Db(anyhow::anyhow!("{e}")))?;
+    tx.commit().await.map_err(db_err)?;
+
+    let module_uuid = module.uuid.to_string();
+    sqlx::query("UPDATE content_module SET created_by_user_uuid = ? WHERE uuid = ?")
+        .bind(&req.created_by)
+        .bind(&module_uuid)
+        .execute(db)
+        .await
+        .map_err(db_err)?;
+    ensure_module_document(db, &module_uuid, &module.name)
+        .await
+        .map_err(db_err)?;
+    Ok(module)
+}
+
+/// Loads every record of one table belonging to a module, decoded from the
+/// stored `data` JSON into its typed form.
+async fn load_module_table<T: DeserializeOwned>(
+    db: &SqlitePool,
+    table: &str,
+    module_uuid: &str,
+) -> Result<Vec<T>> {
+    let rows: Vec<(String,)> = sqlx::query_as(&format!(
+        "SELECT data FROM {table} WHERE content_module_uuid = ?"
+    ))
+    .bind(module_uuid)
+    .fetch_all(db)
+    .await?;
+    rows.into_iter()
+        .map(|(data,)| serde_json::from_str::<T>(&data).map_err(Into::into))
+        .collect()
+}
+
+/// Assembles a self-contained [`ContentBundle`] for one module: the module
+/// row plus every record it owns, decoded from storage. The inverse of
+/// [`import_bundle`] — the same artifact re-imports on another instance or
+/// re-seeds this one. Records load by table so the result is dependency-
+/// ordered for re-import.
+pub async fn export_module(db: &SqlitePool, module: ContentModule) -> Result<ContentBundle> {
+    let u = module.uuid.to_string();
+    Ok(ContentBundle {
+        schema: SchemaVersion {
+            version: SCHEMA_VERSION,
+            min_supported: MIN_SUPPORTED_SCHEMA_VERSION,
+        },
+        modules: vec![module],
+        licenses: load_module_table::<License>(db, "license", &u).await?,
+        publishers: load_module_table::<Publisher>(db, "publisher", &u).await?,
+        documents: load_module_table::<Document>(db, "document", &u).await?,
+        ability_scores: load_module_table::<AbilityScoreEntry>(db, "ability_score", &u).await?,
+        skills: load_module_table::<Skill>(db, "skill", &u).await?,
+        alignments: load_module_table::<Alignment>(db, "alignment", &u).await?,
+        damage_types: load_module_table::<DamageType>(db, "damage_type", &u).await?,
+        conditions: load_module_table::<Condition>(db, "condition", &u).await?,
+        languages: load_module_table::<Language>(db, "language", &u).await?,
+        sizes: load_module_table::<Size>(db, "size", &u).await?,
+        environments: load_module_table::<Environment>(db, "environment", &u).await?,
+        spell_schools: load_module_table::<SpellSchool>(db, "spell_school", &u).await?,
+        creature_types: load_module_table::<CreatureType>(db, "creature_type", &u).await?,
+        item_categories: load_module_table::<ItemCategory>(db, "item_category", &u).await?,
+        weapon_properties: load_module_table::<WeaponPropertyDef>(db, "weapon_property", &u)
+            .await?,
+        spells: load_module_table::<Spell>(db, "spell", &u).await?,
+        creatures: load_module_table::<Creature>(db, "creature", &u).await?,
+        classes: load_module_table::<Class>(db, "class", &u).await?,
+        species: load_module_table::<Species>(db, "species", &u).await?,
+        feats: load_module_table::<Feat>(db, "feat", &u).await?,
+        backgrounds: load_module_table::<Background>(db, "background", &u).await?,
+        weapons: load_module_table::<Weapon>(db, "weapon", &u).await?,
+        armors: load_module_table::<Armor>(db, "armor", &u).await?,
+        items: load_module_table::<Item>(db, "item", &u).await?,
+    })
+}
+
+/// Inserts (or replaces, for the edit path) one user-authored content
+/// record. Reuses the bundle insert path so the materialized `summary`
+/// column and indexed filter columns stay single-sourced. The record's
+/// `content_module_uuid` must already name a `local` module — callers
+/// enforce the editable-module rule. `created_by_user_uuid` is set
+/// separately by the caller, since it is a column rather than a record
+/// field.
+pub async fn upsert_content_record(
+    db: &SqlitePool,
+    category: &str,
+    value: Value,
+) -> Result<(), RecordError> {
+    if category_spec(category).is_none() {
+        return Err(RecordError::Invalid(format!("unknown category {category}")));
+    }
+    let uuid = json_str(&value, "uuid")?;
+    let module_uuid = json_str(&value, "content_module_uuid")?;
+    let allowed: HashSet<String> = std::iter::once(module_uuid).collect();
+
+    let mut tx = db.begin().await.map_err(db_err)?;
+    // Replace any prior row (the edit path rebuilds the whole record).
+    sqlx::query(&format!("DELETE FROM {category} WHERE uuid = ?"))
+        .bind(&uuid)
+        .execute(&mut *tx)
+        .await
+        .map_err(db_err)?;
+    insert_authored_record(&mut tx, category, &allowed, value).await?;
+    tx.commit().await.map_err(db_err)?;
+    Ok(())
+}
+
+/// Deletes one content record. Returns whether a row was removed.
+/// Callers gate on authorship + the editable-module rule.
+pub async fn delete_content_record(
+    db: &SqlitePool,
+    category: &str,
+    uuid: &str,
+) -> Result<bool, RecordError> {
+    if category_spec(category).is_none() {
+        return Err(RecordError::Invalid(format!("unknown category {category}")));
+    }
+    let res = sqlx::query(&format!("DELETE FROM {category} WHERE uuid = ?"))
+        .bind(uuid)
+        .execute(db)
+        .await
+        .map_err(db_err)?;
+    Ok(res.rows_affected() > 0)
+}
+
+/// Deserializes the record into its typed struct (the authoritative
+/// structural guard) and inserts it via the shared bundle path.
+async fn insert_authored_record(
+    tx: &mut Transaction<'_, Sqlite>,
+    category: &str,
+    allowed: &HashSet<String>,
+    value: Value,
+) -> Result<(), RecordError> {
+    /// Deserialize, then insert the single record with its materialized
+    /// summary, mapping a serde failure to a 4xx.
+    macro_rules! summarized {
+        ($ty:ty) => {{
+            let record: $ty = serde_json::from_value(value)
+                .map_err(|e| RecordError::Invalid(format!("invalid {category}: {e}")))?;
+            insert_records_summarized(
+                tx,
+                allowed,
+                category,
+                spec_extras(category),
+                &[record],
+                |r: &$ty| r.summary(),
+            )
+            .await
+            .map_err(RecordError::Db)?;
+        }};
+    }
+    macro_rules! lookup {
+        ($ty:ty) => {{
+            let record: $ty = serde_json::from_value(value)
+                .map_err(|e| RecordError::Invalid(format!("invalid {category}: {e}")))?;
+            insert_records(tx, allowed, category, &[], &[record])
+                .await
+                .map_err(RecordError::Db)?;
+        }};
+    }
+    match category {
+        "spell" => summarized!(Spell),
+        "creature" => summarized!(Creature),
+        "class" => summarized!(Class),
+        "species" => summarized!(Species),
+        "background" => summarized!(Background),
+        "feat" => summarized!(Feat),
+        "item" => summarized!(Item),
+        "weapon" => summarized!(Weapon),
+        "armor" => summarized!(Armor),
+        "condition" => lookup!(Condition),
+        "language" => lookup!(Language),
+        other => {
+            return Err(RecordError::Invalid(format!(
+                "category {other} is not authorable"
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn json_str(value: &Value, ptr: &str) -> Result<String, RecordError> {
+    value
+        .get(ptr)
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .ok_or_else(|| RecordError::Invalid(format!("record missing string field {ptr}")))
+}
+
+/// Lowercase, hyphen-joined slug of a display name (homebrew records and
+/// modules need a slug but users only supply a name).
+pub fn slugify(name: &str) -> String {
+    let mut slug = String::with_capacity(name.len());
+    let mut prev_dash = false;
+    for ch in name.chars() {
+        if ch.is_ascii_alphanumeric() {
+            slug.push(ch.to_ascii_lowercase());
+            prev_dash = false;
+        } else if !prev_dash && !slug.is_empty() {
+            slug.push('-');
+            prev_dash = true;
+        }
+    }
+    slug.trim_end_matches('-').to_string()
+}
+
 #[cfg(test)]
 mod compendium_contract {
     //! Drift guard for surface #2: the web (server/src/web/compendium.rs)
@@ -872,72 +1308,160 @@ mod compendium_contract {
             "spell",
             &keys_union(&bundle.spells),
             &[
-                "uuid", "key", "slug", "name", "level", "school", "concentration", "ritual",
-                "verbal", "somatic", "material", "material_specified", "casting_time",
-                "range_text", "duration", "description", "higher_level", "document_uuid",
+                "uuid",
+                "key",
+                "slug",
+                "name",
+                "level",
+                "school",
+                "concentration",
+                "ritual",
+                "verbal",
+                "somatic",
+                "material",
+                "material_specified",
+                "casting_time",
+                "range_text",
+                "duration",
+                "description",
+                "higher_level",
+                "document_uuid",
             ],
         );
         assert_fields(
             "creature",
             &keys_union(&bundle.creatures),
             &[
-                "uuid", "key", "slug", "name", "type", "size", "challenge_rating", "armor_class",
-                "armor_detail", "hit_points", "hit_dice", "speed", "ability_scores",
-                "experience_points", "languages", "actions", "document_uuid",
+                "uuid",
+                "key",
+                "slug",
+                "name",
+                "type",
+                "size",
+                "challenge_rating",
+                "armor_class",
+                "armor_detail",
+                "hit_points",
+                "hit_dice",
+                "speed",
+                "ability_scores",
+                "experience_points",
+                "languages",
+                "actions",
+                "document_uuid",
             ],
         );
         assert_fields(
             "class",
             &keys_union(&bundle.classes),
             &[
-                "uuid", "key", "slug", "name", "subclass_of", "caster_type", "hit_dice",
-                "prof_saving_throws", "prof_armor", "prof_weapons", "prof_skills", "features",
-                "desc", "document_uuid",
+                "uuid",
+                "key",
+                "slug",
+                "name",
+                "subclass_of",
+                "caster_type",
+                "hit_dice",
+                "prof_saving_throws",
+                "prof_armor",
+                "prof_weapons",
+                "prof_skills",
+                "features",
+                "desc",
+                "document_uuid",
             ],
         );
         assert_fields(
             "species",
             &keys_union(&bundle.species),
             &[
-                "uuid", "key", "slug", "name", "is_subspecies", "subspecies_of", "size", "speed",
-                "asi_desc", "traits", "desc", "document_uuid",
+                "uuid",
+                "key",
+                "slug",
+                "name",
+                "is_subspecies",
+                "subspecies_of",
+                "size",
+                "speed",
+                "asi_desc",
+                "traits",
+                "desc",
+                "document_uuid",
             ],
         );
         assert_fields(
             "feat",
             &keys_union(&bundle.feats),
             &[
-                "uuid", "key", "slug", "name", "has_prerequisite", "prerequisite", "benefits",
-                "desc", "document_uuid",
+                "uuid",
+                "key",
+                "slug",
+                "name",
+                "has_prerequisite",
+                "prerequisite",
+                "benefits",
+                "desc",
+                "document_uuid",
             ],
         );
         assert_fields(
             "background",
             &keys_union(&bundle.backgrounds),
-            &["uuid", "key", "slug", "name", "benefits", "desc", "document_uuid"],
+            &[
+                "uuid",
+                "key",
+                "slug",
+                "name",
+                "benefits",
+                "desc",
+                "document_uuid",
+            ],
         );
         assert_fields(
             "item",
             &keys_union(&bundle.items),
             &[
-                "uuid", "key", "slug", "name", "category_uuid", "cost", "weight", "is_magic",
-                "rarity", "requires_attunement", "desc", "document_uuid",
+                "uuid",
+                "key",
+                "slug",
+                "name",
+                "category_uuid",
+                "cost",
+                "weight",
+                "is_magic",
+                "rarity",
+                "requires_attunement",
+                "desc",
+                "document_uuid",
             ],
         );
         assert_fields(
             "weapon",
             &keys_union(&bundle.weapons),
             &[
-                "uuid", "key", "slug", "name", "is_simple", "damage_dice", "damage_type",
-                "properties", "document_uuid",
+                "uuid",
+                "key",
+                "slug",
+                "name",
+                "is_simple",
+                "damage_dice",
+                "damage_type",
+                "properties",
+                "document_uuid",
             ],
         );
         assert_fields(
             "armor",
             &keys_union(&bundle.armors),
             &[
-                "uuid", "key", "slug", "name", "category", "ac_display",
-                "grants_stealth_disadvantage", "document_uuid",
+                "uuid",
+                "key",
+                "slug",
+                "name",
+                "category",
+                "ac_display",
+                "grants_stealth_disadvantage",
+                "document_uuid",
             ],
         );
     }
@@ -964,7 +1488,8 @@ mod compendium_contract {
                         .and_then(|a| a.first())
                         .cloned()
                 });
-            let row = row.unwrap_or_else(|| panic!("{label}: no records carry a non-empty `{field}` list"));
+            let row = row
+                .unwrap_or_else(|| panic!("{label}: no records carry a non-empty `{field}` list"));
             assert!(
                 row.get("name").is_some() && row.get("desc").is_some(),
                 "{label} rows lost `name`/`desc` — update compendium clients' namedList rendering",

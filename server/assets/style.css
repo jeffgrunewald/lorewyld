@@ -1450,3 +1450,188 @@ input[type="checkbox"] {
 .lw-toolbar[hidden] {
     display: none;
 }
+
+/* ── content authoring forms (lw-content-authoring.js) ──────────────── */
+
+.lw-authoring-modal {
+    max-width: 560px;
+    width: 100%;
+    max-height: 85vh;
+    overflow-y: auto;
+}
+
+.lw-authoring-form {
+    display: flex;
+    flex-direction: column;
+}
+
+/* Helper text under a field control. */
+.lw-field-help {
+    margin: 0;
+    font-size: 0.8rem;
+    color: var(--lw-on-surface-muted);
+}
+
+/* Checkbox fields lay the box beside its label rather than above. */
+.lw-field-check {
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+}
+
+.lw-authoring-area {
+    font: inherit;
+    resize: vertical;
+}
+
+.lw-authoring-json {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.85rem;
+}
+
+.lw-confirm-text {
+    margin: 0 0 12px;
+    color: var(--lw-on-surface-muted);
+}
+
+/* ── New-player guidance quiz ─────────────────────────────────── */
+
+.lw-guidance {
+    max-width: 720px;
+}
+
+.lw-quiz-count {
+    margin: 0 0 6px;
+    font-size: 0.85rem;
+    color: var(--lw-on-surface-muted);
+}
+
+.lw-quiz-progress {
+    height: 6px;
+    border-radius: 3px;
+    background: var(--lw-purple-container);
+    overflow: hidden;
+    margin-bottom: 20px;
+}
+
+.lw-quiz-progress-fill {
+    display: block;
+    height: 100%;
+    background: var(--lw-purple);
+    border-radius: 3px;
+    transition: width 200ms ease;
+}
+
+.lw-quiz-prompt {
+    margin: 0 0 16px;
+    font-size: 1.25rem;
+}
+
+.lw-quiz-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+.lw-quiz-option {
+    text-align: left;
+    padding: 14px 18px;
+    border: 1px solid var(--lw-divider);
+    border-radius: 12px;
+    background: var(--lw-surface);
+    font: inherit;
+    color: var(--lw-on-surface);
+    cursor: pointer;
+}
+
+.lw-quiz-option:hover {
+    border-color: var(--lw-purple);
+}
+
+.lw-quiz-option-selected {
+    border-color: var(--lw-purple);
+    background: var(--lw-purple-container);
+    color: var(--lw-on-purple-container);
+}
+
+/* Results: top-3 cards per category */
+
+.lw-rec-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.lw-rec-card {
+    text-align: left;
+    padding: 14px 16px;
+    border: 1px solid var(--lw-divider);
+    border-radius: 12px;
+    background: var(--lw-surface);
+    font: inherit;
+    color: var(--lw-on-surface);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.lw-rec-card:hover {
+    border-color: var(--lw-purple);
+}
+
+.lw-rec-card-selected {
+    border-color: var(--lw-purple);
+    box-shadow: 0 0 0 1px var(--lw-purple);
+}
+
+.lw-rec-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.lw-rec-card-name {
+    font-weight: 600;
+}
+
+.lw-rec-card-score {
+    font-size: 0.8rem;
+    color: var(--lw-on-surface-muted);
+    white-space: nowrap;
+}
+
+.lw-rec-score {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--lw-purple-container);
+    overflow: hidden;
+}
+
+.lw-rec-score-fill {
+    display: block;
+    height: 100%;
+    background: var(--lw-purple);
+    border-radius: 2px;
+}
+
+.lw-rec-reasons {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 0.85rem;
+    color: var(--lw-on-surface-muted);
+}
+
+.lw-rec-reasons li + li {
+    margin-top: 4px;
+}
+
+.lw-rec-estimated {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--lw-outline);
+}

@@ -1,0 +1,12 @@
+ALTER TABLE language   DROP COLUMN created_by_user_uuid;
+ALTER TABLE condition  DROP COLUMN created_by_user_uuid;
+ALTER TABLE armor      DROP COLUMN created_by_user_uuid;
+ALTER TABLE weapon     DROP COLUMN created_by_user_uuid;
+ALTER TABLE item       DROP COLUMN created_by_user_uuid;
+ALTER TABLE feat       DROP COLUMN created_by_user_uuid;
+ALTER TABLE background DROP COLUMN created_by_user_uuid;
+ALTER TABLE species    DROP COLUMN created_by_user_uuid;
+ALTER TABLE class      DROP COLUMN created_by_user_uuid;
+ALTER TABLE creature   DROP COLUMN created_by_user_uuid;
+ALTER TABLE spell      DROP COLUMN created_by_user_uuid;
+ALTER TABLE content_module DROP COLUMN created_by_user_uuid;

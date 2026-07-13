@@ -7,6 +7,7 @@ import '../services/local_store.dart';
 import '../types/character.dart';
 import '../widgets/async_list_view.dart';
 import 'character_create_wizard_screen.dart';
+import 'character_guided_wizard_screen.dart';
 import 'character_sheet_screen.dart';
 
 class CharacterListScreen extends StatefulWidget {
@@ -36,9 +37,39 @@ class _CharacterListScreenState extends State<CharacterListScreen> {
   }
 
   Future<void> _createCharacter() async {
+    // Quick create jumps straight to the 4-step wizard; the guided quiz
+    // suggests class/species/background first, then lands in the same
+    // wizard with the picks prefilled.
+    final guided = await showModalBottomSheet<bool>(
+      context: context,
+      builder: (context) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.bolt),
+              title: const Text('Quick create'),
+              subtitle: const Text('Pick a name and go — choose the rest later'),
+              onTap: () => Navigator.of(context).pop(false),
+            ),
+            ListTile(
+              leading: const Icon(Icons.auto_awesome),
+              title: const Text('Help me choose'),
+              subtitle: const Text(
+                'A short quiz suggests a class, species, and background',
+              ),
+              onTap: () => Navigator.of(context).pop(true),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (guided == null || !mounted) return;
     final sheet = await Navigator.of(context).push<CharacterSheet>(
       MaterialPageRoute(
-        builder: (_) => CharacterCreateWizardScreen(store: widget.store),
+        builder: (_) => guided
+            ? CharacterGuidedWizardScreen(store: widget.store)
+            : CharacterCreateWizardScreen(store: widget.store),
       ),
     );
     if (sheet == null || !mounted) return;

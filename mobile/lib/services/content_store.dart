@@ -13,6 +13,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:sqflite/sqflite.dart';
 
 import '../types/bundled_module.dart';
+import '../util/uuid.dart';
 import 'local_store.dart';
 
 /// Bundle JSON field -> sqflite table, in import-dependency order, with
@@ -243,6 +244,193 @@ class ContentStore {
       whereArgs: [slug],
     );
     await importBundle(onProgress: onProgress);
+  }
+
+  // ── homebrew authoring ──────────────────────────────────────────────
+
+  static const homebrewModuleSlug = 'homebrew';
+  static const _nilUuid = '00000000-0000-0000-0000-000000000000';
+
+  _TableSpec _specFor(String table) =>
+      _specs.firstWhere((s) => s.table == table, orElse: () => _TableSpec('', table));
+
+  /// The `local` (homebrew) modules content can be authored into or
+  /// reassigned between — the editable origin.
+  Future<List<Map<String, dynamic>>> localModules() async {
+    final rows = await _db.query(
+      'content_module',
+      columns: ['data'],
+      where: 'origin = ?',
+      whereArgs: ['local'],
+      orderBy: 'name COLLATE NOCASE',
+    );
+    return rows
+        .map((r) => jsonDecode(r['data'] as String) as Map<String, dynamic>)
+        .toList();
+  }
+
+  Future<bool> isLocalModule(String moduleUuid) async {
+    final rows = await _db.query(
+      'content_module',
+      columns: ['origin'],
+      where: 'uuid = ?',
+      whereArgs: [moduleUuid],
+    );
+    return rows.isNotEmpty && rows.first['origin'] == 'local';
+  }
+
+  /// Returns the per-device Homebrew module + its attribution document,
+  /// creating them on first use (mirrors the server's lazy creation).
+  Future<({String moduleUuid, String documentUuid})>
+  ensureHomebrewModule() async {
+    final existing = await _db.query(
+      'content_module',
+      columns: ['uuid'],
+      where: 'slug = ?',
+      whereArgs: [homebrewModuleSlug],
+    );
+    final String moduleUuid;
+    if (existing.isNotEmpty) {
+      moduleUuid = existing.first['uuid'] as String;
+    } else {
+      moduleUuid = generateUuidV4();
+      final now = DateTime.now().toUtc().toIso8601String();
+      await _db.insert('content_module', {
+        'uuid': moduleUuid,
+        'key': homebrewModuleSlug,
+        'slug': homebrewModuleSlug,
+        'name': 'Homebrew',
+        'origin': 'local',
+        'data': jsonEncode({
+          'uuid': moduleUuid,
+          'name': 'Homebrew',
+          'slug': homebrewModuleSlug,
+          'license': 'unlicensed',
+          'schema_version': 2,
+          'authors': <String>[],
+          'is_active': true,
+          'ordering': 1000,
+          'version_string': '1.0.0',
+          'created_at': now,
+          'updated_at': now,
+        }),
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+    final documentUuid = await ensureModuleDocument(moduleUuid, 'Homebrew');
+    return (moduleUuid: moduleUuid, documentUuid: documentUuid);
+  }
+
+  /// The (single) attribution document for a local module, created if
+  /// absent, so authored records render a source label.
+  Future<String> ensureModuleDocument(String moduleUuid, String name) async {
+    final rows = await _db.query(
+      'document',
+      columns: ['uuid'],
+      where: 'content_module_uuid = ?',
+      whereArgs: [moduleUuid],
+      limit: 1,
+    );
+    if (rows.isNotEmpty) return rows.first['uuid'] as String;
+    final docUuid = generateUuidV4();
+    final now = DateTime.now().toUtc().toIso8601String();
+    await _db.insert('document', {
+      'uuid': docUuid,
+      'key': 'doc-$moduleUuid',
+      'slug': _slugify(name),
+      'name': name,
+      'content_module_uuid': moduleUuid,
+      'data': jsonEncode({
+        'uuid': docUuid,
+        'content_module_uuid': moduleUuid,
+        'name': name,
+        'slug': _slugify(name),
+        'key': 'doc-$moduleUuid',
+        'license_uuid': _nilUuid,
+        'publisher_uuid': _nilUuid,
+        'gamesystem_key': '5e-2014',
+        'is_restricted': false,
+        'created_at': now,
+        'updated_at': now,
+      }),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+    return docUuid;
+  }
+
+  /// Creates a custom `local` module (plus its document) content can be
+  /// assigned to. Returns its uuid.
+  Future<String> createCustomModule({
+    required String name,
+    required String slug,
+    String license = 'unlicensed',
+    String? description,
+    List<String> authors = const [],
+    String? websiteUrl,
+  }) async {
+    final normalized = _slugify(slug.isEmpty ? name : slug);
+    final clash = await _db.query(
+      'content_module',
+      columns: ['uuid'],
+      where: 'slug = ?',
+      whereArgs: [normalized],
+    );
+    if (clash.isNotEmpty) {
+      throw ArgumentError("a module with slug '$normalized' already exists");
+    }
+    final moduleUuid = generateUuidV4();
+    final now = DateTime.now().toUtc().toIso8601String();
+    await _db.insert('content_module', {
+      'uuid': moduleUuid,
+      'key': normalized,
+      'slug': normalized,
+      'name': name,
+      'origin': 'local',
+      'data': jsonEncode({
+        'uuid': moduleUuid,
+        'name': name,
+        'slug': normalized,
+        'license': license,
+        'schema_version': 2,
+        'authors': authors,
+        'description': ?description,
+        'website_url': ?websiteUrl,
+        'is_active': true,
+        'ordering': 1000,
+        'version_string': '1.0.0',
+        'created_at': now,
+        'updated_at': now,
+      }),
+    });
+    await ensureModuleDocument(moduleUuid, name);
+    return moduleUuid;
+  }
+
+  /// Inserts or replaces one authored content record (full wire Map) in
+  /// its table, populating identity + indexed extra columns from the
+  /// record, mirroring the bundle insert path.
+  Future<void> upsertRecord(String table, Map<String, dynamic> record) async {
+    final spec = _specFor(table);
+    await _db.insert('"$table"', {
+      'uuid': record['uuid'],
+      'key': record['key'] ?? record['slug'],
+      'slug': record['slug'],
+      'name': record['name'],
+      'content_module_uuid': record['content_module_uuid'],
+      for (final entry in spec.extras.entries)
+        entry.key: _bindable(record[entry.value]),
+      'data': jsonEncode(record),
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  Future<void> deleteRecord(String table, String uuid) async {
+    await _db.delete('"$table"', where: 'uuid = ?', whereArgs: [uuid]);
+  }
+
+  static String _slugify(String name) {
+    final slug = name
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z0-9]+'), '-')
+        .replaceAll(RegExp(r'^-+|-+$'), '');
+    return slug.isEmpty ? 'module' : slug;
   }
 
   static List<dynamic> _parentsFirst(
