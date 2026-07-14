@@ -2,9 +2,8 @@
 // modifiers, proficiency, save/skill bonuses are derived live — but
 // never blocks a value the player wants to write down.
 //
-// Species, class, background, spells, and equipment are chosen from
-// the installed content modules; alignment from the seeded alignment
-// table.
+// Species, class, background, spells, and equipment are chosen from the
+// installed content modules; alignment from the canonical code list.
 //
 // Leaving with unsaved edits prompts to save or discard; the save icon
 // persists immediately. Removing an item or spell asks for confirmation.
@@ -13,7 +12,6 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 
-import '../compendium/categories.dart';
 import '../dice/dice_expression_builder.dart';
 import '../ffi/api/sheet.dart';
 import '../services/content_store.dart';
@@ -48,11 +46,13 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
   Map<String, int> _skillBonuses = const {};
 
   late final ContentStore _content = ContentStore(widget.store);
-  List<Map<String, dynamic>> _alignments = const [];
   List<Map<String, dynamic>> _languages = const [];
 
   // Names of items whose content record requires attunement.
   Set<String> _attunableItems = const {};
+
+  // Class table rows (full records) for subclass lookup + prereq checks.
+  List<Map<String, dynamic>> _classRows = const [];
 
   late final TextEditingController _nameCtl;
   late final TextEditingController _hitDiceCtl;
@@ -68,9 +68,6 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
     _xpCtl = TextEditingController(
       text: _sheet.experiencePoints?.toString() ?? '',
     );
-    _content.listAlignments().then((rows) {
-      if (mounted) setState(() => _alignments = rows);
-    });
     _content.listNamed('language').then((rows) {
       if (mounted) setState(() => _languages = rows);
     });
@@ -83,6 +80,9 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
               r['name'] as String,
         };
       });
+    });
+    _content.listNamed('class').then((rows) {
+      if (mounted) setState(() => _classRows = rows);
     });
   }
 
@@ -272,6 +272,8 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
           children: [
             _identitySection(),
             const SizedBox(height: 16),
+            _classesSection(),
+            const SizedBox(height: 16),
             _abilitiesSection(),
             const SizedBox(height: 16),
             _combatSection(),
@@ -340,31 +342,10 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
           const SizedBox(width: 12),
           Expanded(
             child: ContentPickerField(
-              label: 'Class',
-              value: _sheet.className,
-              onTap: _pickClass,
-              onCleared: () => _mutate(_sheet.copyWith(className: '')),
-            ),
-          ),
-        ],
-      ),
-      const SizedBox(height: 12),
-      Row(
-        children: [
-          Expanded(
-            child: _NumberStepper(
-              label: 'Level',
-              value: _sheet.level,
-              min: 1,
-              max: 20,
-              onChanged: (v) => _mutate(_sheet.copyWith(level: v)),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: _StatBadge(
-              label: 'Proficiency',
-              value: CharacterSheet.formatBonus(_derived.proficiencyBonus),
+              label: 'Background',
+              value: _sheet.background,
+              onTap: _pickBackground,
+              onCleared: () => _mutate(_sheet.copyWith(background: '')),
             ),
           ),
         ],
@@ -372,20 +353,7 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
       const SizedBox(height: 12),
       _experienceField(),
       const SizedBox(height: 12),
-      Row(
-        children: [
-          Expanded(
-            child: ContentPickerField(
-              label: 'Background',
-              value: _sheet.background,
-              onTap: _pickBackground,
-              onCleared: () => _mutate(_sheet.copyWith(background: '')),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(child: _alignmentDropdown()),
-        ],
-      ),
+      _alignmentDropdown(),
     ]);
   }
 
@@ -426,15 +394,11 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
   }
 
   Widget _alignmentDropdown() {
-    final options = [for (final a in _alignments) humanizeSlug('${a['name']}')];
-    // A previously saved free-text value stays selectable so opening
-    // the dropdown never silently discards it.
+    // Nine canonical alignments only ("Unaligned" is creature-only);
+    // off-list stored values show as unset — the server rejects them.
     final current = _sheet.alignment;
-    if (current.isNotEmpty && !options.contains(current)) {
-      options.insert(0, current);
-    }
     return DropdownButtonFormField<String>(
-      initialValue: current.isEmpty ? null : current,
+      initialValue: kCanonicalAlignments.contains(current) ? current : null,
       // The field gets half a Row; without isExpanded the selected
       // value sizes to its natural width and overflows.
       isExpanded: true,
@@ -443,7 +407,7 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
         border: OutlineInputBorder(),
       ),
       items: [
-        for (final o in options)
+        for (final o in kCanonicalAlignments)
           DropdownMenuItem(
             value: o,
             child: Text(o, overflow: TextOverflow.ellipsis),
@@ -457,6 +421,7 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
     String table,
     String title, {
     String? where,
+    List<Object?>? whereArgs,
   }) {
     return showContentPicker(
       context: context,
@@ -464,6 +429,7 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
       table: table,
       title: title,
       where: where,
+      whereArgs: whereArgs,
     );
   }
 
@@ -473,26 +439,55 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
     _mutate(_sheet.copyWith(race: record['name'] as String? ?? ''));
   }
 
-  Future<void> _pickClass() async {
-    final record = await _pickContent(
-      'class',
-      'Choose a class',
-      where: 'subclass_of IS NULL',
+  // ── classes & subclasses ────────────────────────────────────────────
+
+  Map<String, dynamic>? _baseClassRecord(String name) {
+    for (final r in _classRows) {
+      if (r['subclass_of'] == null && r['name'] == name) return r;
+    }
+    return null;
+  }
+
+  int _subclassCount(Object? parentUuid) => parentUuid == null
+      ? 0
+      : _classRows.where((r) => r['subclass_of'] == parentUuid).length;
+
+  List<ClassEntry> _replaceEntry(int index, ClassEntry entry) {
+    final next = [..._sheet.classes];
+    next[index] = entry;
+    return next;
+  }
+
+  // Base classes not already on the sheet (excludeIndex exempts the row
+  // being re-picked).
+  ({String where, List<Object?> args}) _basePickerFilter(int excludeIndex) {
+    final taken = [
+      for (var i = 0; i < _sheet.classes.length; i++)
+        if (i != excludeIndex) _sheet.classes[i].name,
+    ];
+    if (taken.isEmpty) {
+      return (where: 'subclass_of IS NULL', args: const []);
+    }
+    final holes = List.filled(taken.length, '?').join(', ');
+    return (
+      where: 'subclass_of IS NULL AND name NOT IN ($holes)',
+      args: taken,
     );
-    if (record == null) return;
+  }
+
+  // Starting-class grants (saves, first-level HP while untouched):
+  // documents, never enforces.
+  CharacterSheet _applyClassGrants(
+    CharacterSheet sheet,
+    Map<String, dynamic> record,
+  ) {
     final saves = record['prof_saving_throws'];
     final hitDie = record['hit_dice'];
-
-    var next = _sheet.copyWith(
-      className: record['name'] as String? ?? '',
-      // Switching class re-derives save proficiencies from the new
-      // class — the checkboxes stay editable afterwards.
+    var next = sheet.copyWith(
       savingThrowProficiencies: saves is List
           ? Ability.parseWireSet(saves)
           : null,
     );
-    // Compute 1st-level HP (hit die max + Con modifier) only while HP
-    // is still at the placeholder — never clobber a tracked value.
     if (next.maxHp <= 1 && hitDie is num) {
       final hp =
           (hitDie.truncate() +
@@ -500,12 +495,301 @@ class _CharacterSheetScreenState extends State<CharacterSheetScreen> {
               .clamp(1, 999);
       next = next.copyWith(maxHp: hp, currentHp: hp);
     }
-    _mutate(next);
+    return next;
+  }
 
-    // Suggest hit dice from the class when none are recorded yet.
+  void _seedHitDice(Map<String, dynamic> record) {
+    final hitDie = record['hit_dice'];
     if (_hitDiceCtl.text.trim().isEmpty && hitDie is num) {
-      _hitDiceCtl.text = '${_sheet.level}d${hitDie.truncate()}';
+      _hitDiceCtl.text = '1d${hitDie.truncate()}';
+      _dirty = true;
     }
+  }
+
+  // Held-class prereq records: the entry's pick-time snapshot wins (it
+  // travels with the sheet), else live content, else a name stub.
+  Map<String, dynamic> _prereqRecord(ClassEntry entry) {
+    if (entry.primaryAbilities.isNotEmpty) {
+      return {'name': entry.name, 'primary_abilities': entry.primaryAbilities};
+    }
+    return _baseClassRecord(entry.name) ?? {'name': entry.name};
+  }
+
+  // Extracts the snapshot groups from a picked class record.
+  List<List<String>> _snapshotPrereqs(Map<String, dynamic> record) => [
+    for (final group in record['primary_abilities'] as List<dynamic>? ?? [])
+      if (group is List) [for (final a in group) a as String],
+  ];
+
+  // Hard block (shared core check): every class in the set must meet its
+  // primary-ability prerequisite (13+) before another class is added.
+  Future<bool> _passesPrereqs(
+    Map<String, dynamic> newRecord,
+    int excludeIndex,
+  ) async {
+    final others = [
+      for (var i = 0; i < _sheet.classes.length; i++)
+        if (i != excludeIndex) _prereqRecord(_sheet.classes[i]),
+    ];
+    if (others.isEmpty) return true;
+    final abilities = {
+      for (final e in _sheet.abilities.entries) e.key.name: e.value,
+    };
+    final raw = checkMulticlass(
+      abilitiesJson: jsonEncode(abilities),
+      classRecordsJson: jsonEncode([newRecord, ...others]),
+    );
+    final failed = [
+      for (final r in (jsonDecode(raw) as List<dynamic>))
+        if ((r as Map<String, dynamic>)['ok'] != true) r,
+    ];
+    if (failed.isEmpty) return true;
+    if (mounted) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Multiclass requirements not met'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final r in failed)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    '${r['name']} requires '
+                    '${(r['requirement'] as String?)?.isNotEmpty == true ? r['requirement'] : 'an ability score of 13'}.',
+                  ),
+                ),
+            ],
+          ),
+          actions: [
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
+    }
+    return false;
+  }
+
+  Future<void> _addClass() async {
+    final filter = _basePickerFilter(-1);
+    final record = await _pickContent(
+      'class',
+      _sheet.classes.isEmpty ? 'Choose a class' : 'Add a class',
+      where: filter.where,
+      whereArgs: filter.args,
+    );
+    if (record == null || !mounted) return;
+    if (!await _passesPrereqs(record, -1)) return;
+    final first = _sheet.classes.isEmpty;
+    var next = _sheet.copyWith(
+      classes: [
+        ..._sheet.classes,
+        ClassEntry(
+          name: record['name'] as String? ?? '',
+          starting: first,
+          primaryAbilities: _snapshotPrereqs(record),
+        ),
+      ],
+    );
+    if (first) next = _applyClassGrants(next, record);
+    _mutate(next);
+    if (first) _seedHitDice(record);
+  }
+
+  Future<void> _repickClass(int index) async {
+    final filter = _basePickerFilter(index);
+    final record = await _pickContent(
+      'class',
+      'Choose a class',
+      where: filter.where,
+      whereArgs: filter.args,
+    );
+    if (record == null || !mounted) return;
+    if (!await _passesPrereqs(record, index)) return;
+    final entry = _sheet.classes[index];
+    var next = _sheet.copyWith(
+      classes: _replaceEntry(
+        index,
+        entry.copyWith(
+          name: record['name'] as String? ?? '',
+          subclass: '',
+          primaryAbilities: _snapshotPrereqs(record),
+        ),
+      ),
+    );
+    if (entry.starting) next = _applyClassGrants(next, record);
+    _mutate(next);
+    if (entry.starting) _seedHitDice(record);
+  }
+
+  Future<void> _removeClass(int index) async {
+    if (_sheet.classes.length <= 1) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('A character needs at least one class.'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+    final entry = _sheet.classes[index];
+    if (!await _confirmRemove('class', entry.name) || !mounted) return;
+    final next = [..._sheet.classes]..removeAt(index);
+    if (!next.any((c) => c.starting)) {
+      next[0] = next[0].copyWith(starting: true);
+    }
+    _mutate(_sheet.copyWith(classes: next));
+  }
+
+  void _setStartingClass(int index) {
+    _mutate(
+      _sheet.copyWith(
+        classes: [
+          for (var i = 0; i < _sheet.classes.length; i++)
+            _sheet.classes[i].copyWith(starting: i == index),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickSubclass(int index) async {
+    final entry = _sheet.classes[index];
+    final parent = _baseClassRecord(entry.name);
+    if (parent == null) return;
+    final record = await _pickContent(
+      'class',
+      'Choose a ${entry.name} subclass',
+      where: 'subclass_of = ?',
+      whereArgs: [parent['uuid']],
+    );
+    if (record == null) return;
+    _setSubclass(index, record['name'] as String? ?? '');
+  }
+
+  void _setSubclass(int index, String name) {
+    _mutate(
+      _sheet.copyWith(
+        classes: _replaceEntry(
+          index,
+          _sheet.classes[index].copyWith(subclass: name),
+        ),
+      ),
+    );
+  }
+
+  Widget _classesSection() {
+    final startingIndex = _sheet.classes.indexWhere((c) => c.starting);
+    return _sectionCard('Classes', [
+      Row(
+        children: [
+          Expanded(
+            child: _StatBadge(label: 'Level', value: '${_derived.level}'),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: _StatBadge(
+              label: 'Proficiency',
+              value: CharacterSheet.formatBonus(_derived.proficiencyBonus),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 12),
+      RadioGroup<int>(
+        groupValue: startingIndex,
+        onChanged: (v) {
+          if (v != null) _setStartingClass(v);
+        },
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            for (var i = 0; i < _sheet.classes.length; i++) ...[
+              _classRow(i, startingIndex),
+              const SizedBox(height: 12),
+            ],
+          ],
+        ),
+      ),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          onPressed: _addClass,
+          icon: const Icon(Icons.add),
+          label: const Text('Add class'),
+        ),
+      ),
+    ]);
+  }
+
+  Widget _classRow(int index, int startingIndex) {
+    final entry = _sheet.classes[index];
+    final parent = _baseClassRecord(entry.name);
+    final subclasses = _subclassCount(parent?['uuid']);
+    final unlocked = entry.level >= 3;
+    final subclassEnabled = unlocked && subclasses > 0;
+    final String? hint;
+    if (!unlocked) {
+      hint = 'Subclass unlocks at level 3';
+    } else if (parent == null) {
+      hint = 'Class content not found';
+    } else if (subclasses == 0) {
+      hint = 'No subclasses available';
+    } else {
+      hint = null;
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Tooltip(
+              message: 'Starting class — determines first-level stats',
+              child: Radio<int>(value: index),
+            ),
+            Expanded(
+              child: ContentPickerField(
+                label: index == startingIndex ? 'Class (starting)' : 'Class',
+                value: entry.name,
+                onTap: () => _repickClass(index),
+                onCleared: () => _removeClass(index),
+              ),
+            ),
+            const SizedBox(width: 12),
+            _NumberStepper(
+              label: 'Level',
+              compact: true,
+              value: entry.level,
+              min: 1,
+              max: 20,
+              onChanged: (v) => _mutate(
+                _sheet.copyWith(
+                  classes: _replaceEntry(index, entry.copyWith(level: v)),
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Padding(
+          padding: const EdgeInsets.only(left: 48),
+          child: ContentPickerField(
+            label: 'Subclass',
+            value: entry.subclass,
+            enabled: subclassEnabled,
+            helperText: hint,
+            onTap: () => _pickSubclass(index),
+            onCleared: entry.subclass.isEmpty
+                ? null
+                : () => _setSubclass(index, ''),
+          ),
+        ),
+      ],
+    );
   }
 
   Future<void> _pickBackground() async {

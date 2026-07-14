@@ -206,6 +206,8 @@ class ContentPickerField extends StatelessWidget {
     required this.value,
     required this.onTap,
     this.onCleared,
+    this.enabled = true,
+    this.helperText,
   });
 
   final String label;
@@ -213,16 +215,23 @@ class ContentPickerField extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback? onCleared;
 
+  // When false the field greys out and ignores taps; helperText can
+  // explain why (e.g. "Subclass unlocks at level 3").
+  final bool enabled;
+  final String? helperText;
+
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: onTap,
+      onTap: enabled ? onTap : null,
       borderRadius: BorderRadius.circular(4),
       child: InputDecorator(
         decoration: InputDecoration(
           labelText: label,
+          helperText: helperText,
+          enabled: enabled,
           border: const OutlineInputBorder(),
-          suffixIcon: value.isNotEmpty && onCleared != null
+          suffixIcon: enabled && value.isNotEmpty && onCleared != null
               ? IconButton(
                   icon: const Icon(Icons.clear),
                   tooltip: 'Clear',
@@ -231,7 +240,14 @@ class ContentPickerField extends StatelessWidget {
               : const Icon(Icons.arrow_drop_down),
         ),
         isEmpty: value.isEmpty,
-        child: value.isEmpty ? null : Text(value),
+        child: value.isEmpty
+            ? null
+            : Text(
+                value,
+                style: enabled
+                    ? null
+                    : TextStyle(color: Theme.of(context).disabledColor),
+              ),
       ),
     );
   }

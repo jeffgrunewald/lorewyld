@@ -288,15 +288,21 @@ class _ContentFormScreenState extends State<ContentFormScreen> {
     List<Map<String, dynamic>> options,
   ) {
     final key = field['key'] as String;
+    // An off-list stored value (e.g. free text predating an enum field)
+    // falls back to the placeholder instead of crashing the dropdown.
+    final current = _values[key] as String?;
+    final known = options.any((o) => o['value'] == current);
     return DropdownButtonFormField<String?>(
-      initialValue: _values[key] as String?,
+      initialValue: known ? current : null,
       decoration: InputDecoration(
         labelText: label + (required ? ' *' : ''),
         border: const OutlineInputBorder(),
       ),
       items: [
-        if (!required)
-          const DropdownMenuItem(value: null, child: Text('— none —')),
+        DropdownMenuItem(
+          value: null,
+          child: Text(required ? '— select —' : '— none —'),
+        ),
         for (final o in options)
           DropdownMenuItem(
             value: o['value'] as String,

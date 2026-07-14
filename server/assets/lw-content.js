@@ -198,7 +198,8 @@ window.lwContent = (function () {
                 if (typeof r.subclass_of === 'string') {
                     return 'Subclass of ' + (l.classes[r.subclass_of] || 'unknown');
                 }
-                return r.hit_dice != null ? 'Hit die d' + r.hit_dice : null;
+                // Hit die belongs in the Core traits table, not here.
+                return null;
             },
         },
         {
@@ -1133,6 +1134,14 @@ window.lwContent = (function () {
 
     /* ── character rules shared by the wizard and the sheet ─────── */
 
+    /* The nine canonical alignments in grid order — mirrors the Rust
+     * core's alignment_options (shared/domain/src/authoring.rs). */
+    const alignmentList = [
+        'Lawful Good', 'Neutral Good', 'Chaotic Good',
+        'Lawful Neutral', 'True Neutral', 'Chaotic Neutral',
+        'Lawful Evil', 'Neutral Evil', 'Chaotic Evil',
+    ];
+
     const abilityList = [
         { key: 'strength', label: 'Strength', abbr: 'STR' },
         { key: 'dexterity', label: 'Dexterity', abbr: 'DEX' },
@@ -1183,6 +1192,14 @@ window.lwContent = (function () {
      * shape). Mirrors the mobile FFI's derive_stats. */
     function deriveStats(sheet) {
         return JSON.parse(_wasm.derive_stats(JSON.stringify(sheet)));
+    }
+
+    /* Multiclass prereq check over full class records (new + held) ->
+     * [{name, ok, requirement}] (mirrors FFI check_multiclass). */
+    function checkMulticlass(abilities, classRecords) {
+        return JSON.parse(_wasm.check_multiclass(
+            JSON.stringify(abilities), JSON.stringify(classRecords)
+        ));
     }
 
     /* ── authoring metadata (shared with mobile FFI) ────────────── */
@@ -1284,11 +1301,13 @@ window.lwContent = (function () {
         buildEntryRow: buildEntryRow,
         openPicker: openPicker,
         renderMarkdown: renderMarkdown,
+        alignmentList: alignmentList,
         abilityList: abilityList,
         skillList: skillList,
         abilityMod: abilityMod,
         proficiencyBonus: proficiencyBonus,
         deriveStats: deriveStats,
+        checkMulticlass: checkMulticlass,
         formatBonus: formatBonus,
         fieldSchema: fieldSchema,
         defaultRecord: defaultRecord,

@@ -37,6 +37,20 @@
     "ranger": "half",
     "warlock": "pact"
   },
+  "class_primary_abilities": {
+    "barbarian": [["strength"]],
+    "bard": [["charisma"]],
+    "cleric": [["wisdom"]],
+    "druid": [["wisdom"]],
+    "fighter": [["strength"], ["dexterity"]],
+    "monk": [["dexterity", "wisdom"]],
+    "paladin": [["strength", "charisma"]],
+    "ranger": [["dexterity", "wisdom"]],
+    "rogue": [["dexterity"]],
+    "sorcerer": [["charisma"]],
+    "warlock": [["charisma"]],
+    "wizard": [["intelligence"]]
+  },
   "name_aliases": {
     "Feeblemind": "Befuddlement",
     "Branding Smite": "Shining Smite",

@@ -224,10 +224,22 @@ class _EntryTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final subtitle = category.subtitle(record, lookups);
+    // Class lists render as a hierarchy: bold base classes, indented
+    // subclasses (whose subtitle the indentation makes redundant).
+    final isClassTable = category.table == 'class';
+    final isSubclass = isClassTable && record['subclass_of'] != null;
+    final subtitle = isSubclass ? null : category.subtitle(record, lookups);
     final source = lookups.sourceSlugOf(record);
     return ListTile(
-      title: Text(category.displayName(record)),
+      contentPadding: isSubclass
+          ? const EdgeInsetsDirectional.only(start: 40, end: 16)
+          : null,
+      title: Text(
+        category.displayName(record),
+        style: isClassTable && !isSubclass
+            ? const TextStyle(fontWeight: FontWeight.bold)
+            : null,
+      ),
       subtitle: (subtitle == null || subtitle.isEmpty) ? null : Text(subtitle),
       trailing: source == null ? null : SourceBadge(source),
       onTap: () async {
@@ -317,7 +329,27 @@ class _CompendiumCategoryScreenState extends State<CompendiumCategoryScreen> {
           r,
     ];
     rows.sort((a, b) => _filters.sort.compare(a, b, widget.lookups));
+    if (widget.category.table == 'class') return _groupClasses(rows);
     return rows;
+  }
+
+  // Classes list as a hierarchy: each base class, then its subclasses;
+  // orphaned subclasses (parent filtered out by search) trail.
+  List<Map<String, dynamic>> _groupClasses(List<Map<String, dynamic>> rows) {
+    final subsByParent = <String, List<Map<String, dynamic>>>{};
+    for (final r in rows) {
+      if (r['subclass_of'] case final String parent) {
+        subsByParent.putIfAbsent(parent, () => []).add(r);
+      }
+    }
+    return [
+      for (final r in rows)
+        if (r['subclass_of'] == null) ...[
+          r,
+          ...subsByParent.remove(r['uuid']) ?? const [],
+        ],
+      for (final orphans in subsByParent.values) ...orphans,
+    ];
   }
 
   @override
@@ -489,6 +521,13 @@ class CompendiumEntryScreen extends StatelessWidget {
               child: Text(s, style: Theme.of(context).textTheme.titleSmall),
             ),
           if (facts.isNotEmpty) ...[
+            if (category.table == 'class') ...[
+              Text(
+                'Core traits',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+            ],
             Card(
               child: Padding(
                 padding: const EdgeInsets.all(16),
@@ -598,6 +637,8 @@ class CompendiumEntryScreen extends StatelessWidget {
         ];
       case 'creature':
         return [
+          if (r['alignment'] case final String v when v.isNotEmpty)
+            ('Alignment', v),
           if (r['armor_class'] case final num v)
             (
               'Armor class',
@@ -619,6 +660,8 @@ class CompendiumEntryScreen extends StatelessWidget {
       case 'class':
         return [
           if (r['hit_dice'] != null) ('Hit die', 'd${r['hit_dice']}'),
+          if (_primaryAbility(r) case final String v when v.isNotEmpty)
+            ('Primary ability', v),
           if (r['prof_saving_throws'] case final String v) ('Saving throws', v),
           if (r['prof_armor'] case final String v) ('Armor', v),
           if (r['prof_weapons'] case final String v) ('Weapons', v),
@@ -684,6 +727,13 @@ class CompendiumEntryScreen extends StatelessWidget {
     };
     return sections.where((s) => s.$2.isNotEmpty).toList();
   }
+
+  // "Strength or Dexterity" / "Dexterity and Wisdom" from the class's
+  // primary_abilities OR-of-AND groups.
+  String _primaryAbility(Map<String, dynamic> r) => [
+    for (final group in r['primary_abilities'] as List<dynamic>? ?? [])
+      if (group is List) group.map((a) => humanizeSlug('$a')).join(' and '),
+  ].join(' or ');
 
   String _spellComponents(Map<String, dynamic> r) {
     final parts = [

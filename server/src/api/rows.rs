@@ -249,6 +249,9 @@ impl CharacterRow {
     pub fn into_dto(self) -> Result<lorewyld_types::CharacterSheet, ApiError> {
         let mut sheet: lorewyld_types::CharacterSheet =
             serde_json::from_str(&self.data).map_err(|e| ApiError::Internal(e.into()))?;
+        // Lazy multiclass migration: pre-multiclass blobs gain a
+        // synthesized classes entry; projections stay consistent.
+        lorewyld_domain::normalize_classes(&mut sheet);
         sheet.uuid = parse_uuid(&self.uuid)?;
         sheet.name = self.name;
         sheet.owner_user_uuid = Some(parse_uuid(&self.owner_user_uuid)?);

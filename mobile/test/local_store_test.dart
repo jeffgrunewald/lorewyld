@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:lorewyld/services/local_store.dart';
+import 'package:lorewyld/types/character.dart';
 import 'package:lorewyld/types/lore_note.dart';
 
 void main() {
@@ -20,12 +21,15 @@ void main() {
 
   test('characters: create, list, save, delete', () async {
     final created = await store.createCharacter('Thistle');
-    expect(created.level, 1);
+    expect(created.totalLevel, 1);
 
     final updated = await store.saveCharacter(
-      created.copyWith(level: 3, race: 'Halfling'),
+      created.copyWith(
+        race: 'Halfling',
+        classes: const [ClassEntry(name: 'Rogue', level: 3, starting: true)],
+      ),
     );
-    expect(updated.level, 3);
+    expect(updated.totalLevel, 3);
 
     final listed = await store.listCharacters();
     expect(listed.single.race, 'Halfling');

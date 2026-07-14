@@ -33,6 +33,21 @@ pub fn derive_stats(sheet_json: &str) -> String {
     }
 }
 
+/// Check 5e multiclass prerequisites: `abilities_json` is the sheet's
+/// `abilities` object, `class_records_json` a JSON array of full class
+/// records (new class + every current class). Returns a JSON array of
+/// `{name, ok, requirement}`; `"[]"` on malformed input.
+#[wasm_bindgen]
+pub fn check_multiclass(abilities_json: &str, class_records_json: &str) -> String {
+    serde_json::from_str::<lorewyld_types::common::AbilityScores>(abilities_json)
+        .ok()
+        .zip(serde_json::from_str::<Vec<serde_json::Value>>(class_records_json).ok())
+        .and_then(|(abilities, records)| {
+            serde_json::to_string(&lorewyld_domain::check_multiclass(&abilities, &records)).ok()
+        })
+        .unwrap_or_else(|| "[]".to_string())
+}
+
 /// The authoring [`FieldSchema`](lorewyld_domain::FieldSchema) for a content
 /// category, as a JSON string the form builder renders from. `"null"` for an
 /// unknown/unauthorable category.

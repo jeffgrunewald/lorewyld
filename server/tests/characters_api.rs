@@ -52,9 +52,14 @@ async fn insert_user(pool: &SqlitePool, username: &str, admin: bool) -> CurrentU
     }
 }
 
-/// A minimal sheet via serde defaults — only the name is required.
+/// A minimal valid sheet via serde defaults — a name and at least one
+/// class are required.
 fn sheet_named(name: &str) -> CharacterSheet {
-    serde_json::from_value(serde_json::json!({ "name": name })).expect("sheet from defaults")
+    serde_json::from_value(serde_json::json!({
+        "name": name,
+        "classes": [{ "name": "Fighter", "starting": true }],
+    }))
+    .expect("sheet from defaults")
 }
 
 async fn create(state: &ApiState, user: &CurrentUser, name: &str) -> CharacterSheet {
@@ -88,7 +93,7 @@ async fn owner_crud_roundtrip() {
     assert_eq!(fetched.name, "Thistle");
 
     let mut update = sheet_named("Thistle Quickfoot");
-    update.level = 3;
+    update.classes[0].level = 3;
     let Json(replaced) = replace_character(
         State(state.clone()),
         alice.clone(),
@@ -98,7 +103,7 @@ async fn owner_crud_roundtrip() {
     .await
     .expect("replacing character");
     assert_eq!(replaced.name, "Thistle Quickfoot");
-    assert_eq!(replaced.level, 3);
+    assert_eq!(replaced.classes[0].level, 3);
     assert_eq!(replaced.owner_user_uuid, Some(alice.uuid));
 
     let status = delete_character(State(state.clone()), alice, Path(created.uuid))
@@ -165,6 +170,66 @@ async fn admin_can_write_others_characters() {
         .await
         .expect("admin deleting another user's character");
     assert_eq!(status, axum::http::StatusCode::NO_CONTENT);
+}
+
+#[tokio::test]
+async fn classless_sheets_are_rejected() {
+    let pool = fresh_pool().await;
+    let state = ApiState { db: pool };
+    let alice = insert_user(&state.db, "alice", false).await;
+
+    let classless: CharacterSheet =
+        serde_json::from_value(serde_json::json!({ "name": "Nobody" })).expect("sheet");
+    let created = create_character(
+        State(state.clone()),
+        alice.clone(),
+        Json(classless.clone()),
+    )
+    .await;
+    assert!(matches!(created, Err(ApiError::BadRequest(_))));
+
+    // Replace enforces the same minimum.
+    let existing = create(&state, &alice, "Thistle").await;
+    let replaced = replace_character(
+        State(state.clone()),
+        alice,
+        Path(existing.uuid),
+        Json(classless),
+    )
+    .await;
+    assert!(matches!(replaced, Err(ApiError::BadRequest(_))));
+}
+
+#[tokio::test]
+async fn character_alignment_must_be_canonical() {
+    let pool = fresh_pool().await;
+    let state = ApiState { db: pool };
+    let alice = insert_user(&state.db, "alice", false).await;
+
+    // "Unaligned" is creature-only; off-list values are rejected.
+    for bad in ["Unaligned", "chaotic evil", "Lawful Weird"] {
+        let mut sheet = sheet_named("Thistle");
+        sheet.alignment = bad.to_string();
+        let created =
+            create_character(State(state.clone()), alice.clone(), Json(sheet)).await;
+        assert!(
+            matches!(created, Err(ApiError::BadRequest(_))),
+            "expected rejection for {bad:?}"
+        );
+    }
+
+    // Canonical values and no-alignment pass.
+    for good in ["Chaotic Evil", "True Neutral", ""] {
+        let mut sheet = sheet_named("Thistle");
+        sheet.alignment = good.to_string();
+        let created = create_character(State(state.clone()), alice.clone(), Json(sheet))
+            .await
+            .unwrap_or_else(|e| panic!("expected acceptance for {good:?}: {e:?}"));
+        let uuid = created.1.0.uuid;
+        delete_character(State(state.clone()), alice.clone(), Path(uuid))
+            .await
+            .expect("cleanup");
+    }
 }
 
 #[tokio::test]

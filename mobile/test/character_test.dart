@@ -12,7 +12,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:lorewyld/types/character.dart';
 
 CharacterSheet _sheet({
-  int level = 1,
+  List<ClassEntry> classes = const [],
   Map<Ability, int>? abilities,
   Set<Ability> saves = const {},
   Set<Skill> skills = const {},
@@ -21,7 +21,7 @@ CharacterSheet _sheet({
   return CharacterSheet(
     uuid: 'test-uuid',
     name: 'Thistle',
-    level: level,
+    classes: classes,
     abilities: abilities ?? CharacterSheet.defaultAbilities(),
     savingThrowProficiencies: saves,
     skillProficiencies: skills,
@@ -33,7 +33,16 @@ CharacterSheet _sheet({
 void main() {
   test('json round-trip preserves the full sheet', () {
     final original = _sheet(
-      level: 7,
+      classes: const [
+        ClassEntry(
+          name: 'Wizard',
+          level: 7,
+          starting: true,
+          primaryAbilities: [
+            ['intelligence'],
+          ],
+        ),
+      ],
       abilities: {
         for (final a in Ability.values) a: 8 + Ability.values.indexOf(a),
       },
@@ -41,7 +50,6 @@ void main() {
       skills: {Skill.arcana, Skill.sleightOfHand},
     ).copyWith(
       race: 'Gnome',
-      className: 'Wizard',
       background: 'Sage',
       alignment: 'NG',
       armorClass: 15,
@@ -66,6 +74,39 @@ void main() {
     expect(restored.equipment.first.attuned, false);
     expect(restored.equipment.last.attuned, true);
     expect(restored.spells.first.level, 3);
+  });
+
+  test('multiclass sums the level and round-trips the snapshot', () {
+    final multi = _sheet(
+      classes: const [
+        ClassEntry(name: 'Wizard', level: 3, subclass: 'Evocation'),
+        ClassEntry(
+          name: 'Fighter',
+          level: 5,
+          starting: true,
+          primaryAbilities: [
+            ['strength'],
+            ['dexterity'],
+          ],
+        ),
+      ],
+    );
+    expect(multi.totalLevel, 8);
+    expect(multi.startingClass?.name, 'Fighter');
+
+    final json = multi.toJson();
+    expect((json['classes'] as List).length, 2);
+
+    final restored = CharacterSheet.fromJson(json);
+    expect(restored.classes.first.subclass, 'Evocation');
+    expect(restored.classes.last.primaryAbilities, [
+      ['strength'],
+      ['dexterity'],
+    ]);
+    expect(restored.toJson(), json);
+
+    // A defensively-empty class list still derives level 1.
+    expect(_sheet().totalLevel, 1);
   });
 
   test('parseWireSet maps content ability names, skipping unknowns', () {

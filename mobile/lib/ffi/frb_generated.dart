@@ -66,7 +66,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.12.0';
 
   @override
-  int get rustContentHash => 335873899;
+  int get rustContentHash => 131757787;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -79,6 +79,11 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
 
 abstract class RustLibApi extends BaseApi {
   int crateApiSheetAbilityModifier({required int score});
+
+  String crateApiSheetCheckMulticlass({
+    required String abilitiesJson,
+    required String classRecordsJson,
+  });
 
   String crateApiAuthoringDefaultRecord({required String category});
 
@@ -133,13 +138,43 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       const TaskConstMeta(debugName: "ability_modifier", argNames: ["score"]);
 
   @override
+  String crateApiSheetCheckMulticlass({
+    required String abilitiesJson,
+    required String classRecordsJson,
+  }) {
+    return handler.executeSync(
+      SyncTask(
+        callFfi: () {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(abilitiesJson, serializer);
+          sse_encode_String(classRecordsJson, serializer);
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 2)!;
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_String,
+          decodeErrorData: null,
+        ),
+        constMeta: kCrateApiSheetCheckMulticlassConstMeta,
+        argValues: [abilitiesJson, classRecordsJson],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiSheetCheckMulticlassConstMeta =>
+      const TaskConstMeta(
+        debugName: "check_multiclass",
+        argNames: ["abilitiesJson", "classRecordsJson"],
+      );
+
+  @override
   String crateApiAuthoringDefaultRecord({required String category}) {
     return handler.executeSync(
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(category, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 2)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 3)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -162,7 +197,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(sheetJson, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 3)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 4)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_derived_stats,
@@ -185,7 +220,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(category, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 4)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -207,7 +242,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       SyncTask(
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 5)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -234,7 +269,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(answersJson, serializer);
           sse_encode_String(candidatesJson, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 6)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -260,7 +295,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
         callFfi: () {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_i_32(level, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 7)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_i_32,
@@ -287,7 +322,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           final serializer = SseSerializer(generalizedFrbRustBinding);
           sse_encode_String(category, serializer);
           sse_encode_String(inputJson, serializer);
-          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 8)!;
+          return pdeCallFfi(generalizedFrbRustBinding, serializer, funcId: 9)!;
         },
         codec: SseCodec(
           decodeSuccessData: sse_decode_String,
@@ -316,15 +351,16 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   DerivedStats dco_decode_derived_stats(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 6)
-      throw Exception('unexpected arr length: expect 6 but see ${arr.length}');
+    if (arr.length != 7)
+      throw Exception('unexpected arr length: expect 7 but see ${arr.length}');
     return DerivedStats(
-      proficiencyBonus: dco_decode_i_32(arr[0]),
-      abilityModifiers: dco_decode_list_named_bonus(arr[1]),
-      savingThrowBonuses: dco_decode_list_named_bonus(arr[2]),
-      skillBonuses: dco_decode_list_named_bonus(arr[3]),
-      initiative: dco_decode_i_32(arr[4]),
-      passivePerception: dco_decode_i_32(arr[5]),
+      level: dco_decode_i_32(arr[0]),
+      proficiencyBonus: dco_decode_i_32(arr[1]),
+      abilityModifiers: dco_decode_list_named_bonus(arr[2]),
+      savingThrowBonuses: dco_decode_list_named_bonus(arr[3]),
+      skillBonuses: dco_decode_list_named_bonus(arr[4]),
+      initiative: dco_decode_i_32(arr[5]),
+      passivePerception: dco_decode_i_32(arr[6]),
     );
   }
 
@@ -380,6 +416,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   DerivedStats sse_decode_derived_stats(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_level = sse_decode_i_32(deserializer);
     var var_proficiencyBonus = sse_decode_i_32(deserializer);
     var var_abilityModifiers = sse_decode_list_named_bonus(deserializer);
     var var_savingThrowBonuses = sse_decode_list_named_bonus(deserializer);
@@ -387,6 +424,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_initiative = sse_decode_i_32(deserializer);
     var var_passivePerception = sse_decode_i_32(deserializer);
     return DerivedStats(
+      level: var_level,
       proficiencyBonus: var_proficiencyBonus,
       abilityModifiers: var_abilityModifiers,
       savingThrowBonuses: var_savingThrowBonuses,
@@ -455,6 +493,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   @protected
   void sse_encode_derived_stats(DerivedStats self, SseSerializer serializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.level, serializer);
     sse_encode_i_32(self.proficiencyBonus, serializer);
     sse_encode_list_named_bonus(self.abilityModifiers, serializer);
     sse_encode_list_named_bonus(self.savingThrowBonuses, serializer);

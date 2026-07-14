@@ -15,6 +15,7 @@ import 'package:lorewyld/screens/character_list_screen.dart';
 import 'package:lorewyld/services/content_store.dart';
 import 'package:lorewyld/services/local_store.dart';
 import 'package:lorewyld/services/server_connection.dart';
+import 'package:lorewyld/widgets/content_picker.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -117,8 +118,24 @@ void main() {
     await tester.enterText(find.byType(TextField), 'Thistle Quickfoot');
     await tester.pump();
 
-    // Species/class/background are optional — jump straight to the last
-    // step via its header and create.
+    // A class is required — expand the Class step and pick one from the
+    // seeded SRD content (picker IO resolves in the real zone).
+    await tester.tap(find.text('Class').first);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.tap(find.byType(ContentPickerField).at(1));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 100)),
+    );
+    await tester.pump();
+    await tester.tap(find.text('Fighter').last);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    // Species/background stay optional — jump to the last step and
+    // create.
     await tester.tap(find.text('Background & alignment'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));

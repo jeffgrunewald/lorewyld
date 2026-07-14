@@ -237,14 +237,48 @@ const CATEGORY_SCRIPT: &str = r#"
             });
         }
 
+        // Classes list as a hierarchy: each base class, then its
+        // subclasses; orphaned subclasses (parent filtered out) trail.
+        function orderForDisplay(visible) {
+            if (table !== 'class') return visible;
+            const subs = new Map();
+            for (const r of visible) {
+                if (r.subclass_of == null) continue;
+                if (!subs.has(r.subclass_of)) subs.set(r.subclass_of, []);
+                subs.get(r.subclass_of).push(r);
+            }
+            const out = [];
+            for (const r of visible) {
+                if (r.subclass_of != null) continue;
+                out.push(r);
+                (subs.get(r.uuid) || []).forEach(function (s) { out.push(s); });
+                subs.delete(r.uuid);
+            }
+            subs.forEach(function (list) {
+                list.forEach(function (s) { out.push(s); });
+            });
+            return out;
+        }
+
         function render() {
             const visible = C.visibleRecords(records, category, search.value, dimensions, state, lookups);
             list.replaceChildren();
-            for (const record of visible) {
-                list.appendChild(C.buildEntryRow(
+            for (const record of orderForDisplay(visible)) {
+                const row = C.buildEntryRow(
                     record, category, lookups,
                     '/compendium/' + table + '/' + record.uuid
-                ));
+                );
+                if (table === 'class') {
+                    if (record.subclass_of != null) {
+                        row.classList.add('lw-entry-subclass');
+                        // Indentation under the parent says it already.
+                        const sub = row.querySelector('.lw-list-item-subtitle');
+                        if (sub) sub.remove();
+                    } else {
+                        row.classList.add('lw-entry-class');
+                    }
+                }
+                list.appendChild(row);
             }
             countLine.textContent =
                 visible.length.toLocaleString() + ' of ' + records.length.toLocaleString();
@@ -359,6 +393,7 @@ const ENTRY_SCRIPT: &str = r#"
                 if (r.ritual === true) push('Ritual', 'Yes');
                 break;
             case 'creature':
+                if (typeof r.alignment === 'string') push('Alignment', r.alignment);
                 if (typeof r.armor_class === 'number') {
                     push('Armor class', Math.trunc(r.armor_class) +
                         (typeof r.armor_detail === 'string' && r.armor_detail ? ' (' + r.armor_detail + ')' : ''));
@@ -376,6 +411,11 @@ const ENTRY_SCRIPT: &str = r#"
                 break;
             case 'class':
                 if (r.hit_dice != null) push('Hit die', 'd' + r.hit_dice);
+                if (Array.isArray(r.primary_abilities) && r.primary_abilities.length) {
+                    push('Primary ability', r.primary_abilities.map(function (group) {
+                        return group.map(C.humanizeSlug).join(' and ');
+                    }).join(' or '));
+                }
                 if (typeof r.prof_saving_throws === 'string') push('Saving throws', r.prof_saving_throws);
                 else if (Array.isArray(r.prof_saving_throws)) {
                     push('Saving throws', r.prof_saving_throws.map(C.humanizeSlug).join(', '));
@@ -463,7 +503,11 @@ const ENTRY_SCRIPT: &str = r#"
                 row.appendChild(C.el('span', 'lw-fact-value', fact[1]));
                 wrap.appendChild(row);
             }
-            factsEl.replaceChildren(wrap);
+            if (table === 'class') {
+                factsEl.replaceChildren(C.el('h2', 'lw-group-header', 'Core traits'), wrap);
+            } else {
+                factsEl.replaceChildren(wrap);
+            }
         }
 
         const desc = description(record);

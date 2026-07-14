@@ -1744,3 +1744,44 @@ input[type="checkbox"] {
     margin-right: 8px;
     cursor: pointer;
 }
+
+/* ── class rows on the character sheet ──────────────────────────────── */
+
+.lw-class-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--lw-outline-variant, rgba(0, 0, 0, 0.08));
+}
+
+.lw-class-row .lw-picker-field {
+    flex: 1 1 160px;
+    min-width: 140px;
+}
+
+.lw-class-start {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.8rem;
+    color: var(--lw-on-surface-muted);
+    flex-shrink: 0;
+    cursor: pointer;
+}
+
+.lw-class-row .lw-picker-field-btn:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+}
+
+/* ── class hierarchy in the compendium list ─────────────────────────── */
+
+.lw-entry-class .lw-list-item-title {
+    font-weight: 700;
+}
+
+.lw-entry-subclass .lw-list-item-link {
+    padding-left: 40px;
+}

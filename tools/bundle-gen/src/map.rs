@@ -73,6 +73,75 @@ pub fn alignment_from_key(key: &str) -> Result<AlignmentName> {
     enum_from_str("alignment", &normalized)
 }
 
+/// The nine canonical alignment display strings, keyed by their
+/// lowercase form. All are two words, so no prefix shadows another.
+const CANONICAL_ALIGNMENTS: [(&str, &str); 9] = [
+    ("lawful good", "Lawful Good"),
+    ("neutral good", "Neutral Good"),
+    ("chaotic good", "Chaotic Good"),
+    ("lawful neutral", "Lawful Neutral"),
+    ("true neutral", "True Neutral"),
+    ("chaotic neutral", "Chaotic Neutral"),
+    ("lawful evil", "Lawful Evil"),
+    ("neutral evil", "Neutral Evil"),
+    ("chaotic evil", "Chaotic Evil"),
+];
+
+/// Normalizes free-text creature alignment onto the ten picker values:
+/// casing variants map directly, bare/"any" axis words take the neutral
+/// of that axis, either/or forms keep the first option, and anything
+/// unrecognized (corrupt source rows) becomes "Unaligned".
+pub fn normalize_creature_alignment(raw: &str) -> String {
+    // Strip parentheticals ("(50%)", "(as its creator deity)"), take
+    // the first either/or branch, collapse whitespace.
+    let mut cleaned = String::new();
+    let mut depth = 0usize;
+    for c in raw.to_lowercase().chars() {
+        match c {
+            '(' => depth += 1,
+            ')' => depth = depth.saturating_sub(1),
+            _ if depth == 0 => cleaned.push(c),
+            _ => {}
+        }
+    }
+    let first = cleaned
+        .split(" or ")
+        .next()
+        .unwrap_or_default()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+
+    if let Some((_, canonical)) = CANONICAL_ALIGNMENTS.iter().find(|(l, _)| *l == first) {
+        return (*canonical).to_string();
+    }
+    match first.as_str() {
+        "neutral" => return "True Neutral".to_string(),
+        "unaligned" => return "Unaligned".to_string(),
+        "any" | "any alignment" => return "True Neutral".to_string(),
+        "good" | "any good" | "any good alignment" => return "Neutral Good".to_string(),
+        "evil" | "any evil" | "any evil alignment" => return "Neutral Evil".to_string(),
+        "lawful" | "any lawful" | "any lawful alignment" => return "Lawful Neutral".to_string(),
+        "chaotic" | "any chaotic" | "any chaotic alignment" => {
+            return "Chaotic Neutral".to_string();
+        }
+        _ => {}
+    }
+    // "non-X" constrains without indicating an axis pole: True Neutral.
+    if first.starts_with("non-") || first.starts_with("any non-") {
+        return "True Neutral".to_string();
+    }
+    // Concatenated forms like "neutral evil (50%) lawful evil (50%)"
+    // reduce to their leading alignment.
+    if let Some((_, canonical)) = CANONICAL_ALIGNMENTS
+        .iter()
+        .find(|(l, _)| first.starts_with(*l))
+    {
+        return (*canonical).to_string();
+    }
+    "Unaligned".to_string()
+}
+
 // ─── Prose parsing helpers (v1 sheet-math recovery) ──────────────────────
 
 /// Parses `"Choose two from Animal Handling, Athletics, and Survival"`.
@@ -402,7 +471,7 @@ pub fn map_creature(ctx: &Ctx, rec: &v2::CreatureRec) -> Result<Creature> {
         key: rec.key.clone(),
         kind,
         size,
-        alignment: rec.alignment.clone(),
+        alignment: normalize_creature_alignment(&rec.alignment),
         challenge_rating: rec.challenge_rating as f32,
         proficiency_bonus: rec
             .proficiency_bonus
@@ -486,6 +555,8 @@ fn ability_scores_from(map: &v2::AbilityMap) -> AbilityScores {
 pub struct Overrides {
     pub spell_slot_tables: BTreeMap<String, Value>,
     pub class_caster_kind: BTreeMap<String, String>,
+    /// Multiclass prerequisites by class slug: OR-of-AND ability groups.
+    pub class_primary_abilities: BTreeMap<String, Vec<Vec<String>>>,
     pub name_aliases: BTreeMap<String, String>,
     pub srd24_species_asi_desc: String,
     pub document_attribution: BTreeMap<String, String>,
@@ -509,6 +580,12 @@ impl Overrides {
         Ok(Self {
             spell_slot_tables: obj_map("spell_slot_tables"),
             class_caster_kind: str_map("class_caster_kind"),
+            class_primary_abilities: obj_map("class_primary_abilities")
+                .into_iter()
+                .filter_map(|(k, v)| {
+                    serde_json::from_value::<Vec<Vec<String>>>(v).ok().map(|g| (k, g))
+                })
+                .collect(),
             name_aliases: str_map("name_aliases"),
             srd24_species_asi_desc: v
                 .get("srd24_species_asi_desc")
@@ -584,6 +661,25 @@ pub fn map_class(
         subtypes_name: v1_class
             .filter(|_| !is_subclass)
             .and_then(|c| none_if_none_str(&c.subtypes_name)),
+        primary_abilities: if is_subclass {
+            Vec::new()
+        } else {
+            overrides
+                .class_primary_abilities
+                .get(&slug_from_key(&rec.key))
+                .map(|groups| {
+                    groups
+                        .iter()
+                        .map(|group| {
+                            group
+                                .iter()
+                                .filter_map(|a| ability_from_str(a).ok())
+                                .collect()
+                        })
+                        .collect()
+                })
+                .unwrap_or_default()
+        },
         features: rec
             .features
             .iter()
@@ -895,4 +991,62 @@ pub fn map_item(
         created_at: ctx.epoch,
         updated_at: ctx.epoch,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::normalize_creature_alignment;
+
+    #[test]
+    fn creature_alignments_normalize_onto_the_ten_picker_values() {
+        // Every family observed in the source data, pinned.
+        let cases = [
+            // Casing variants of the canonical nine.
+            ("chaotic evil", "Chaotic Evil"),
+            ("Neutral Evil", "Neutral Evil"),
+            ("lawful good", "Lawful Good"),
+            // Bare neutral is the SRD's print form of True Neutral.
+            ("neutral", "True Neutral"),
+            ("Neutral", "True Neutral"),
+            // Unaligned in both casings.
+            ("unaligned", "Unaligned"),
+            ("Unaligned", "Unaligned"),
+            // "any ..." family takes the neutral of the indicated axis.
+            ("any alignment", "True Neutral"),
+            ("any", "True Neutral"),
+            ("Any Alignment", "True Neutral"),
+            ("any alignment (as its creator deity)", "True Neutral"),
+            ("any evil alignment", "Neutral Evil"),
+            ("Any Evil", "Neutral Evil"),
+            ("any good", "Neutral Good"),
+            ("Any Lawful Alignment", "Lawful Neutral"),
+            ("any chaotic", "Chaotic Neutral"),
+            ("Any Chaotic Alignment", "Chaotic Neutral"),
+            // "non-X" doesn't indicate a pole: True Neutral.
+            ("any non-good alignment", "True Neutral"),
+            ("non-lawful", "True Neutral"),
+            ("any non-lawful", "True Neutral"),
+            // Axis singletons take the neutral of the other axis.
+            ("chaotic", "Chaotic Neutral"),
+            ("good", "Neutral Good"),
+            // Either/or forms keep the first option.
+            ("chaotic neutral or chaotic evil", "Chaotic Neutral"),
+            ("Lawful Neutral or Lawful Evil", "Lawful Neutral"),
+            ("Neutral Evil (50%) or Lawful Evil (50%)", "Neutral Evil"),
+            ("chaotic good or chaotic neutral", "Chaotic Good"),
+            ("lawful neutral or evil", "Lawful Neutral"),
+            ("neutral evil (50%) lawful evil (50%)", "Neutral Evil"),
+            // Corrupt source rows (type fragments) become Unaligned.
+            ("Titan)", "Unaligned"),
+            ("Shapechanger)", "Unaligned"),
+            ("", "Unaligned"),
+        ];
+        for (raw, expected) in cases {
+            assert_eq!(
+                normalize_creature_alignment(raw),
+                expected,
+                "input {raw:?}"
+            );
+        }
+    }
 }

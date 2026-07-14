@@ -132,6 +132,40 @@ fn ability_options() -> Vec<EnumOption> {
     .collect()
 }
 
+/// The nine canonical SRD alignments in grid order (law/chaos ×
+/// good/evil), as the humanized display strings character sheets store.
+/// Mirrors `AlignmentName` in lorewyld-types.
+pub fn alignment_options() -> Vec<EnumOption> {
+    [
+        "Lawful Good",
+        "Neutral Good",
+        "Chaotic Good",
+        "Lawful Neutral",
+        "True Neutral",
+        "Chaotic Neutral",
+        "Lawful Evil",
+        "Neutral Evil",
+        "Chaotic Evil",
+    ]
+    .into_iter()
+    .map(|v| EnumOption {
+        value: v.into(),
+        label: v.into(),
+    })
+    .collect()
+}
+
+/// Creature alignment adds `Unaligned` (beasts, constructs, oozes — the
+/// most common SRD creature alignment after chaotic evil).
+fn creature_alignment_options() -> Vec<EnumOption> {
+    let mut options = alignment_options();
+    options.push(EnumOption {
+        value: "Unaligned".into(),
+        label: "Unaligned".into(),
+    });
+    options
+}
+
 fn damage_type_options() -> Vec<EnumOption> {
     [
         "acid",
@@ -404,10 +438,7 @@ fn creature_fields() -> Vec<FieldDef> {
         text("name", "Name", true),
         lookup("size", "Size", true, "size"),
         lookup("type", "Creature type", true, "creature_type"),
-        with_help(
-            text("alignment", "Alignment", true),
-            "Free text, e.g. \"chaotic evil\".",
-        ),
+        select_enum("alignment", "Alignment", true, creature_alignment_options()),
         float(
             "challenge_rating",
             "Challenge rating",
@@ -493,6 +524,13 @@ fn class_fields() -> Vec<FieldDef> {
             ability_options(),
         ),
         lookup("subclass_of", "Subclass of", false, "class"),
+        json_field(
+            "primary_abilities",
+            "Multiclass prerequisite",
+            serde_json::json!([]),
+            "OR-of-AND ability groups requiring 13+, e.g. \
+             [[\"strength\"],[\"dexterity\"]] = STR 13 or DEX 13.",
+        ),
         json_field(
             "features",
             "Features",
@@ -925,6 +963,41 @@ mod tests {
         )
         .unwrap_err();
         assert!(errs.iter().any(|e| e.field == "damage_types"));
+    }
+
+    #[test]
+    fn creature_alignment_is_a_canonical_enum_pick() {
+        let schema = field_schema("creature").unwrap();
+        let field = schema
+            .fields
+            .iter()
+            .find(|f| f.key == "alignment")
+            .unwrap();
+        // The nine canonical alignments plus Unaligned, no free text.
+        match &field.kind {
+            FieldKind::SelectEnum { options } => {
+                assert_eq!(options.len(), 10);
+                assert_eq!(options[0].value, "Lawful Good");
+                assert_eq!(options[4].value, "True Neutral");
+                assert_eq!(options[9].value, "Unaligned");
+            }
+            other => panic!("expected SelectEnum, got {other:?}"),
+        }
+
+        let valid = validate_value(
+            &schema,
+            &serde_json::json!({"alignment": "Chaotic Evil"}),
+        )
+        .unwrap_err(); // other required fields missing, but not alignment
+        assert!(!valid.iter().any(|e| e.field == "alignment"));
+
+        // Off-list values (including the old free-text casing) fail.
+        let invalid = validate_value(
+            &schema,
+            &serde_json::json!({"alignment": "chaotic evil"}),
+        )
+        .unwrap_err();
+        assert!(invalid.iter().any(|e| e.field == "alignment"));
     }
 
     #[test]

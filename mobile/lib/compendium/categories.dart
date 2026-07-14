@@ -171,7 +171,8 @@ final compendiumCategories = <CompendiumCategory>[
     icon: Icons.shield_outlined,
     subtitle: (r, l) => switch (r['subclass_of']) {
       final String parent => 'Subclass of ${l.classes[parent] ?? 'unknown'}',
-      _ => r['hit_dice'] != null ? 'Hit die d${r['hit_dice']}' : null,
+      // Hit die belongs in the Core traits table, not here.
+      _ => null,
     },
   ),
   CompendiumCategory(

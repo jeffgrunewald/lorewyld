@@ -7,6 +7,14 @@
 export function ability_modifier(score: number): number;
 
 /**
+ * Check 5e multiclass prerequisites: `abilities_json` is the sheet's
+ * `abilities` object, `class_records_json` a JSON array of full class
+ * records (new class + every current class). Returns a JSON array of
+ * `{name, ok, requirement}`; `"[]"` on malformed input.
+ */
+export function check_multiclass(abilities_json: string, class_records_json: string): string;
+
+/**
  * The skeleton record for a category, as a JSON string used to seed a new
  * authoring form. `"null"` for an unknown category.
  */
@@ -57,6 +65,7 @@ export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembl
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
+    readonly check_multiclass: (a: number, b: number, c: number, d: number) => [number, number];
     readonly default_record: (a: number, b: number) => [number, number];
     readonly derive_stats: (a: number, b: number) => [number, number];
     readonly field_schema: (a: number, b: number) => [number, number];

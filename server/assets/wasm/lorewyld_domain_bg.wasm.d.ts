@@ -1,6 +1,7 @@
 /* tslint:disable */
 /* eslint-disable */
 export const memory: WebAssembly.Memory;
+export const check_multiclass: (a: number, b: number, c: number, d: number) => [number, number];
 export const default_record: (a: number, b: number) => [number, number];
 export const derive_stats: (a: number, b: number) => [number, number];
 export const field_schema: (a: number, b: number) => [number, number];

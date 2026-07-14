@@ -1,7 +1,7 @@
-//! Generates `content/srd-bundle.json` (and the byte-identical mobile
-//! asset copy) from the Open5e v2 API: SRD 5.2 as the base, gap-filled
-//! by name with SRD 5.1 records, plus a v1-API join recovering the
-//! sheet-math data v2 dropped to prose.
+//! Generates `content/srd-bundle.json` from the Open5e v2 API: SRD 5.2
+//! as the base, gap-filled by name with SRD 5.1 records, plus a v1-API
+//! join recovering the sheet-math data v2 dropped to prose. The mobile
+//! asset path is a symlink to the canonical file (no second copy).
 
 mod dedup;
 mod fetch;
@@ -32,12 +32,10 @@ struct Cli {
     /// Cache directory for raw API pages (gitignored; delete to refetch).
     #[arg(long, default_value = "tools/bundle-gen/.cache")]
     cache_dir: PathBuf,
-    /// Canonical output path.
+    /// Canonical output path. The mobile asset
+    /// (mobile/assets/content/srd-bundle.json) is a symlink to this file.
     #[arg(long, default_value = "content/srd-bundle.json")]
     out: PathBuf,
-    /// Mobile asset copy (byte-identical to the canonical output).
-    #[arg(long, default_value = "mobile/assets/content/srd-bundle.json")]
-    mobile_out: PathBuf,
     /// Tiny manifest of module slugs — the mobile app's fast seeding
     /// check, so launches don't decode the full bundle just to learn
     /// nothing is missing.
@@ -57,12 +55,10 @@ fn main() -> Result<()> {
 
     let mut json = serde_json::to_string_pretty(&bundle)?;
     json.push('\n');
-    for path in [&cli.out, &cli.mobile_out] {
-        if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        std::fs::write(path, &json).with_context(|| format!("writing {}", path.display()))?;
+    if let Some(parent) = cli.out.parent() {
+        std::fs::create_dir_all(parent)?;
     }
+    std::fs::write(&cli.out, &json).with_context(|| format!("writing {}", cli.out.display()))?;
     let meta_json = build_meta(&bundle)?;
     std::fs::write(&cli.mobile_meta_out, &meta_json)
         .with_context(|| format!("writing {}", cli.mobile_meta_out.display()))?;

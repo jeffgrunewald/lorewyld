@@ -83,6 +83,12 @@ pub struct Class {
     /// Pact Boon, etc.). `None` on subclass rows.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subtypes_name: Option<String>,
+    /// Multiclass "primary ability" prerequisite: OR-of-AND groups of
+    /// abilities that must each be >= 13. Fighter is
+    /// `[[Strength], [Dexterity]]` (either), Monk `[[Dexterity, Wisdom]]`
+    /// (both). Empty = no/unknown prerequisite. Empty on subclass rows.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub primary_abilities: Vec<Vec<AbilityScore>>,
     #[serde(default)]
     pub features: Vec<ClassFeature>,
     pub is_restricted: bool,

@@ -38,7 +38,7 @@ flutter_rust_bridge::frb_generated_boilerplate!(
     default_rust_auto_opaque = RustAutoOpaqueMoi,
 );
 pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_VERSION: &str = "2.12.0";
-pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 335873899;
+pub(crate) const FLUTTER_RUST_BRIDGE_CODEGEN_CONTENT_HASH: i32 = 131757787;
 
 // Section: executor
 
@@ -72,6 +72,40 @@ fn wire__crate__api__sheet__ability_modifier_impl(
             transform_result_sse::<_, ()>((move || {
                 let output_ok =
                     Result::<_, ()>::Ok(crate::api::sheet::ability_modifier(api_score))?;
+                Ok(output_ok)
+            })())
+        },
+    )
+}
+fn wire__crate__api__sheet__check_multiclass_impl(
+    ptr_: flutter_rust_bridge::for_generated::PlatformGeneralizedUint8ListPtr,
+    rust_vec_len_: i32,
+    data_len_: i32,
+) -> flutter_rust_bridge::for_generated::WireSyncRust2DartSse {
+    FLUTTER_RUST_BRIDGE_HANDLER.wrap_sync::<flutter_rust_bridge::for_generated::SseCodec, _>(
+        flutter_rust_bridge::for_generated::TaskInfo {
+            debug_name: "check_multiclass",
+            port: None,
+            mode: flutter_rust_bridge::for_generated::FfiCallMode::Sync,
+        },
+        move || {
+            let message = unsafe {
+                flutter_rust_bridge::for_generated::Dart2RustMessageSse::from_wire(
+                    ptr_,
+                    rust_vec_len_,
+                    data_len_,
+                )
+            };
+            let mut deserializer =
+                flutter_rust_bridge::for_generated::SseDeserializer::new(message);
+            let api_abilities_json = <String>::sse_decode(&mut deserializer);
+            let api_class_records_json = <String>::sse_decode(&mut deserializer);
+            deserializer.end();
+            transform_result_sse::<_, ()>((move || {
+                let output_ok = Result::<_, ()>::Ok(crate::api::sheet::check_multiclass(
+                    api_abilities_json,
+                    api_class_records_json,
+                ))?;
                 Ok(output_ok)
             })())
         },
@@ -313,6 +347,7 @@ impl SseDecode for String {
 impl SseDecode for crate::api::sheet::DerivedStats {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_decode(deserializer: &mut flutter_rust_bridge::for_generated::SseDeserializer) -> Self {
+        let mut var_level = <i32>::sse_decode(deserializer);
         let mut var_proficiencyBonus = <i32>::sse_decode(deserializer);
         let mut var_abilityModifiers =
             <Vec<crate::api::sheet::NamedBonus>>::sse_decode(deserializer);
@@ -322,6 +357,7 @@ impl SseDecode for crate::api::sheet::DerivedStats {
         let mut var_initiative = <i32>::sse_decode(deserializer);
         let mut var_passivePerception = <i32>::sse_decode(deserializer);
         return crate::api::sheet::DerivedStats {
+            level: var_level,
             proficiency_bonus: var_proficiencyBonus,
             ability_modifiers: var_abilityModifiers,
             saving_throw_bonuses: var_savingThrowBonuses,
@@ -416,13 +452,14 @@ fn pde_ffi_dispatcher_sync_impl(
     // Codec=Pde (Serialization + dispatch), see doc to use other codecs
     match func_id {
         1 => wire__crate__api__sheet__ability_modifier_impl(ptr, rust_vec_len, data_len),
-        2 => wire__crate__api__authoring__default_record_impl(ptr, rust_vec_len, data_len),
-        3 => wire__crate__api__sheet__derive_stats_impl(ptr, rust_vec_len, data_len),
-        4 => wire__crate__api__authoring__field_schema_impl(ptr, rust_vec_len, data_len),
-        5 => wire__crate__api__guidance__guidance_questionnaire_impl(ptr, rust_vec_len, data_len),
-        6 => wire__crate__api__guidance__guidance_recommend_impl(ptr, rust_vec_len, data_len),
-        7 => wire__crate__api__sheet__proficiency_bonus_impl(ptr, rust_vec_len, data_len),
-        8 => wire__crate__api__authoring__validate_record_impl(ptr, rust_vec_len, data_len),
+        2 => wire__crate__api__sheet__check_multiclass_impl(ptr, rust_vec_len, data_len),
+        3 => wire__crate__api__authoring__default_record_impl(ptr, rust_vec_len, data_len),
+        4 => wire__crate__api__sheet__derive_stats_impl(ptr, rust_vec_len, data_len),
+        5 => wire__crate__api__authoring__field_schema_impl(ptr, rust_vec_len, data_len),
+        6 => wire__crate__api__guidance__guidance_questionnaire_impl(ptr, rust_vec_len, data_len),
+        7 => wire__crate__api__guidance__guidance_recommend_impl(ptr, rust_vec_len, data_len),
+        8 => wire__crate__api__sheet__proficiency_bonus_impl(ptr, rust_vec_len, data_len),
+        9 => wire__crate__api__authoring__validate_record_impl(ptr, rust_vec_len, data_len),
         _ => unreachable!(),
     }
 }
@@ -433,6 +470,7 @@ fn pde_ffi_dispatcher_sync_impl(
 impl flutter_rust_bridge::IntoDart for crate::api::sheet::DerivedStats {
     fn into_dart(self) -> flutter_rust_bridge::for_generated::DartAbi {
         [
+            self.level.into_into_dart().into_dart(),
             self.proficiency_bonus.into_into_dart().into_dart(),
             self.ability_modifiers.into_into_dart().into_dart(),
             self.saving_throw_bonuses.into_into_dart().into_dart(),
@@ -483,6 +521,7 @@ impl SseEncode for String {
 impl SseEncode for crate::api::sheet::DerivedStats {
     // Codec=Sse (Serialization based), see doc to use other codecs
     fn sse_encode(self, serializer: &mut flutter_rust_bridge::for_generated::SseSerializer) {
+        <i32>::sse_encode(self.level, serializer);
         <i32>::sse_encode(self.proficiency_bonus, serializer);
         <Vec<crate::api::sheet::NamedBonus>>::sse_encode(self.ability_modifiers, serializer);
         <Vec<crate::api::sheet::NamedBonus>>::sse_encode(self.saving_throw_bonuses, serializer);

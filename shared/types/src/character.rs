@@ -25,6 +25,30 @@ pub struct CharacterEquipmentItem {
     pub attuned: bool,
 }
 
+/// One class a character has levels in. Multiclass characters carry
+/// several entries; the character's level is the sum of entry levels.
+/// Class and subclass are display-name strings, like the rest of the
+/// sheet's content references. Every sheet has at least one entry.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
+pub struct CharacterClassEntry {
+    pub name: String,
+    #[serde(default = "default_level")]
+    pub level: i32,
+    /// Chosen subclass display name; "" = none yet.
+    #[serde(default)]
+    pub subclass: String,
+    /// The initial class, which dictates first-level stats such as the
+    /// hit-die seed. Exactly one entry should be flagged.
+    #[serde(default)]
+    pub starting: bool,
+    /// Multiclass prerequisite snapshotted from the class record at pick
+    /// time (OR-of-AND ability groups, each needing 13+), so the rule
+    /// travels with the character to servers missing the content module.
+    #[serde(default)]
+    pub primary_abilities: Vec<Vec<String>>,
+}
+
 /// One known/prepared spell line on the sheet. `level` 0 = cantrip.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "openapi", derive(utoipa::ToSchema))]
@@ -56,10 +80,10 @@ pub struct CharacterSheet {
     pub owner_username: Option<String>,
     #[serde(default)]
     pub race: String,
+    /// Classes this character has levels in. The server requires at
+    /// least one entry; the character's level is the sum of entry levels.
     #[serde(default)]
-    pub class_name: String,
-    #[serde(default = "default_level")]
-    pub level: i32,
+    pub classes: Vec<CharacterClassEntry>,
     /// Accumulated XP for campaigns that advance by experience points.
     /// `None` = campaign doesn't track XP (e.g. milestone advancement).
     /// Advisory only — never auto-advances `level`.
@@ -141,6 +165,50 @@ mod tests {
         let back: CharacterSheet =
             serde_json::from_value(serde_json::to_value(&tracked).unwrap()).unwrap();
         assert_eq!(back.experience_points, Some(1500));
+    }
+
+    #[test]
+    fn classes_default_to_empty_and_round_trip() {
+        // Absent in JSON deserializes to empty (the API layer, not
+        // serde, enforces the at-least-one-class rule).
+        let sheet: CharacterSheet =
+            serde_json::from_value(serde_json::json!({ "name": "Thistle" })).unwrap();
+        assert!(sheet.classes.is_empty());
+
+        // Entry defaults: level 1, no subclass, not starting, no prereq.
+        let entry: CharacterClassEntry =
+            serde_json::from_value(serde_json::json!({ "name": "Fighter" })).unwrap();
+        assert_eq!(entry.level, 1);
+        assert_eq!(entry.subclass, "");
+        assert!(!entry.starting);
+        assert!(entry.primary_abilities.is_empty());
+
+        // A populated multiclass list round-trips, snapshot included.
+        let multi = CharacterSheet {
+            classes: vec![
+                CharacterClassEntry {
+                    name: "Fighter".to_string(),
+                    level: 5,
+                    subclass: "Champion".to_string(),
+                    starting: true,
+                    primary_abilities: vec![
+                        vec!["strength".to_string()],
+                        vec!["dexterity".to_string()],
+                    ],
+                },
+                CharacterClassEntry {
+                    name: "Wizard".to_string(),
+                    level: 3,
+                    subclass: String::new(),
+                    starting: false,
+                    primary_abilities: vec![vec!["intelligence".to_string()]],
+                },
+            ],
+            ..sheet
+        };
+        let back: CharacterSheet =
+            serde_json::from_value(serde_json::to_value(&multi).unwrap()).unwrap();
+        assert_eq!(back.classes, multi.classes);
     }
 
     #[test]

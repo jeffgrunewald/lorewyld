@@ -10,17 +10,19 @@
 pub mod authoring;
 pub mod guidance;
 pub mod guidance_profiles;
+pub mod multiclass;
 pub mod sheet;
 
 pub use authoring::{
     AUTHORABLE_CATEGORIES, EnumOption, FieldDef, FieldError, FieldKind, FieldSchema,
-    default_record, field_schema, validate_record, validate_value,
+    alignment_options, default_record, field_schema, validate_record, validate_value,
 };
 pub use guidance::{
     Answer, AnswerOption, Axis, CandidateSets, GUIDANCE_VERSION, Question, Questionnaire,
     Recommendation, RecommendationSet, Theme, guidance_questionnaire, recommend,
 };
+pub use multiclass::{PrereqResult, check_multiclass, prereq_groups};
 pub use sheet::{
-    DerivedStats, NamedBonus, ability_modifier, derive_stats, initiative, passive_perception,
-    proficiency_bonus, saving_throw_bonus, skill_bonus,
+    DerivedStats, NamedBonus, ability_modifier, derive_stats, initiative, normalize_classes,
+    passive_perception, proficiency_bonus, saving_throw_bonus, skill_bonus, total_level,
 };

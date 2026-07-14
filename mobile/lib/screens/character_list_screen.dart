@@ -101,7 +101,9 @@ class _CharacterListScreenState extends State<CharacterListScreen> {
           itemBuilder: (_, c) {
             final subtitle = [
               if (c.race.isNotEmpty) c.race,
-              if (c.className.isNotEmpty) 'Level ${c.level} ${c.className}',
+              if (c.classes.isNotEmpty)
+                'Level ${c.totalLevel} · '
+                    '${c.classes.map((e) => '${e.name} ${e.level}').join(' / ')}',
             ].join(' · ');
             return ListTile(
               leading: CircleAvatar(

@@ -11,6 +11,32 @@ export function ability_modifier(score) {
 }
 
 /**
+ * Check 5e multiclass prerequisites: `abilities_json` is the sheet's
+ * `abilities` object, `class_records_json` a JSON array of full class
+ * records (new class + every current class). Returns a JSON array of
+ * `{name, ok, requirement}`; `"[]"` on malformed input.
+ * @param {string} abilities_json
+ * @param {string} class_records_json
+ * @returns {string}
+ */
+export function check_multiclass(abilities_json, class_records_json) {
+    let deferred3_0;
+    let deferred3_1;
+    try {
+        const ptr0 = passStringToWasm0(abilities_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len0 = WASM_VECTOR_LEN;
+        const ptr1 = passStringToWasm0(class_records_json, wasm.__wbindgen_malloc, wasm.__wbindgen_realloc);
+        const len1 = WASM_VECTOR_LEN;
+        const ret = wasm.check_multiclass(ptr0, len0, ptr1, len1);
+        deferred3_0 = ret[0];
+        deferred3_1 = ret[1];
+        return getStringFromWasm0(ret[0], ret[1]);
+    } finally {
+        wasm.__wbindgen_free(deferred3_0, deferred3_1, 1);
+    }
+}
+
+/**
  * The skeleton record for a category, as a JSON string used to seed a new
  * authoring form. `"null"` for an unknown category.
  * @param {string} category

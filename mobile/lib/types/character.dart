@@ -5,6 +5,14 @@
 // and skill bonuses, proficiency from level) but never enforces — any
 // score or value the player types is accepted.
 
+// The nine canonical alignments in grid order — mirrors the Rust core's
+// alignment_options (shared/domain/src/authoring.rs).
+const List<String> kCanonicalAlignments = [
+  'Lawful Good', 'Neutral Good', 'Chaotic Good',
+  'Lawful Neutral', 'True Neutral', 'Chaotic Neutral',
+  'Lawful Evil', 'Neutral Evil', 'Chaotic Evil',
+];
+
 enum Ability {
   strength('Strength', 'STR'),
   dexterity('Dexterity', 'DEX'),
@@ -94,6 +102,65 @@ class EquipmentItem {
       );
 }
 
+// One class the character has levels in; multiclass sheets carry
+// several (the server enforces a minimum of one).
+class ClassEntry {
+  final String name;
+  final int level;
+
+  // Chosen subclass display name; '' = none yet.
+  final String subclass;
+
+  // The initial class: dictates first-level stats such as the hit-die
+  // seed. Exactly one entry should be flagged.
+  final bool starting;
+
+  // Prereq snapshot from the class record at pick time (OR-of-AND
+  // ability groups needing 13+) — survives missing content modules.
+  final List<List<String>> primaryAbilities;
+
+  const ClassEntry({
+    required this.name,
+    this.level = 1,
+    this.subclass = '',
+    this.starting = false,
+    this.primaryAbilities = const [],
+  });
+
+  factory ClassEntry.fromJson(Map<String, dynamic> json) => ClassEntry(
+    name: json['name'] as String,
+    level: json['level'] as int? ?? 1,
+    subclass: json['subclass'] as String? ?? '',
+    starting: json['starting'] as bool? ?? false,
+    primaryAbilities: [
+      for (final group in json['primary_abilities'] as List<dynamic>? ?? [])
+        if (group is List) [for (final a in group) a as String],
+    ],
+  );
+
+  Map<String, dynamic> toJson() => {
+    'name': name,
+    'level': level,
+    'subclass': subclass,
+    'starting': starting,
+    'primary_abilities': primaryAbilities,
+  };
+
+  ClassEntry copyWith({
+    String? name,
+    int? level,
+    String? subclass,
+    bool? starting,
+    List<List<String>>? primaryAbilities,
+  }) => ClassEntry(
+    name: name ?? this.name,
+    level: level ?? this.level,
+    subclass: subclass ?? this.subclass,
+    starting: starting ?? this.starting,
+    primaryAbilities: primaryAbilities ?? this.primaryAbilities,
+  );
+}
+
 class SpellEntry {
   final String name;
 
@@ -120,8 +187,8 @@ class CharacterSheet {
   final String uuid;
   final String name;
   final String race;
-  final String className;
-  final int level;
+  // Classes with levels; the server requires at least one entry.
+  final List<ClassEntry> classes;
   // Accumulated XP; null = campaign doesn't track XP (milestone play).
   // Advisory only — never auto-advances level.
   final int? experiencePoints;
@@ -146,8 +213,7 @@ class CharacterSheet {
     required this.uuid,
     required this.name,
     this.race = '',
-    this.className = '',
-    this.level = 1,
+    this.classes = const [],
     this.experiencePoints,
     this.background = '',
     this.alignment = '',
@@ -170,6 +236,16 @@ class CharacterSheet {
     for (final a in Ability.values) a: 10,
   };
 
+  // Character level: sum of per-class levels (each clamped 1..20);
+  // minimum 1 for a defensively-empty list.
+  int get totalLevel => classes.isEmpty
+      ? 1
+      : classes.fold(0, (n, c) => n + c.level.clamp(1, 20));
+
+  ClassEntry? get startingClass => classes.isEmpty
+      ? null
+      : classes.firstWhere((c) => c.starting, orElse: () => classes.first);
+
   // ── raw-score access + formatting ───────────────────────────────────
   //
   // The derived 5e math (modifiers, proficiency, save/skill bonuses,
@@ -187,8 +263,9 @@ class CharacterSheet {
     uuid: json['uuid'] as String,
     name: json['name'] as String,
     race: json['race'] as String? ?? '',
-    className: json['class_name'] as String? ?? '',
-    level: json['level'] as int? ?? 1,
+    classes: (json['classes'] as List<dynamic>? ?? [])
+        .map((e) => ClassEntry.fromJson(e as Map<String, dynamic>))
+        .toList(),
     experiencePoints: json['experience_points'] as int?,
     background: json['background'] as String? ?? '',
     alignment: json['alignment'] as String? ?? '',
@@ -228,8 +305,7 @@ class CharacterSheet {
     'uuid': uuid,
     'name': name,
     'race': race,
-    'class_name': className,
-    'level': level,
+    'classes': classes.map((c) => c.toJson()).toList(),
     // Emit only when tracked, mirroring Rust's skip_serializing_if.
     if (experiencePoints != null) 'experience_points': experiencePoints,
     'background': background,
@@ -254,8 +330,7 @@ class CharacterSheet {
   CharacterSheet copyWith({
     String? name,
     String? race,
-    String? className,
-    int? level,
+    List<ClassEntry>? classes,
     int? experiencePoints,
     bool clearExperiencePoints = false,
     String? background,
@@ -276,8 +351,7 @@ class CharacterSheet {
     uuid: uuid,
     name: name ?? this.name,
     race: race ?? this.race,
-    className: className ?? this.className,
-    level: level ?? this.level,
+    classes: classes ?? this.classes,
     // `?? this` can't reset a nullable field, so clearing is explicit.
     experiencePoints: clearExperiencePoints
         ? null

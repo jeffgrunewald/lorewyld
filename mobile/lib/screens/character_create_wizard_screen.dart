@@ -1,16 +1,8 @@
-// New-character wizard: name → species → class → background & alignment.
-// Species, class, and background come from the installed content
-// modules via pickers; alignment from the seeded alignment table.
-// Everything except the name can be skipped and chosen later on the
-// sheet.
-//
-// Picking a class pre-fills hit dice (1d<hit_die>); picking a species
-// pre-fills walking speed. Pre-filled, never enforced — both stay
-// editable on the sheet.
+// New-character wizard (name/class required, rest optional); class pick
+// pre-fills hit dice + prereq snapshot, species pre-fills speed.
 
 import 'package:flutter/material.dart';
 
-import '../compendium/categories.dart';
 import '../ffi/api/sheet.dart';
 import '../services/content_store.dart';
 import '../services/local_store.dart';
@@ -56,7 +48,6 @@ class _CharacterCreateWizardScreenState
   Map<String, dynamic>? _characterClass;
   Map<String, dynamic>? _background;
   String _alignment = '';
-  List<Map<String, dynamic>> _alignments = const [];
 
   @override
   void initState() {
@@ -65,9 +56,6 @@ class _CharacterCreateWizardScreenState
     _characterClass = widget.initialClass;
     _background = widget.initialBackground;
     _alignment = widget.initialAlignment ?? '';
-    _content.listAlignments().then((rows) {
-      if (mounted) setState(() => _alignments = rows);
-    });
   }
 
   @override
@@ -94,7 +82,7 @@ class _CharacterCreateWizardScreenState
 
   Future<void> _create() async {
     final name = _nameCtl.text.trim();
-    if (name.isEmpty || _creating) return;
+    if (name.isEmpty || _characterClass == null || _creating) return;
     setState(() => _creating = true);
     final created = await widget.store.createCharacter(name);
 
@@ -118,7 +106,21 @@ class _CharacterCreateWizardScreenState
       created.copyWith(
         abilities: widget.initialAbilities,
         race: _species?['name'] as String? ?? '',
-        className: _characterClass?['name'] as String? ?? '',
+        classes: _characterClass?['name'] is String
+            ? [
+                ClassEntry(
+                  name: _characterClass!['name'] as String,
+                  starting: true,
+                  primaryAbilities: [
+                    for (final group
+                        in _characterClass!['primary_abilities']
+                                as List<dynamic>? ??
+                            [])
+                      if (group is List) [for (final a in group) a as String],
+                  ],
+                ),
+              ]
+            : null,
         background: _background?['name'] as String? ?? '',
         alignment: _alignment,
         speed: (_species?['speed'] as num?)?.truncate() ?? created.speed,
@@ -199,18 +201,17 @@ class _CharacterCreateWizardScreenState
             ),
             const SizedBox(height: 12),
             DropdownButtonFormField<String>(
-              initialValue: _alignment.isEmpty ? null : _alignment,
+              initialValue: kCanonicalAlignments.contains(_alignment)
+                  ? _alignment
+                  : null,
               isExpanded: true,
               decoration: const InputDecoration(
                 labelText: 'Alignment',
                 border: OutlineInputBorder(),
               ),
               items: [
-                for (final a in _alignments)
-                  DropdownMenuItem(
-                    value: humanizeSlug('${a['name']}'),
-                    child: Text(humanizeSlug('${a['name']}')),
-                  ),
+                for (final a in kCanonicalAlignments)
+                  DropdownMenuItem(value: a, child: Text(a)),
               ],
               onChanged: (v) => setState(() => _alignment = v ?? ''),
             ),
@@ -237,15 +238,22 @@ class _CharacterCreateWizardScreenState
         // built, not the active step.
         controlsBuilder: (context, details) {
           final last = details.stepIndex == steps.length - 1;
+          // A name and a class are required; everything else can be
+          // chosen later on the sheet.
+          final canContinue =
+              nameValid && !_creating && (!last || _characterClass != null);
           return Padding(
             padding: const EdgeInsets.only(top: 16),
             child: Row(
               children: [
-                FilledButton(
-                  onPressed: nameValid && !_creating
-                      ? details.onStepContinue
-                      : null,
-                  child: Text(last ? 'Create' : 'Next'),
+                Tooltip(
+                  message: last && _characterClass == null
+                      ? 'Choose a class first'
+                      : '',
+                  child: FilledButton(
+                    onPressed: canContinue ? details.onStepContinue : null,
+                    child: Text(last ? 'Create' : 'Next'),
+                  ),
                 ),
                 const SizedBox(width: 8),
                 if (details.onStepCancel != null)

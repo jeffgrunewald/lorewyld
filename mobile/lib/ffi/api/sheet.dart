@@ -25,9 +25,23 @@ int abilityModifier({required int score}) =>
 int proficiencyBonus({required int level}) =>
     RustLib.instance.api.crateApiSheetProficiencyBonus(level: level);
 
+/// Check 5e multiclass prerequisites: `abilities_json` is the sheet's
+/// `AbilityScores`, `class_records_json` a JSON array of full class
+/// records (new class + every current class). Returns a JSON array of
+/// `{name, ok, requirement}`; "[]" on malformed input.
+String checkMulticlass({
+  required String abilitiesJson,
+  required String classRecordsJson,
+}) => RustLib.instance.api.crateApiSheetCheckMulticlass(
+  abilitiesJson: abilitiesJson,
+  classRecordsJson: classRecordsJson,
+);
+
 /// Everything the sheet UI derives from the raw scores, computed in one
 /// call per edit.
 class DerivedStats {
+  /// Character level: sum of per-class levels.
+  final int level;
   final int proficiencyBonus;
   final List<NamedBonus> abilityModifiers;
   final List<NamedBonus> savingThrowBonuses;
@@ -36,6 +50,7 @@ class DerivedStats {
   final int passivePerception;
 
   const DerivedStats({
+    required this.level,
     required this.proficiencyBonus,
     required this.abilityModifiers,
     required this.savingThrowBonuses,
@@ -46,6 +61,7 @@ class DerivedStats {
 
   @override
   int get hashCode =>
+      level.hashCode ^
       proficiencyBonus.hashCode ^
       abilityModifiers.hashCode ^
       savingThrowBonuses.hashCode ^
@@ -58,6 +74,7 @@ class DerivedStats {
       identical(this, other) ||
       other is DerivedStats &&
           runtimeType == other.runtimeType &&
+          level == other.level &&
           proficiencyBonus == other.proficiencyBonus &&
           abilityModifiers == other.abilityModifiers &&
           savingThrowBonuses == other.savingThrowBonuses &&

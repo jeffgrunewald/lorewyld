@@ -149,9 +149,15 @@ const LIST_SCRIPT: &str = r#"
                 a.href = '/characters/' + sheet.uuid;
                 const text = C.el('div', 'lw-list-item-text');
                 text.appendChild(C.el('div', 'lw-list-item-title', sheet.name));
-                const parts = ['Level ' + (sheet.level || 1)];
+                const classes = Array.isArray(sheet.classes) ? sheet.classes : [];
+                const total = classes.reduce(function (n, c) { return n + (c.level || 1); }, 0);
+                const parts = ['Level ' + Math.max(total, 1)];
                 if (sheet.race) parts.push(sheet.race);
-                if (sheet.class_name) parts.push(sheet.class_name);
+                if (classes.length) {
+                    parts.push(classes.map(function (c) {
+                        return c.name + ' ' + (c.level || 1);
+                    }).join(' / '));
+                }
                 if (sheet.owner_username && (!me || sheet.owner_user_uuid !== me.id)) {
                     parts.push('by ' + sheet.owner_username);
                 }
@@ -209,12 +215,10 @@ const WIZARD_SCRIPT: &str = r#"
     }
 
     C.requireAuth(function () {
-        Promise.all([
-            C.fetchTable('alignment').then(function (records) {
-                alignments = records.map(function (r) { return C.humanizeSlug(String(r.name)); });
-            }).catch(function () {}),
-            applyGuidedPicks(),
-        ]).then(render);
+        // The nine canonical alignments come from the shared code list,
+        // not a content table.
+        alignments = C.alignmentList;
+        applyGuidedPicks().then(render);
     });
 
     function pickerField(label, current, onPick, onClear) {
@@ -247,7 +251,10 @@ const WIZARD_SCRIPT: &str = r#"
         }
         const next = C.el('button', 'lw-btn lw-btn-filled', isLast ? 'Create' : 'Next');
         next.type = 'button';
-        next.disabled = state.name.trim() === '' || state.creating;
+        // A name and a class are required; everything else is optional.
+        next.disabled = state.name.trim() === '' || state.creating ||
+            (isLast && !state.characterClass);
+        if (isLast && !state.characterClass) next.title = 'Choose a class first';
         next.id = isLast ? 'lw-wizard-create' : 'lw-wizard-next-' + stepIndex;
         next.addEventListener('click', function () {
             if (isLast) create();
@@ -347,7 +354,7 @@ const WIZARD_SCRIPT: &str = r#"
 
     function create() {
         const name = state.name.trim();
-        if (!name || state.creating) return;
+        if (!name || !state.characterClass || state.creating) return;
         state.creating = true;
         render();
 
@@ -369,8 +376,14 @@ const WIZARD_SCRIPT: &str = r#"
         const sheet = {
             name: name,
             race: state.species ? String(state.species.name) : '',
-            class_name: cls ? String(cls.name) : '',
-            level: 1,
+            classes: [{
+                name: String(cls.name),
+                level: 1,
+                subclass: '',
+                starting: true,
+                primary_abilities: Array.isArray(cls.primary_abilities)
+                    ? cls.primary_abilities : [],
+            }],
             background: state.background ? String(state.background.name) : '',
             alignment: state.alignment,
             abilities: abilities,
@@ -426,6 +439,8 @@ const SHEET_SCRIPT: &str = r#"
     let languages = [];
     // Names of items whose content record requires attunement.
     let attunable = new Set();
+    // Class table rows (summaries) for subclass lookup + prereq records.
+    let classRows = [];
     // Derived 5e stats from the shared Rust core (WASM), recomputed once
     // per render; sub-renders read from it instead of re-deriving in JS.
     let derived = null;
@@ -534,6 +549,10 @@ const SHEET_SCRIPT: &str = r#"
                 (rows || []).forEach(function (r) {
                     if (r.requires_attunement === true) attunable.add(String(r.name));
                 });
+                render();
+            }).catch(function () {});
+            C.fetchTable('class').then(function (rows) {
+                classRows = rows || [];
                 render();
             }).catch(function () {});
         }).catch(function (err) {
@@ -696,6 +715,7 @@ const SHEET_SCRIPT: &str = r#"
         sheetEl.replaceChildren();
         derived = C.deriveStats(sheet);
         renderIdentity();
+        renderClasses();
         renderAbilities();
         renderCombat();
         renderSaves();
@@ -737,35 +757,6 @@ const SHEET_SCRIPT: &str = r#"
             });
         }, function () { sheet.race = ''; markDirty(); render(); })));
 
-        c.appendChild(labeled('Class', pickerField('Choose a class', sheet.class_name || null, function () {
-            C.openPicker({
-                table: 'class',
-                title: 'Choose a class',
-                recordFilter: function (r) { return r.subclass_of == null; },
-            }).then(function (r) {
-                if (!r) return;
-                C.fetchEntry('class', r.uuid).catch(function () { return r; }).then(function (full) {
-                    sheet.class_name = String(full.name);
-                    const die = typeof full.hit_dice === 'number' ? Math.trunc(full.hit_dice) : null;
-                    if (die != null) sheet.hit_dice = '1d' + die;
-                    if (Array.isArray(full.prof_saving_throws)) {
-                        const keys = C.abilityList.map(function (a) { return a.key; });
-                        sheet.saving_throw_proficiencies =
-                            full.prof_saving_throws.filter(function (s) { return keys.includes(s); });
-                    }
-                    // HP re-derives only while untouched (maxHp <= 1):
-                    // documents, never enforces.
-                    if (die != null && sheet.max_hp <= 1) {
-                        const hp = Math.max(1, die + C.abilityMod(sheet.abilities.constitution));
-                        sheet.max_hp = hp;
-                        sheet.current_hp = hp;
-                    }
-                    markDirty();
-                    render();
-                });
-            });
-        }, function () { sheet.class_name = ''; markDirty(); render(); })));
-
         c.appendChild(labeled('Background', pickerField('Choose a background', sheet.background || null, function () {
             C.openPicker({ table: 'background', title: 'Choose a background' }).then(function (r) {
                 if (!r) return;
@@ -775,39 +766,263 @@ const SHEET_SCRIPT: &str = r#"
             });
         }, function () { sheet.background = ''; markDirty(); render(); })));
 
-        const levelRow = C.el('div', 'lw-combat-grid');
-        const levelItem = C.el('div', 'lw-combat-item', 'Level');
-        levelItem.appendChild(numStepper(sheet.level || 1, 1, 20, 1, function (v) {
-            sheet.level = v;
-            markDirty();
-            render();
-        }));
-        levelRow.appendChild(levelItem);
-        const prof = C.el('div', 'lw-stat-badge', 'Proficiency');
-        prof.appendChild(C.el('span', 'lw-stat-value', C.formatBonus(derived.proficiency_bonus)));
-        levelRow.appendChild(prof);
-        c.appendChild(levelRow);
-
         const select = C.el('select', 'lw-input');
         const none = C.el('option', null, 'No alignment');
         none.value = '';
         select.appendChild(none);
-        C.fetchTable('alignment').then(function (records) {
-            const names = records.map(function (r) { return C.humanizeSlug(String(r.name)); });
-            // A saved free-text value stays selectable.
-            if (sheet.alignment && !names.includes(sheet.alignment)) names.unshift(sheet.alignment);
-            for (const n of names) {
-                const opt = C.el('option', null, n);
-                opt.value = n;
-                select.appendChild(opt);
-            }
-            select.value = sheet.alignment || '';
-        });
+        for (const n of C.alignmentList) {
+            const opt = C.el('option', null, n);
+            opt.value = n;
+            select.appendChild(opt);
+        }
+        // An off-list stored value (e.g. "Unaligned") falls back to the
+        // "No alignment" option; the server rejects off-list writes.
+        select.value = C.alignmentList.includes(sheet.alignment) ? sheet.alignment : '';
         select.addEventListener('change', function () {
             sheet.alignment = select.value;
             markDirty();
         });
         c.appendChild(labeled('Alignment', select));
+
+        sheetEl.appendChild(c);
+    }
+
+    /* ── classes & subclasses ────────────────────────────────────── */
+
+    function classByName(name) {
+        return classRows.find(function (r) {
+            return r.subclass_of == null && r.name === name;
+        }) || null;
+    }
+
+    function subclassesOf(parentUuid) {
+        return classRows.filter(function (r) { return r.subclass_of === parentUuid; });
+    }
+
+    // Starting-class grants (hit-die seed, saves, first-level HP while
+    // untouched): documents, never enforces.
+    function applyClassGrants(full) {
+        const die = typeof full.hit_dice === 'number' ? Math.trunc(full.hit_dice) : null;
+        if (die != null) sheet.hit_dice = '1d' + die;
+        if (Array.isArray(full.prof_saving_throws)) {
+            const keys = C.abilityList.map(function (a) { return a.key; });
+            sheet.saving_throw_proficiencies =
+                full.prof_saving_throws.filter(function (s) { return keys.includes(s); });
+        }
+        if (die != null && sheet.max_hp <= 1) {
+            const hp = Math.max(1, die + C.abilityMod(sheet.abilities.constitution));
+            sheet.max_hp = hp;
+            sheet.current_hp = hp;
+        }
+    }
+
+    // Held-class prereq records: the entry's pick-time snapshot wins
+    // (it travels with the sheet), else live content, else a name stub.
+    function heldClassRecords(excludeIndex) {
+        const held = sheet.classes.filter(function (_, i) { return i !== excludeIndex; });
+        return Promise.all(held.map(function (c) {
+            if (Array.isArray(c.primary_abilities) && c.primary_abilities.length) {
+                return Promise.resolve({ name: c.name, primary_abilities: c.primary_abilities });
+            }
+            const summary = classByName(c.name);
+            if (!summary) return Promise.resolve({ name: c.name });
+            return C.fetchEntry('class', summary.uuid).catch(function () { return summary; });
+        }));
+    }
+
+    // Hard block: multiclass sets must satisfy every class's primary-
+    // ability prerequisite (13+, checked in the shared core).
+    function guardPrereqs(newFull, excludeIndex, proceed) {
+        const others = sheet.classes.filter(function (_, i) { return i !== excludeIndex; });
+        if (others.length === 0) { proceed(); return; }
+        heldClassRecords(excludeIndex).then(function (records) {
+            const failed = C.checkMulticlass(sheet.abilities, [newFull].concat(records))
+                .filter(function (r) { return !r.ok; });
+            if (failed.length) { prereqModal(failed); return; }
+            proceed();
+        });
+    }
+
+    function prereqModal(failed) {
+        const modal = C.openModal('');
+        modal.panel.appendChild(C.el('h2', 'lw-modal-title', 'Multiclass requirements not met'));
+        failed.forEach(function (r) {
+            modal.panel.appendChild(C.el('p', null,
+                r.name + ' requires ' + (r.requirement || 'an ability score of 13') + '.'));
+        });
+        const actions = C.el('div', 'lw-modal-actions');
+        const ok = C.el('button', 'lw-btn lw-btn-filled', 'OK');
+        ok.type = 'button';
+        ok.addEventListener('click', modal.close);
+        actions.appendChild(ok);
+        modal.panel.appendChild(actions);
+    }
+
+    function addClass() {
+        C.openPicker({
+            table: 'class',
+            title: sheet.classes.length ? 'Add a class' : 'Choose a class',
+            recordFilter: function (r) {
+                return r.subclass_of == null && !sheet.classes.some(function (c) {
+                    return c.name === r.name;
+                });
+            },
+        }).then(function (r) {
+            if (!r) return;
+            C.fetchEntry('class', r.uuid).catch(function () { return r; }).then(function (full) {
+                guardPrereqs(full, -1, function () {
+                    const first = sheet.classes.length === 0;
+                    sheet.classes.push({
+                        name: String(full.name),
+                        level: 1,
+                        subclass: '',
+                        starting: first,
+                        primary_abilities: Array.isArray(full.primary_abilities)
+                            ? full.primary_abilities : [],
+                    });
+                    if (first) applyClassGrants(full);
+                    markDirty();
+                    render();
+                });
+            });
+        });
+    }
+
+    function repickClass(entry, index) {
+        C.openPicker({
+            table: 'class',
+            title: 'Choose a class',
+            recordFilter: function (r) {
+                return r.subclass_of == null && !sheet.classes.some(function (c, i) {
+                    return i !== index && c.name === r.name;
+                });
+            },
+        }).then(function (r) {
+            if (!r) return;
+            C.fetchEntry('class', r.uuid).catch(function () { return r; }).then(function (full) {
+                guardPrereqs(full, index, function () {
+                    entry.name = String(full.name);
+                    entry.subclass = '';
+                    entry.primary_abilities = Array.isArray(full.primary_abilities)
+                        ? full.primary_abilities : [];
+                    if (entry.starting) applyClassGrants(full);
+                    markDirty();
+                    render();
+                });
+            });
+        });
+    }
+
+    // Disabled until this class's own level reaches 3 (RAW); a chosen
+    // subclass is kept but greyed if the level drops back below 3.
+    function subclassField(entry) {
+        const parent = classByName(entry.name);
+        const subs = parent ? subclassesOf(parent.uuid) : [];
+        const unlocked = (entry.level || 1) >= 3;
+        const row = C.el('div', 'lw-picker-field');
+        const btn = C.el('button', 'lw-picker-field-btn' + (entry.subclass ? '' : ' lw-placeholder'),
+            entry.subclass || 'Choose a subclass');
+        btn.type = 'button';
+        if (!unlocked) {
+            btn.disabled = true;
+            btn.title = 'Subclass unlocks at level 3';
+        } else if (!parent) {
+            btn.disabled = true;
+            btn.title = 'Class content not found';
+        } else if (subs.length === 0) {
+            btn.disabled = true;
+            btn.title = 'No subclasses available for ' + entry.name;
+        }
+        btn.addEventListener('click', function () {
+            C.openPicker({
+                table: 'class',
+                title: 'Choose a ' + entry.name + ' subclass',
+                recordFilter: function (r) { return r.subclass_of === parent.uuid; },
+            }).then(function (r) {
+                if (!r) return;
+                entry.subclass = String(r.name);
+                markDirty();
+                render();
+            });
+        });
+        row.appendChild(btn);
+        if (entry.subclass && unlocked) {
+            const clear = C.el('button', 'lw-picker-field-clear', '✕');
+            clear.type = 'button';
+            clear.setAttribute('aria-label', 'Clear subclass');
+            clear.addEventListener('click', function () {
+                entry.subclass = '';
+                markDirty();
+                render();
+            });
+            row.appendChild(clear);
+        }
+        return row;
+    }
+
+    function renderClasses() {
+        const c = card('Classes');
+
+        const badges = C.el('div', 'lw-combat-grid');
+        const levelBadge = C.el('div', 'lw-stat-badge', 'Level');
+        levelBadge.appendChild(C.el('span', 'lw-stat-value', String(derived.level)));
+        badges.appendChild(levelBadge);
+        const prof = C.el('div', 'lw-stat-badge', 'Proficiency');
+        prof.appendChild(C.el('span', 'lw-stat-value', C.formatBonus(derived.proficiency_bonus)));
+        badges.appendChild(prof);
+        c.appendChild(badges);
+
+        sheet.classes.forEach(function (entry, index) {
+            const row = C.el('div', 'lw-class-row');
+
+            const start = C.el('label', 'lw-class-start');
+            start.title = 'Starting class — determines first-level stats';
+            const radio = C.el('input');
+            radio.type = 'radio';
+            radio.name = 'lw-start-class';
+            radio.checked = entry.starting === true;
+            radio.addEventListener('change', function () {
+                sheet.classes.forEach(function (c) { c.starting = false; });
+                entry.starting = true;
+                markDirty();
+                render();
+            });
+            start.appendChild(radio);
+            start.appendChild(C.el('span', null, 'Start'));
+            row.appendChild(start);
+
+            row.appendChild(pickerField('Choose a class', entry.name || null, function () {
+                repickClass(entry, index);
+            }, function () {
+                if (sheet.classes.length <= 1) {
+                    C.showToast('A character needs at least one class.');
+                    return;
+                }
+                confirmRemove('class', entry.name, function () {
+                    sheet.classes.splice(index, 1);
+                    // Keep the starting flag on exactly one entry.
+                    if (!sheet.classes.some(function (c) { return c.starting; })) {
+                        sheet.classes[0].starting = true;
+                    }
+                    markDirty();
+                    render();
+                });
+            }));
+
+            row.appendChild(numStepper(entry.level || 1, 1, 20, 1, function (v) {
+                entry.level = v;
+                markDirty();
+                render();
+            }));
+
+            row.appendChild(subclassField(entry));
+            c.appendChild(row);
+        });
+
+        const add = C.el('button', 'lw-btn lw-btn-text', '+ Add class');
+        add.type = 'button';
+        add.addEventListener('click', addClass);
+        c.appendChild(add);
 
         sheetEl.appendChild(c);
     }

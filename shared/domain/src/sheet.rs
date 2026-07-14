@@ -52,6 +52,8 @@ pub struct NamedBonus {
 /// Everything the sheet UI derives from the raw scores, computed once.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DerivedStats {
+    /// Character level: sum of class levels (see [`total_level`]).
+    pub level: i32,
     pub proficiency_bonus: i32,
     pub ability_modifiers: Vec<NamedBonus>,
     pub saving_throw_bonuses: Vec<NamedBonus>,
@@ -73,6 +75,33 @@ pub fn proficiency_bonus(level: i32) -> i32 {
     2 + (level.clamp(1, 20) - 1).div_euclid(4)
 }
 
+/// The character's level: the sum of per-class levels, each clamped to
+/// 1..=20 (minimum 1 for a defensively-empty list). The total is
+/// uncapped — `proficiency_bonus` clamps downstream.
+pub fn total_level(sheet: &CharacterSheet) -> i32 {
+    sheet
+        .classes
+        .iter()
+        .map(|entry| entry.level.clamp(1, 20))
+        .sum::<i32>()
+        .max(1)
+}
+
+/// Class-list invariants, enforced server-side on read and write: keeps
+/// exactly one `starting` flag (first flagged wins, first entry when
+/// none is flagged) and clamps entry levels to 1..=20.
+pub fn normalize_classes(sheet: &mut CharacterSheet) {
+    let starting = sheet
+        .classes
+        .iter()
+        .position(|entry| entry.starting)
+        .unwrap_or(0);
+    for (i, entry) in sheet.classes.iter_mut().enumerate() {
+        entry.level = entry.level.clamp(1, 20);
+        entry.starting = i == starting;
+    }
+}
+
 /// The ability governing a skill (defaults to dexterity for unknown
 /// names — content is data we read, not data we control).
 fn skill_ability(skill: &str) -> &'static str {
@@ -83,7 +112,7 @@ fn skill_ability(skill: &str) -> &'static str {
         .unwrap_or("dexterity")
 }
 
-fn ability_score(scores: &AbilityScores, ability: &str) -> i32 {
+pub(crate) fn ability_score(scores: &AbilityScores, ability: &str) -> i32 {
     match ability {
         "strength" => scores.strength,
         "dexterity" => scores.dexterity,
@@ -109,7 +138,7 @@ pub fn saving_throw_bonus(sheet: &CharacterSheet, ability: &str) -> i32 {
         .any(|a| a == ability);
     modifier
         + if proficient {
-            proficiency_bonus(sheet.level)
+            proficiency_bonus(total_level(sheet))
         } else {
             0
         }
@@ -122,7 +151,7 @@ pub fn skill_bonus(sheet: &CharacterSheet, skill: &str) -> i32 {
     let proficient = sheet.skill_proficiencies.iter().any(|s| s == skill);
     modifier
         + if proficient {
-            proficiency_bonus(sheet.level)
+            proficiency_bonus(total_level(sheet))
         } else {
             0
         }
@@ -141,8 +170,10 @@ pub fn passive_perception(sheet: &CharacterSheet) -> i32 {
 /// Computes the full derived-stat block in one pass — the call the sheet
 /// UI makes after every edit.
 pub fn derive_stats(sheet: &CharacterSheet) -> DerivedStats {
+    let level = total_level(sheet);
     DerivedStats {
-        proficiency_bonus: proficiency_bonus(sheet.level),
+        level,
+        proficiency_bonus: proficiency_bonus(level),
         ability_modifiers: ABILITIES
             .iter()
             .map(|a| NamedBonus {
@@ -172,9 +203,11 @@ pub fn derive_stats(sheet: &CharacterSheet) -> DerivedStats {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use lorewyld_types::character::CharacterClassEntry;
 
-    /// Build a sheet with the given level/abilities/proficiencies.
-    /// Abilities default to 10 (the 5e baseline and the mobile UI default).
+    /// Build a single-class sheet at the given level, with the given
+    /// abilities/proficiencies. Abilities default to 10 (the 5e baseline
+    /// and the mobile UI default).
     fn sheet(
         level: i32,
         abilities: &[(&str, i32)],
@@ -207,8 +240,7 @@ mod tests {
             owner_user_uuid: None,
             owner_username: None,
             race: String::new(),
-            class_name: String::new(),
-            level,
+            classes: vec![class_entry("Adventurer", level, true)],
             experience_points: None,
             background: String::new(),
             alignment: String::new(),
@@ -269,6 +301,77 @@ mod tests {
         }
     }
 
+    fn class_entry(name: &str, level: i32, starting: bool) -> CharacterClassEntry {
+        CharacterClassEntry {
+            name: name.to_string(),
+            level,
+            subclass: String::new(),
+            starting,
+            primary_abilities: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn total_level_sums_class_levels() {
+        let mut s = sheet(5, &[], &[], &[]);
+        assert_eq!(total_level(&s), 5);
+
+        s.classes = vec![
+            class_entry("Fighter", 3, true),
+            class_entry("Wizard", 2, false),
+        ];
+        assert_eq!(total_level(&s), 5);
+
+        // Out-of-range entry levels clamp before summing; a defensively
+        // empty list still yields level 1.
+        s.classes[0].level = 0;
+        s.classes[1].level = 25;
+        assert_eq!(total_level(&s), 21);
+        s.classes.clear();
+        assert_eq!(total_level(&s), 1);
+    }
+
+    #[test]
+    fn summed_level_drives_proficiency_and_derived_stats() {
+        let mut s = sheet(1, &[("dexterity", 16)], &["dexterity"], &["stealth"]);
+        s.classes = vec![
+            class_entry("Fighter", 3, true),
+            class_entry("Wizard", 2, false),
+        ];
+        // Total level 5 -> proficiency +3.
+        assert_eq!(saving_throw_bonus(&s, "dexterity"), 6);
+        assert_eq!(skill_bonus(&s, "stealth"), 6);
+        let d = derive_stats(&s);
+        assert_eq!(d.level, 5);
+        assert_eq!(d.proficiency_bonus, 3);
+    }
+
+    #[test]
+    fn normalize_enforces_one_starting_flag_and_clamps_levels() {
+        let mut s = sheet(1, &[], &[], &[]);
+        s.classes = vec![
+            class_entry("Fighter", 25, false),
+            class_entry("Wizard", 3, true),
+            class_entry("Cleric", 0, true),
+        ];
+        normalize_classes(&mut s);
+        // First flagged entry wins; the duplicate flag is cleared.
+        let flags: Vec<bool> = s.classes.iter().map(|c| c.starting).collect();
+        assert_eq!(flags, vec![false, true, false]);
+        assert_eq!(s.classes[0].level, 20);
+        assert_eq!(s.classes[2].level, 1);
+
+        // No flag at all: the first entry becomes the starting class.
+        let mut unflagged = sheet(1, &[], &[], &[]);
+        unflagged.classes = vec![
+            class_entry("Fighter", 1, false),
+            class_entry("Wizard", 1, false),
+        ];
+        normalize_classes(&mut unflagged);
+        assert!(unflagged.classes[0].starting);
+        assert!(!unflagged.classes[1].starting);
+    }
+
     #[test]
     fn proficiency_adds_the_bonus_exactly_once() {
         let s = sheet(5, &[("dexterity", 16)], &["dexterity"], &["stealth"]);
@@ -320,8 +423,7 @@ mod tests {
             "uuid": "00000000-0000-0000-0000-000000000000",
             "name": "Thistle",
             "race": "",
-            "class_name": "Rogue",
-            "level": 5,
+            "classes": [{"name":"Rogue","level":5,"subclass":"Thief","starting":true,"primary_abilities":[["dexterity"]]}],
             "background": "",
             "alignment": "",
             "abilities": {"strength":10,"dexterity":16,"constitution":10,"intelligence":10,"wisdom":12,"charisma":10},

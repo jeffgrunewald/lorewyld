@@ -12,6 +12,28 @@ use axum::{
 use lorewyld_types::CharacterSheet;
 use uuid::Uuid;
 
+/// Sheet-level validation shared by create and replace: at least one
+/// class, and alignment (when set) is one of the nine canonical values.
+fn validate_sheet(sheet: &CharacterSheet) -> Result<(), ApiError> {
+    if sheet.name.trim().is_empty() {
+        return Err(ApiError::BadRequest("name is required".to_string()));
+    }
+    if sheet.classes.is_empty() {
+        return Err(ApiError::BadRequest(
+            "at least one class is required".to_string(),
+        ));
+    }
+    let canonical = lorewyld_domain::alignment_options();
+    if !sheet.alignment.is_empty()
+        && !canonical.iter().any(|o| o.value == sheet.alignment)
+    {
+        return Err(ApiError::BadRequest(
+            "alignment must be one of the nine canonical alignments".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 use crate::api::{
     ApiState,
     auth::CurrentUser,
@@ -55,10 +77,9 @@ pub async fn create_character(
     user: CurrentUser,
     Json(mut sheet): Json<CharacterSheet>,
 ) -> Result<(StatusCode, Json<CharacterSheet>), ApiError> {
-    if sheet.name.trim().is_empty() {
-        return Err(ApiError::BadRequest("name is required".to_string()));
-    }
+    validate_sheet(&sheet)?;
     sheet.name = sheet.name.trim().to_string();
+    lorewyld_domain::normalize_classes(&mut sheet);
     sheet.uuid = Uuid::new_v4();
     let now = chrono::Utc::now();
     sheet.created_at = now;
@@ -129,12 +150,11 @@ pub async fn replace_character(
     Path(uuid): Path<Uuid>,
     Json(mut sheet): Json<CharacterSheet>,
 ) -> Result<Json<CharacterSheet>, ApiError> {
-    if sheet.name.trim().is_empty() {
-        return Err(ApiError::BadRequest("name is required".to_string()));
-    }
+    validate_sheet(&sheet)?;
     let existing = fetch_writable(&state, &user, uuid).await?;
 
     sheet.name = sheet.name.trim().to_string();
+    lorewyld_domain::normalize_classes(&mut sheet);
     sheet.uuid = uuid;
     sheet.created_at = existing.created_at;
     sheet.updated_at = chrono::Utc::now();
